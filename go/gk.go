@@ -1,0 +1,259 @@
+// Package gk is the Gatekeeper Go SDK: verify access tokens offline, hydrate
+// a Principal, resolve permissions from the client's role map and guard
+// routes (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005).
+package gk
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	jose "github.com/go-jose/go-jose/v4"
+)
+
+// Config configures one API. Issuer is https://auth.<domain>/t/<tenant>;
+// Audience is this API's identifier (enforced on every token); ClientID and
+// ClientSecret identify the client whose role map resolves permissions.
+type Config struct {
+	Issuer       string
+	Audience     string
+	ClientID     string
+	ClientSecret string
+	HTTPClient   *http.Client
+	// Leeway is the clock skew allowed on exp (default and maximum 60 s).
+	Leeway time.Duration
+}
+
+// Principal is the authenticated subject of a request.
+type Principal struct {
+	Sub         string
+	TenantID    string
+	OrgID       string
+	ClientID    string
+	Roles       []string
+	Permissions []string
+	Scopes      []string
+	AMR         []string
+	AuthTime    time.Time
+	RV          int64
+}
+
+// Can reports whether the principal holds permission (exact key; wildcards
+// are already expanded in the role map).
+func (p *Principal) Can(permission string) bool { return slices.Contains(p.Permissions, permission) }
+
+// ErrInvalidToken wraps every verification failure.
+var ErrInvalidToken = errors.New("gk: invalid token")
+
+// SDK verifies tokens for one API. It is safe for concurrent use.
+type SDK struct {
+	cfg Config
+
+	mu         sync.Mutex
+	keys       jose.JSONWebKeySet
+	lastFetch  time.Time
+	roleMap    map[string][]string
+	roleMapRV  int64
+	roleMapSet bool
+}
+
+// New returns an SDK for cfg.
+func New(cfg Config) *SDK {
+	if cfg.HTTPClient == nil {
+		cfg.HTTPClient = &http.Client{Timeout: 5 * time.Second}
+	}
+	if cfg.Leeway <= 0 || cfg.Leeway > time.Minute {
+		cfg.Leeway = time.Minute
+	}
+	cfg.Issuer = strings.TrimSuffix(cfg.Issuer, "/")
+	return &SDK{cfg: cfg}
+}
+
+const jwksCooldown = 30 * time.Second
+
+// Verify runs the TOKENS.md checklist and returns the Principal.
+func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
+	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256})
+	if err != nil || len(jws.Signatures) != 1 {
+		return nil, fmt.Errorf("%w: parse", ErrInvalidToken)
+	}
+	h := jws.Signatures[0].Protected
+	if typ, _ := h.ExtraHeaders[jose.HeaderType].(string); !strings.EqualFold(typ, "at+jwt") {
+		return nil, fmt.Errorf("%w: typ", ErrInvalidToken)
+	}
+	key, err := s.key(ctx, h.KeyID)
+	if err != nil {
+		return nil, err
+	}
+	payload, err := jws.Verify(key)
+	if err != nil {
+		return nil, fmt.Errorf("%w: signature", ErrInvalidToken)
+	}
+	var c struct {
+		Iss      string   `json:"iss"`
+		Sub      string   `json:"sub"`
+		Aud      audience `json:"aud"`
+		Exp      int64    `json:"exp"`
+		ClientID string   `json:"client_id"`
+		Tid      string   `json:"tid"`
+		Org      string   `json:"org"`
+		Roles    []string `json:"roles"`
+		RV       int64    `json:"rv"`
+		Scope    string   `json:"scope"`
+		AMR      []string `json:"amr"`
+		AuthTime int64    `json:"auth_time"`
+	}
+	if err := json.Unmarshal(payload, &c); err != nil {
+		return nil, fmt.Errorf("%w: claims", ErrInvalidToken)
+	}
+	switch {
+	case time.Now().After(time.Unix(c.Exp, 0).Add(s.cfg.Leeway)):
+		return nil, fmt.Errorf("%w: expired", ErrInvalidToken)
+	case c.Iss != s.cfg.Issuer:
+		return nil, fmt.Errorf("%w: iss", ErrInvalidToken)
+	case !slices.Contains(c.Aud, s.cfg.Audience):
+		return nil, fmt.Errorf("%w: aud", ErrInvalidToken)
+	}
+	perms, err := s.permissions(ctx, c.Roles, c.RV)
+	if err != nil {
+		return nil, err
+	}
+	return &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
+		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV}, nil
+}
+
+// key returns the public key for kid, refetching the JWKS once on an unknown
+// kid, at most every 30 s.
+func (s *SDK) key(ctx context.Context, kid string) (any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if k := s.keys.Key(kid); len(k) == 1 {
+		return k[0].Key, nil
+	}
+	if time.Since(s.lastFetch) < jwksCooldown {
+		return nil, fmt.Errorf("%w: unknown kid", ErrInvalidToken)
+	}
+	s.lastFetch = time.Now()
+	var set jose.JSONWebKeySet
+	if err := s.getJSON(ctx, s.cfg.Issuer+"/.well-known/jwks.json", false, &set); err != nil {
+		return nil, err
+	}
+	s.keys = set
+	if k := s.keys.Key(kid); len(k) == 1 {
+		return k[0].Key, nil
+	}
+	return nil, fmt.Errorf("%w: unknown kid", ErrInvalidToken)
+}
+
+// permissions resolves roles through the cached role map, refetching when the
+// token's rv is newer than the cached one.
+func (s *SDK) permissions(ctx context.Context, roles []string, rv int64) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.roleMapSet || rv > s.roleMapRV {
+		var rm struct {
+			RV    int64               `json:"rv"`
+			Roles map[string][]string `json:"roles"`
+		}
+		if err := s.getJSON(ctx, s.cfg.Issuer+"/v1/clients/"+s.cfg.ClientID+"/role-map", true, &rm); err != nil {
+			return nil, err
+		}
+		s.roleMap, s.roleMapRV, s.roleMapSet = rm.Roles, rm.RV, true
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, r := range roles {
+		for _, p := range s.roleMap[r] {
+			if !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out, nil
+}
+
+func (s *SDK) getJSON(ctx context.Context, url string, auth bool, v any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	if auth && s.cfg.ClientSecret != "" {
+		req.SetBasicAuth(s.cfg.ClientID, s.cfg.ClientSecret)
+	}
+	resp, err := s.cfg.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("gk: fetch %s: %w", url, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("gk: fetch %s: status %d", url, resp.StatusCode)
+	}
+	return json.NewDecoder(resp.Body).Decode(v)
+}
+
+// audience accepts aud as a string or an array (RFC 7519).
+type audience []string
+
+func (a *audience) UnmarshalJSON(b []byte) error {
+	var one string
+	if json.Unmarshal(b, &one) == nil {
+		*a = []string{one}
+		return nil
+	}
+	var many []string
+	err := json.Unmarshal(b, &many)
+	*a = many
+	return err
+}
+
+type ctxKey struct{}
+
+// FromContext returns the Principal Middleware stored.
+func FromContext(ctx context.Context) (*Principal, bool) {
+	p, ok := ctx.Value(ctxKey{}).(*Principal)
+	return p, ok
+}
+
+// Middleware verifies the bearer token on every request. Failures are 401
+// with WWW-Authenticate: Bearer error="invalid_token" (TOKENS.md).
+func (s *SDK) Middleware() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if !ok || raw == "" {
+				w.Header().Set("WWW-Authenticate", `Bearer`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			p, err := s.Verify(r.Context(), raw)
+			if err != nil {
+				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
+		})
+	}
+}
+
+// RequirePermission answers 403 unless the Principal holds permission.
+// Sensitive permissions and direct grants need /v1/authz/check (ADR-0005).
+func RequirePermission(permission string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, ok := FromContext(r.Context())
+			if !ok || !p.Can(permission) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
