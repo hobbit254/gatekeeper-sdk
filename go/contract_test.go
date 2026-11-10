@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 )
 
 // vectors is sdk/contract/vectors.json, shared by every SDK (ADR-0038).
@@ -21,6 +24,11 @@ type vectors struct {
 	Cases        []struct {
 		Name, Token, Permission, Expect string
 	} `json:"cases"`
+	StepUp []struct {
+		Name, Token string
+		MaxAge      int  `json:"max_age"`
+		Fresh       bool `json:"fresh"`
+	} `json:"step_up"`
 }
 
 // fixedServer answers the two SDK fetches from the vectors file.
@@ -61,6 +69,38 @@ func TestContractVectors(t *testing.T) {
 			}
 			if got != c.Expect {
 				t.Fatalf("got %s, want %s (err %v)", got, c.Expect, err)
+			}
+		})
+	}
+}
+
+func TestContractStepUp(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range v.StepUp {
+		t.Run(c.Name, func(t *testing.T) {
+			sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+				HTTPClient: &http.Client{Transport: fixedServer{v}}})
+			p, err := sdk.Verify(context.Background(), c.Token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(context.WithValue(context.Background(), ctxKey{}, p))
+			RequireStepUp(time.Duration(c.MaxAge)*time.Second)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rec, req)
+			if got := rec.Code == http.StatusOK; got != c.Fresh {
+				t.Fatalf("fresh: got %v, want %v", got, c.Fresh)
+			}
+			if !c.Fresh && rec.Header().Get("WWW-Authenticate") != fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d"`, c.MaxAge) {
+				t.Fatalf("challenge: %q", rec.Header().Get("WWW-Authenticate"))
 			}
 		})
 	}

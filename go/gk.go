@@ -257,3 +257,27 @@ func RequirePermission(permission string) func(http.Handler) http.Handler {
 		})
 	}
 }
+
+// FreshMFA reports whether the principal signed in with a second factor
+// ("mfa" in amr) no longer ago than maxAge (ADR-0046).
+func (p *Principal) FreshMFA(maxAge time.Duration) bool {
+	return slices.Contains(p.AMR, "mfa") && time.Since(p.AuthTime) <= maxAge
+}
+
+// RequireStepUp answers 401 with the RFC 9470 challenge unless the principal
+// has a second factor within maxAge. The client re-runs authorize with
+// max_age and acr_values=mfa, then retries.
+func RequireStepUp(maxAge time.Duration) func(http.Handler) http.Handler {
+	secs := int(maxAge.Seconds())
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, ok := FromContext(r.Context())
+			if !ok || !p.FreshMFA(maxAge) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d"`, secs))
+				http.Error(w, "step-up required", http.StatusUnauthorized)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}

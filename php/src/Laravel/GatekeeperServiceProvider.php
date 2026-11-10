@@ -10,7 +10,7 @@ use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
 
-/** Binds Gatekeeper from config/gatekeeper.php and registers the 'gatekeeper' and 'gk.can' middleware. */
+/** Binds Gatekeeper from config/gatekeeper.php and registers the 'gatekeeper', 'gk.can' and 'gk.stepup' middleware. */
 final class GatekeeperServiceProvider extends ServiceProvider
 {
     public function register(): void
@@ -33,6 +33,7 @@ final class GatekeeperServiceProvider extends ServiceProvider
             $router = $this->app['router'];
             $router->aliasMiddleware('gatekeeper', GatekeeperAuthenticate::class);
             $router->aliasMiddleware('gk.can', RequirePermission::class);
+            $router->aliasMiddleware('gk.stepup', RequireStepUp::class);
         }
     }
 }

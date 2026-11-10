@@ -198,3 +198,22 @@ export function getPrincipal(req: Req): Principal | undefined {
 function strings(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
+
+/** Whether the principal signed in with a second factor ("mfa" in amr) within maxAgeSec (ADR-0046). */
+export function freshMFA(p: Principal, maxAgeSec: number): boolean {
+  return p.amr.includes("mfa") && Date.now() - p.authTime.getTime() <= maxAgeSec * 1000;
+}
+
+/** Answers 401 with the RFC 9470 challenge unless the principal has a second
+ * factor within maxAgeSec. The client re-runs authorize with max_age and
+ * acr_values=mfa, then retries. */
+export function requireStepUp(maxAgeSec: number): Middleware {
+  return (req, res, next) => {
+    if (!req.gatekeeper || !freshMFA(req.gatekeeper, maxAgeSec)) {
+      res.setHeader("WWW-Authenticate", `Bearer error="insufficient_user_authentication", max_age="${maxAgeSec}"`);
+      res.status(401).end("step-up required");
+      return;
+    }
+    next();
+  };
+}
