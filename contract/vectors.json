@@ -1,0 +1,140 @@
+{
+  "audience": "notify-api",
+  "cases": [
+    {
+      "name": "viewer may read",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.S3BiYN0QxGGUDXmDIusSyL0Tf3sBDbff4UIwfhPOwWMq253FKToR073RY3nXrJo3RvBu3m3pDCzxS9MOre916A",
+      "permission": "subscriber:read",
+      "expect": "allow"
+    },
+    {
+      "name": "viewer may not delete",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.S3BiYN0QxGGUDXmDIusSyL0Tf3sBDbff4UIwfhPOwWMq253FKToR073RY3nXrJo3RvBu3m3pDCzxS9MOre916A",
+      "permission": "subscriber:delete",
+      "expect": "deny"
+    },
+    {
+      "name": "admin may delete",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJhZG1pbiJdLCJydiI6Mywic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSIsInN1YiI6IjAxOTJmM2ExLTdjMmUtN2QzYS05YjFmLTNhNGM1ZDZlN2Y4MCIsInRpZCI6IjAxOTJmM2ExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9.lhKQyewFtdW8j8-RNciL47lw8MITFleWWVbD_xI2BuK78jl20Avtj_rR2JVFpT2FXNjAacu9P4oK9WV5sP6VcQ",
+      "permission": "subscriber:delete",
+      "expect": "allow"
+    },
+    {
+      "name": "roles combine",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiLCJiaWxsaW5nIl0sInJ2IjozLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIiwic3ViIjoiMDE5MmYzYTEtN2MyZS03ZDNhLTliMWYtM2E0YzVkNmU3ZjgwIiwidGlkIjoiMDE5MmYzYTEtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIn0.nRQwN-CgTtvezgUPczfUOsc6Aj3QTrIueujfC_gb5A8W9Nu6y1pMWaxACZxsF-fmRk1I0462OYHAGzjPhL_g3g",
+      "permission": "invoice:read",
+      "expect": "allow"
+    },
+    {
+      "name": "unknown role grants nothing",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJnaG9zdCJdLCJydiI6Mywic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSIsInN1YiI6IjAxOTJmM2ExLTdjMmUtN2QzYS05YjFmLTNhNGM1ZDZlN2Y4MCIsInRpZCI6IjAxOTJmM2ExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9.-QfGZttmxmViz_wYjInpMFrVBtpweGJ3pymzDBfTMyL0so1uZ1K4k1qFH-q4Ig8bs__8IhOZ3mlyismi-blUrw",
+      "permission": "subscriber:read",
+      "expect": "deny"
+    },
+    {
+      "name": "no wildcard matching in SDKs",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.S3BiYN0QxGGUDXmDIusSyL0Tf3sBDbff4UIwfhPOwWMq253FKToR073RY3nXrJo3RvBu3m3pDCzxS9MOre916A",
+      "permission": "subscriber:*",
+      "expect": "deny"
+    },
+    {
+      "name": "aud as a single string",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6Im5vdGlmeS1hcGkiLCJhdXRoX3RpbWUiOjE3MDAwMDAwMDAsImNsaWVudF9pZCI6IndlYiIsImV4cCI6NDEwMjQ0NDgwMCwiaWF0IjoxNzAwMDAwMDAwLCJpc3MiOiJodHRwczovL2F1dGguZXhhbXBsZS50ZXN0L3QvYWNtZSIsImp0aSI6ImNvbnRyYWN0Iiwicm9sZXMiOlsidmlld2VyIl0sInJ2IjozLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIiwic3ViIjoiMDE5MmYzYTEtN2MyZS03ZDNhLTliMWYtM2E0YzVkNmU3ZjgwIiwidGlkIjoiMDE5MmYzYTEtMDAwMC03MDAwLTgwMDAtMDAwMDAwMDAwMDAxIn0.0iX0wt3wo_E_XnTfT8Pra3k8z89PHQbv0mGZ_DmgecUN9exE4_RF3wwuDE7QJbSOXTjYRPNtTuBEwL0vVhGYwA",
+      "permission": "subscriber:read",
+      "expect": "allow"
+    },
+    {
+      "name": "wrong audience",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJvdGhlci1hcGkiXSwiYXV0aF90aW1lIjoxNzAwMDAwMDAwLCJjbGllbnRfaWQiOiJ3ZWIiLCJleHAiOjQxMDI0NDQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUudGVzdC90L2FjbWUiLCJqdGkiOiJjb250cmFjdCIsInJvbGVzIjpbInZpZXdlciJdLCJydiI6Mywic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSIsInN1YiI6IjAxOTJmM2ExLTdjMmUtN2QzYS05YjFmLTNhNGM1ZDZlN2Y4MCIsInRpZCI6IjAxOTJmM2ExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9.CIxdgt9peVtPR02gMvnRuqrSMHWNPmMzNZHK4ZzWFxI0aEu-KWDwpUIPrvf0aevtZVfa0efqQyRMYNOj-Yuwtg",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "wrong issuer",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9ldmlsIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.kbHnqnlfdYxBVYadHSGP7nAF76kC5c4e52APkmnVe2T8gxBjc-tRE-VOb2p4I77kNSMQhgEVFTXLARika22Swg",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "expired",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo5NDY2ODQ4MDAsImlhdCI6MTcwMDAwMDAwMCwiaXNzIjoiaHR0cHM6Ly9hdXRoLmV4YW1wbGUudGVzdC90L2FjbWUiLCJqdGkiOiJjb250cmFjdCIsInJvbGVzIjpbInZpZXdlciJdLCJydiI6Mywic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSIsInN1YiI6IjAxOTJmM2ExLTdjMmUtN2QzYS05YjFmLTNhNGM1ZDZlN2Y4MCIsInRpZCI6IjAxOTJmM2ExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9.UJXtatW3Rseax95cvGxGg1MM-eZEiO_dnL3THwV4SPW6O1B5AxfZclS3UTXj5Q1p5zpOeA2MsMAxj92KUl3QDw",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "tampered payload",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJhZG1pbiJdLCJydiI6Mywic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSIsInN1YiI6IjAxOTJmM2ExLTdjMmUtN2QzYS05YjFmLTNhNGM1ZDZlN2Y4MCIsInRpZCI6IjAxOTJmM2ExLTAwMDAtNzAwMC04MDAwLTAwMDAwMDAwMDAwMSJ9.S3BiYN0QxGGUDXmDIusSyL0Tf3sBDbff4UIwfhPOwWMq253FKToR073RY3nXrJo3RvBu3m3pDCzxS9MOre916A",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "signed by an unknown key",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.N-AH2dto3xd2bK3OPqjzGPCqIUq_yXlOTvMQcKrhXGHL5uTuB1eS_3viADEZAn2T71y6GPXoAv9Auw3rmt0Vxg",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "unknown kid",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTkiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.vH8KOk44IE8OHq9Z1QpvGwYcpP70jQe63jaw2WpkTpAgVDnVTMzfeyv8gA4yIrsZwSDXz8-fYn7I9l96-6uoPw",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "HS256 with the public key as secret",
+      "token": "eyJhbGciOiJIUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJhdCtqd3QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.s9x2aEpZM9qqJswiJIRZuTTTamAP1v9GUEtEsHjgp1U",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "alg none",
+      "token": "eyJhbGciOiJub25lIiwia2lkIjoiY29udHJhY3QtMSIsInR5cCI6ImF0K2p3dCJ9.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "ID token is not an access token",
+      "token": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImNvbnRyYWN0LTEiLCJ0eXAiOiJKV1QifQ.eyJhbXIiOlsicHdkIl0sImF1ZCI6WyJub3RpZnktYXBpIl0sImF1dGhfdGltZSI6MTcwMDAwMDAwMCwiY2xpZW50X2lkIjoid2ViIiwiZXhwIjo0MTAyNDQ0ODAwLCJpYXQiOjE3MDAwMDAwMDAsImlzcyI6Imh0dHBzOi8vYXV0aC5leGFtcGxlLnRlc3QvdC9hY21lIiwianRpIjoiY29udHJhY3QiLCJyb2xlcyI6WyJ2aWV3ZXIiXSwicnYiOjMsInNjb3BlIjoib3BlbmlkIHByb2ZpbGUiLCJzdWIiOiIwMTkyZjNhMS03YzJlLTdkM2EtOWIxZi0zYTRjNWQ2ZTdmODAiLCJ0aWQiOiIwMTkyZjNhMS0wMDAwLTcwMDAtODAwMC0wMDAwMDAwMDAwMDEifQ.RVvnMMTixOlFUh4J9VRhc_kcVxaYZgAJ4MdfSPfPNc0s6NdDUpRJfEMHbUE91m_Su05XgDzImehNakQT6-jc6A",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    },
+    {
+      "name": "garbage",
+      "token": "not.a.jwt",
+      "permission": "subscriber:read",
+      "expect": "reject"
+    }
+  ],
+  "client_id": "notify-api",
+  "client_secret": "contract-secret",
+  "description": "Shared SDK contract (ADR-0038). Fetch JWKS from {issuer}/.well-known/jwks.json and the role map from {issuer}/v1/clients/{client_id}/role-map; serve both from this file. Generated by sdk/go/internal/contractgen.",
+  "issuer": "https://auth.example.test/t/acme",
+  "jwks": {
+    "keys": [
+      {
+        "use": "sig",
+        "kty": "EC",
+        "kid": "contract-1",
+        "crv": "P-256",
+        "alg": "ES256",
+        "x": "r6fXyXTWBYBkYny_cACBbffwNDYSjTTNRbclFwHwyH4",
+        "y": "KwhimLq__Ssi8d7oGVLw5otkBc_2KNU7aH_DC_NhLx0"
+      }
+    ]
+  },
+  "role_map": {
+    "client_id": "notify-api",
+    "roles": {
+      "admin": [
+        "subscriber:read",
+        "subscriber:delete"
+      ],
+      "billing": [
+        "invoice:read"
+      ],
+      "viewer": [
+        "subscriber:read"
+      ]
+    },
+    "rv": 3
+  }
+}
