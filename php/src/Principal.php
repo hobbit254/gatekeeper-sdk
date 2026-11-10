@@ -24,6 +24,8 @@ final readonly class Principal
         public array $amr,
         public int $authTime,
         public int $rv,
+        public string $sid = '',
+        public string $jti = '',
     ) {
     }
 

@@ -22,7 +22,7 @@ export function fixedFetch(roleMaps: unknown[] = [v.role_map]) {
   return { f, calls };
 }
 
-export const sdk = (f: typeof fetch) =>
-  createGatekeeper({ issuer: v.issuer, audience: v.audience, clientId: v.client_id, clientSecret: v.client_secret, fetch: f });
+export const sdk = (f: typeof fetch, denylist?: (sid: string, jti: string) => Promise<boolean>) =>
+  createGatekeeper({ issuer: v.issuer, audience: v.audience, clientId: v.client_id, clientSecret: v.client_secret, fetch: f, denylist });
 
 export { v };

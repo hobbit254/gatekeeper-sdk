@@ -16,6 +16,10 @@ export interface GatekeeperConfig {
   fetch?: typeof fetch;
   /** Clock skew allowed on exp, seconds (default and maximum 60). */
   leewaySec?: number;
+  /** Optional revocation check (FR-S7, ADR-0048): resolve true to refuse the
+   * token. Rejections refuse too (fail closed). With ioredis:
+   * `(sid, jti) => redis.exists(`gk:deny:sid:${sid}`, `gk:deny:jti:${jti}`).then((n) => n > 0)` */
+  denylist?: (sid: string, jti: string) => Promise<boolean>;
 }
 
 /** The authenticated subject of a request. */
@@ -30,6 +34,8 @@ export interface Principal {
   amr: string[];
   authTime: Date;
   rv: number;
+  sid: string;
+  jti: string;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
 }
@@ -136,6 +142,15 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     } catch (e) {
       throw new InvalidTokenError(e instanceof Error ? e.message : "verification failed");
     }
+    if (config.denylist) {
+      let denied: boolean;
+      try {
+        denied = await config.denylist(String(c.sid ?? ""), String(c.jti ?? ""));
+      } catch {
+        throw new InvalidTokenError("denylist unavailable"); // fail closed (ADR-0048)
+      }
+      if (denied) throw new InvalidTokenError("revoked");
+    }
     const roles = strings(c.roles);
     const rv = typeof c.rv === "number" ? c.rv : 0;
     const perms = await permissions(roles, rv);
@@ -150,6 +165,8 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       amr: strings(c.amr),
       authTime: new Date((typeof c.auth_time === "number" ? c.auth_time : 0) * 1000),
       rv,
+      sid: String(c.sid ?? ""),
+      jti: String(c.jti ?? ""),
       can: (p: string) => perms.includes(p),
     };
   }

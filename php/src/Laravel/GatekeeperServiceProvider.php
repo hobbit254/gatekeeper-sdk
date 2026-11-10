@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Gatekeeper\Laravel;
 
 use Gatekeeper\Config;
+use Gatekeeper\DenylistChecker;
 use Gatekeeper\Gatekeeper;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Routing\Router;
@@ -21,6 +22,9 @@ final class GatekeeperServiceProvider extends ServiceProvider
             return new Gatekeeper(
                 new Config($c['issuer'], $c['audience'], $c['client_id'], (string) ($c['client_secret'] ?? '')),
                 $app->make(Repository::class),
+                null,
+                // Bind Gatekeeper\DenylistChecker in the container to turn on the denylist (ADR-0048).
+                $app->bound(DenylistChecker::class) ? $app->make(DenylistChecker::class) : null,
             );
         });
     }

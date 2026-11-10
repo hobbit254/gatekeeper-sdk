@@ -22,7 +22,7 @@ final class Fixtures
         $this->roleMaps ??= [$this->v['role_map']];
     }
 
-    public function sdk(): Gatekeeper
+    public function sdk(?\Gatekeeper\DenylistChecker $denylist = null): Gatekeeper
     {
         $v = $this->v;
         return new Gatekeeper(new Config($v['issuer'], $v['audience'], $v['client_id'], $v['client_secret']), null,
@@ -38,7 +38,7 @@ final class Fixtures
                     return [200, json_encode($this->roleMaps[$i])];
                 }
                 return [404, '{}'];
-            });
+            }, $denylist);
     }
 
     public function token(string $case): string

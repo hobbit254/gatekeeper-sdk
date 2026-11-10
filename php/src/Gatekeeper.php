@@ -27,8 +27,12 @@ final class Gatekeeper
      * @param ?CacheInterface $cache holds the JWKS and role map (Laravel's cache store, or per-process memory)
      * @param ?callable(string, array<string, string>): array{int, string} $fetch returns [status, body]; tests inject one
      */
-    public function __construct(private readonly Config $config, ?CacheInterface $cache = null, ?callable $fetch = null)
-    {
+    public function __construct(
+        private readonly Config $config,
+        ?CacheInterface $cache = null,
+        ?callable $fetch = null,
+        private readonly ?DenylistChecker $denylist = null,
+    ) {
         $this->cache = $cache ?? new ArrayCache();
         $this->fetch = $fetch ?? self::httpGet(...);
     }
@@ -37,6 +41,18 @@ final class Gatekeeper
     public function verify(string $token): Principal
     {
         $claims = $this->claims($token);
+        $sid = (string) ($claims->sid ?? '');
+        $jti = (string) ($claims->jti ?? '');
+        if ($this->denylist !== null) {
+            try {
+                $denied = $this->denylist->denied($sid, $jti);
+            } catch (\Throwable $e) {
+                throw new InvalidTokenException('denylist unavailable', 0, $e); // fail closed (ADR-0048)
+            }
+            if ($denied) {
+                throw new InvalidTokenException('revoked');
+            }
+        }
         $roles = self::strings($claims->roles ?? []);
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
 
@@ -51,6 +67,8 @@ final class Gatekeeper
             amr: self::strings($claims->amr ?? []),
             authTime: is_int($claims->auth_time ?? null) ? $claims->auth_time : 0,
             rv: $rv,
+            sid: $sid,
+            jti: $jti,
         );
     }
 

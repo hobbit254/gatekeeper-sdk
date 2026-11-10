@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"testing"
 	"time"
 )
@@ -24,6 +26,13 @@ type vectors struct {
 	Cases        []struct {
 		Name, Token, Permission, Expect string
 	} `json:"cases"`
+	Denylist struct {
+		SIDs  []string `json:"sids"`
+		JTIs  []string `json:"jtis"`
+		Cases []struct {
+			Name, Token, Permission, Expect string
+		} `json:"cases"`
+	} `json:"denylist"`
 	StepUp []struct {
 		Name, Token string
 		MaxAge      int  `json:"max_age"`
@@ -104,4 +113,48 @@ func TestContractStepUp(t *testing.T) {
 			}
 		})
 	}
+}
+
+type setDenylist struct{ sids, jtis []string }
+
+func (d setDenylist) Denied(_ context.Context, sid, jti string) (bool, error) {
+	return slices.Contains(d.sids, sid) || slices.Contains(d.jtis, jti), nil
+}
+
+func TestContractDenylist(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range v.Denylist.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+				HTTPClient: &http.Client{Transport: fixedServer{v}}}).WithDenylist(setDenylist{v.Denylist.SIDs, v.Denylist.JTIs})
+			p, err := sdk.Verify(context.Background(), c.Token)
+			got := "reject"
+			if err == nil {
+				got = map[bool]string{true: "allow", false: "deny"}[p.Can(c.Permission)]
+			}
+			if got != c.Expect {
+				t.Fatalf("got %s, want %s (%v)", got, c.Expect, err)
+			}
+		})
+	}
+	t.Run("an unreachable denylist refuses", func(t *testing.T) {
+		sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+			HTTPClient: &http.Client{Transport: fixedServer{v}}}).WithDenylist(brokenDenylist{})
+		if _, err := sdk.Verify(context.Background(), v.Denylist.Cases[0].Token); err == nil {
+			t.Fatal("want an error")
+		}
+	})
+}
+
+type brokenDenylist struct{}
+
+func (brokenDenylist) Denied(context.Context, string, string) (bool, error) {
+	return false, errors.New("redis down")
 }

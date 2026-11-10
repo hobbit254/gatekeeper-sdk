@@ -42,6 +42,8 @@ type Principal struct {
 	AMR         []string
 	AuthTime    time.Time
 	RV          int64
+	SID         string // browser session (ADR-0044)
+	JTI         string
 }
 
 // Can reports whether the principal holds permission (exact key; wildcards
@@ -53,7 +55,8 @@ var ErrInvalidToken = errors.New("gk: invalid token")
 
 // SDK verifies tokens for one API. It is safe for concurrent use.
 type SDK struct {
-	cfg Config
+	cfg  Config
+	deny Denylist
 
 	mu         sync.Mutex
 	keys       jose.JSONWebKeySet
@@ -108,6 +111,8 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		Scope    string   `json:"scope"`
 		AMR      []string `json:"amr"`
 		AuthTime int64    `json:"auth_time"`
+		SID      string   `json:"sid"`
+		JTI      string   `json:"jti"`
 	}
 	if err := json.Unmarshal(payload, &c); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrInvalidToken)
@@ -120,12 +125,19 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 	case !slices.Contains(c.Aud, s.cfg.Audience):
 		return nil, fmt.Errorf("%w: aud", ErrInvalidToken)
 	}
+	if s.deny != nil {
+		denied, err := s.deny.Denied(ctx, c.SID, c.JTI)
+		if err != nil || denied { // an unreachable denylist refuses: fail closed (ADR-0048)
+			return nil, fmt.Errorf("%w: denied", errors.Join(ErrInvalidToken, err))
+		}
+	}
 	perms, err := s.permissions(ctx, c.Roles, c.RV)
 	if err != nil {
 		return nil, err
 	}
 	return &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
-		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV}, nil
+		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV,
+		SID: c.SID, JTI: c.JTI}, nil
 }
 
 // key returns the public key for kid, refetching the JWKS once on an unknown
