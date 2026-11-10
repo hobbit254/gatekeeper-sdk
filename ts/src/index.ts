@@ -1,6 +1,7 @@
 // Gatekeeper TypeScript SDK: verify access tokens offline, hydrate a
 // Principal, resolve permissions from the client's role map and guard routes
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
+import { createHash } from "node:crypto";
 import { createLocalJWKSet, errors, jwtVerify, type JSONWebKeySet, type JWTPayload } from "jose";
 
 /** Configures one API. `issuer` is https://auth.<domain>/t/<tenant>. */
@@ -36,6 +37,12 @@ export interface Principal {
   rv: number;
   sid: string;
   jti: string;
+  /** The admin acting as `sub`, and when that ends; set only on impersonation tokens (ADR-0058). Show a banner. */
+  actor?: string;
+  impersonationEndsAt?: Date;
+  /** True for a principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
+  apiKey?: boolean;
+  ownerType?: string;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
 }
@@ -135,7 +142,46 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     return [...out];
   }
 
+  // API keys: introspected with this API's client credentials, cached 60 s
+  // (inactive 10 s); any failure refuses (ADR-0057, ADR-0059).
+  const keyCache = new Map<string, { p?: Principal; until: number }>();
+  async function verifyKey(key: string): Promise<Principal> {
+    const id = createHash("sha256").update(key).digest("hex");
+    let e = keyCache.get(id);
+    if (!e || Date.now() >= e.until) {
+      let r: Record<string, unknown>;
+      try {
+        const res = await doFetch(`${issuer}/oauth2/introspect`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Authorization: "Basic " + Buffer.from(`${config.clientId}:${config.clientSecret ?? ""}`).toString("base64"),
+          },
+          body: new URLSearchParams({ token: key }).toString(),
+        });
+        if (res.status !== 200) throw new Error(`status ${res.status}`);
+        r = (await res.json()) as Record<string, unknown>;
+      } catch (err) {
+        throw new InvalidTokenError(`introspection failed: ${err instanceof Error ? err.message : err}`);
+      }
+      let p: Principal | undefined;
+      if (r.active === true && r.token_type === "api_key") {
+        const perms = strings(r.permissions);
+        p = {
+          sub: String(r.sub ?? ""), tenantId: String(r.tid ?? ""), clientId: "", roles: [], permissions: perms,
+          scopes: typeof r.scope === "string" ? r.scope.split(" ").filter(Boolean) : [], amr: [], authTime: new Date(0),
+          rv: 0, sid: "", jti: "", apiKey: true, ownerType: String(r.owner_type ?? ""), can: (x: string) => perms.includes(x),
+        };
+      }
+      e = { p, until: Date.now() + (p ? 60_000 : 10_000) };
+      keyCache.set(id, e);
+    }
+    if (!e.p) throw new InvalidTokenError("inactive API key");
+    return e.p;
+  }
+
   async function verify(token: string): Promise<Principal> {
+    if (token.startsWith("gk_live_")) return verifyKey(token);
     let c: JWTPayload;
     try {
       c = await verifySignature(token);
@@ -167,6 +213,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       rv,
       sid: String(c.sid ?? ""),
       jti: String(c.jti ?? ""),
+      ...impersonation(c.act),
       can: (p: string) => perms.includes(p),
     };
   }
@@ -232,5 +279,56 @@ export function requireStepUp(maxAgeSec: number): Middleware {
       return;
     }
     next();
+  };
+}
+
+function impersonation(act: unknown): { actor?: string; impersonationEndsAt?: Date } {
+  if (!act || typeof act !== "object") return {};
+  const a = act as { sub?: unknown; ends_at?: unknown };
+  return {
+    actor: typeof a.sub === "string" ? a.sub : undefined,
+    impersonationEndsAt: typeof a.ends_at === "number" ? new Date(a.ends_at * 1000) : undefined,
+  };
+}
+
+/** Fetches and caches an m2m access token (FR-M1, ADR-0059). */
+export interface ClientCredentialsConfig {
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scope?: string;
+  audience?: string;
+  fetch?: typeof fetch;
+}
+
+/** Returns a token source: `token()` resolves a token valid for at least another minute; concurrent calls share one request. */
+export function createClientCredentials(config: ClientCredentialsConfig): { token(): Promise<string> } {
+  const doFetch = config.fetch ?? fetch;
+  let cached: { token: string; until: number } | undefined;
+  let inflight: Promise<string> | undefined;
+  async function fetchToken(): Promise<string> {
+    const body = new URLSearchParams({ grant_type: "client_credentials" });
+    if (config.scope) body.set("scope", config.scope);
+    if (config.audience) body.set("audience", config.audience);
+    const res = await doFetch(config.tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: "Basic " + Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`).toString("base64"),
+      },
+      body: body.toString(),
+    });
+    if (res.status !== 200) throw new Error(`gatekeeper: client credentials: status ${res.status}`);
+    const r = (await res.json()) as { access_token?: string; expires_in?: number };
+    if (!r.access_token) throw new Error("gatekeeper: client credentials: no access_token");
+    cached = { token: r.access_token, until: Date.now() + ((r.expires_in ?? 0) - 60) * 1000 };
+    return r.access_token;
+  }
+  return {
+    token(): Promise<string> {
+      if (cached && Date.now() < cached.until) return Promise.resolve(cached.token);
+      inflight ??= fetchToken().finally(() => { inflight = undefined; });
+      return inflight;
+    },
   };
 }

@@ -26,6 +26,12 @@ final readonly class Principal
         public int $rv,
         public string $sid = '',
         public string $jti = '',
+        /** The admin acting as $sub, and when that ends (unix); set only on impersonation tokens (ADR-0058). */
+        public ?string $actor = null,
+        public ?int $impersonationEndsAt = null,
+        /** A principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
+        public bool $apiKey = false,
+        public string $ownerType = '',
     ) {
     }
 

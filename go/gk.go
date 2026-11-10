@@ -44,6 +44,14 @@ type Principal struct {
 	RV          int64
 	SID         string // browser session (ADR-0044)
 	JTI         string
+	// Actor is the admin acting as Sub, and ImpersonationEndsAt when that
+	// ends; empty unless the token is an impersonation (ADR-0058). Show a banner.
+	Actor               string
+	ImpersonationEndsAt time.Time
+	// APIKey marks a principal from a gk_live_ key (ADR-0057); OwnerType is
+	// "user" or "service_account".
+	APIKey    bool
+	OwnerType string
 }
 
 // Can reports whether the principal holds permission (exact key; wildcards
@@ -57,6 +65,10 @@ var ErrInvalidToken = errors.New("gk: invalid token")
 type SDK struct {
 	cfg  Config
 	deny Denylist
+	now  func() time.Time
+
+	keyMu    sync.Mutex
+	keyCache map[[32]byte]keyEntry
 
 	mu         sync.Mutex
 	keys       jose.JSONWebKeySet
@@ -75,13 +87,16 @@ func New(cfg Config) *SDK {
 		cfg.Leeway = time.Minute
 	}
 	cfg.Issuer = strings.TrimSuffix(cfg.Issuer, "/")
-	return &SDK{cfg: cfg}
+	return &SDK{cfg: cfg, now: time.Now}
 }
 
 const jwksCooldown = 30 * time.Second
 
 // Verify runs the TOKENS.md checklist and returns the Principal.
 func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
+	if strings.HasPrefix(raw, apiKeyPrefix) {
+		return s.verifyKey(ctx, raw)
+	}
 	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256})
 	if err != nil || len(jws.Signatures) != 1 {
 		return nil, fmt.Errorf("%w: parse", ErrInvalidToken)
@@ -113,6 +128,10 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		AuthTime int64    `json:"auth_time"`
 		SID      string   `json:"sid"`
 		JTI      string   `json:"jti"`
+		Act      *struct {
+			Sub    string `json:"sub"`
+			EndsAt int64  `json:"ends_at"`
+		} `json:"act"`
 	}
 	if err := json.Unmarshal(payload, &c); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrInvalidToken)
@@ -135,9 +154,13 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
+	p := &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
 		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV,
-		SID: c.SID, JTI: c.JTI}, nil
+		SID: c.SID, JTI: c.JTI}
+	if c.Act != nil {
+		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
+	}
+	return p, nil
 }
 
 // key returns the public key for kid, refetching the JWKS once on an unknown

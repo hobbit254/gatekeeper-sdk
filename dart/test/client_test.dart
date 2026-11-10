@@ -119,4 +119,15 @@ void main() {
     final mfa = (v['step_up'] as List).firstWhere((c) => c['fresh'] == true)['token'] as String;
     expect(decodeClaims(mfa)['amr'], contains('mfa'));
   });
+
+  test('contract vectors: impersonation exposes the actor and when it ends (ADR-0058)', () {
+    final v = jsonDecode(File('../contract/vectors.json').readAsStringSync()) as Map<String, dynamic>;
+    final imp = v['impersonation'] as Map<String, dynamic>;
+    final t = Tokens(accessToken: imp['token'] as String, expiresAt: DateTime.now());
+    expect(t.actor, imp['actor']);
+    expect(t.impersonationEndsAt, DateTime.fromMillisecondsSinceEpoch((imp['ends_at'] as int) * 1000, isUtc: true));
+    final plain = Tokens(accessToken: imp['plain'] as String, expiresAt: DateTime.now());
+    expect(plain.actor, isNull);
+    expect(plain.impersonationEndsAt, isNull);
+  });
 }

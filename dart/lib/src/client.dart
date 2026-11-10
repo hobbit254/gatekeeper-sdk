@@ -58,6 +58,21 @@ class Tokens {
   /// The access token's claims, decoded without verification (APIs verify;
   /// the app only reads sub, amr and auth_time for display).
   Map<String, dynamic> get claims => decodeClaims(accessToken);
+
+  /// The admin acting as this user, when the token is an impersonation
+  /// (ADR-0058); show the "Viewing as" banner while it is set.
+  String? get actor => _act?['sub'] as String?;
+
+  /// When the impersonation ends; null otherwise.
+  DateTime? get impersonationEndsAt {
+    final end = _act?['ends_at'];
+    return end is int ? DateTime.fromMillisecondsSinceEpoch(end * 1000, isUtc: true) : null;
+  }
+
+  Map<String, dynamic>? get _act {
+    final a = claims['act'];
+    return a is Map<String, dynamic> ? a : null;
+  }
 }
 
 /// Decodes a JWT payload without verifying it.

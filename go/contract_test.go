@@ -38,6 +38,19 @@ type vectors struct {
 		MaxAge      int  `json:"max_age"`
 		Fresh       bool `json:"fresh"`
 	} `json:"step_up"`
+	Impersonation struct {
+		Token  string `json:"token"`
+		Actor  string `json:"actor"`
+		EndsAt int64  `json:"ends_at"`
+		Plain  string `json:"plain"`
+	} `json:"impersonation"`
+	APIKeys struct {
+		Introspection map[string]json.RawMessage `json:"introspection"`
+		Subject       string                     `json:"subject"`
+		Cases         []struct {
+			Name, Token, Permission, Expect string
+		} `json:"cases"`
+	} `json:"api_keys"`
 }
 
 // fixedServer answers the two SDK fetches from the vectors file.
@@ -46,6 +59,14 @@ type fixedServer struct{ v vectors }
 func (f fixedServer) RoundTrip(r *http.Request) (*http.Response, error) {
 	body, code := []byte(`{}`), http.StatusNotFound
 	switch r.URL.String() {
+	case f.v.Issuer + "/oauth2/introspect":
+		body, code = []byte(`{"error":"invalid_client"}`), http.StatusUnauthorized
+		if u, p, ok := r.BasicAuth(); ok && u == f.v.ClientID && p == f.v.ClientSecret && r.ParseForm() == nil {
+			body, code = []byte(`{"active":false}`), http.StatusOK
+			if canned, ok := f.v.APIKeys.Introspection[r.PostForm.Get("token")]; ok {
+				body = canned
+			}
+		}
 	case f.v.Issuer + "/.well-known/jwks.json":
 		body, code = f.v.JWKS, http.StatusOK
 	case f.v.Issuer + "/v1/clients/" + f.v.ClientID + "/role-map":
@@ -157,4 +178,56 @@ type brokenDenylist struct{}
 
 func (brokenDenylist) Denied(context.Context, string, string) (bool, error) {
 	return false, errors.New("redis down")
+}
+
+func loadVectors(t *testing.T) vectors {
+	t.Helper()
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	return v
+}
+
+func vectorSDK(v vectors) *SDK {
+	return New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+		HTTPClient: &http.Client{Transport: fixedServer{v}}})
+}
+
+func TestContractImpersonation(t *testing.T) {
+	v := loadVectors(t)
+	p, err := vectorSDK(v).Verify(context.Background(), v.Impersonation.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Actor != v.Impersonation.Actor || p.ImpersonationEndsAt.Unix() != v.Impersonation.EndsAt {
+		t.Fatalf("actor %q ends %v", p.Actor, p.ImpersonationEndsAt)
+	}
+	p, err = vectorSDK(v).Verify(context.Background(), v.Impersonation.Plain)
+	if err != nil || p.Actor != "" || !p.ImpersonationEndsAt.IsZero() {
+		t.Fatalf("a plain token is not impersonation: %+v %v", p, err)
+	}
+}
+
+func TestContractAPIKeys(t *testing.T) {
+	v := loadVectors(t)
+	for _, c := range v.APIKeys.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			p, err := vectorSDK(v).Verify(context.Background(), c.Token)
+			got := "reject"
+			if err == nil {
+				got = map[bool]string{true: "allow", false: "deny"}[p.Can(c.Permission)]
+				if !p.APIKey || p.Sub != v.APIKeys.Subject || p.FreshMFA(time.Hour) {
+					t.Fatalf("principal %+v", p)
+				}
+			}
+			if got != c.Expect {
+				t.Fatalf("got %s, want %s (%v)", got, c.Expect, err)
+			}
+		})
+	}
 }

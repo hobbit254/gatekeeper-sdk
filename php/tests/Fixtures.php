@@ -11,6 +11,7 @@ use Gatekeeper\Gatekeeper;
 final class Fixtures
 {
     public int $roleMapFetches = 0;
+    public int $introspections = 0;
 
     /** @var array<string, mixed> */
     public array $v;
@@ -22,11 +23,19 @@ final class Fixtures
         $this->roleMaps ??= [$this->v['role_map']];
     }
 
-    public function sdk(?\Gatekeeper\DenylistChecker $denylist = null): Gatekeeper
+    public function sdk(?\Gatekeeper\DenylistChecker $denylist = null, ?string $secret = null, ?\Psr\SimpleCache\CacheInterface $cache = null): Gatekeeper
     {
         $v = $this->v;
-        return new Gatekeeper(new Config($v['issuer'], $v['audience'], $v['client_id'], $v['client_secret']), null,
-            function (string $url, array $headers) use ($v): array {
+        return new Gatekeeper(new Config($v['issuer'], $v['audience'], $v['client_id'], $secret ?? $v['client_secret']), $cache,
+            function (string $url, array $headers, ?string $body = null) use ($v): array {
+                if ($url === $v['issuer'] . '/oauth2/introspect' && $body !== null) {
+                    $this->introspections++;
+                    if (($headers['Authorization'] ?? '') !== 'Basic ' . base64_encode($v['client_id'] . ':' . $v['client_secret'])) {
+                        return [401, '{"error":"invalid_client"}'];
+                    }
+                    parse_str($body, $form);
+                    return [200, json_encode($v['api_keys']['introspection'][$form['token'] ?? ''] ?? ['active' => false])];
+                }
                 if ($url === $v['issuer'] . '/.well-known/jwks.json') {
                     return [200, json_encode($v['jwks'])];
                 }

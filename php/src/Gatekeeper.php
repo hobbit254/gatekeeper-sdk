@@ -20,12 +20,15 @@ final class Gatekeeper
 
     private CacheInterface $cache;
 
-    /** @var callable(string, array<string, string>): array{int, string} */
+    private const KEY_TTL = 60; // a revoked key works this long at most (ADR-0059)
+    private const DEAD_KEY_TTL = 10;
+
+    /** @var callable(string, array<string, string>, ?string=): array{int, string} */
     private $fetch;
 
     /**
      * @param ?CacheInterface $cache holds the JWKS and role map (Laravel's cache store, or per-process memory)
-     * @param ?callable(string, array<string, string>): array{int, string} $fetch returns [status, body]; tests inject one
+     * @param ?callable(string, array<string, string>, ?string=): array{int, string} $fetch returns [status, body]; a body means POST; tests inject one
      */
     public function __construct(
         private readonly Config $config,
@@ -34,12 +37,15 @@ final class Gatekeeper
         private readonly ?DenylistChecker $denylist = null,
     ) {
         $this->cache = $cache ?? new ArrayCache();
-        $this->fetch = $fetch ?? self::httpGet(...);
+        $this->fetch = $fetch ?? self::http(...);
     }
 
     /** Runs the TOKENS.md checklist and returns the Principal. */
     public function verify(string $token): Principal
     {
+        if (str_starts_with($token, 'gk_live_')) {
+            return $this->verifyKey($token);
+        }
         $claims = $this->claims($token);
         $sid = (string) ($claims->sid ?? '');
         $jti = (string) ($claims->jti ?? '');
@@ -69,6 +75,50 @@ final class Gatekeeper
             rv: $rv,
             sid: $sid,
             jti: $jti,
+            actor: isset($claims->act->sub) && is_string($claims->act->sub) ? $claims->act->sub : null,
+            impersonationEndsAt: isset($claims->act->ends_at) && is_int($claims->act->ends_at) ? $claims->act->ends_at : null,
+        );
+    }
+
+    /**
+     * Introspects an API key with this API's client credentials, caching the
+     * answer; any failure refuses (ADR-0057, ADR-0059).
+     */
+    private function verifyKey(string $key): Principal
+    {
+        $cacheKey = 'gatekeeper.apikey.' . hash('sha256', $this->config->issuer . '|' . $key);
+        $r = $this->cache->get($cacheKey);
+        if (!is_array($r)) {
+            $headers = ['Content-Type' => 'application/x-www-form-urlencoded', 'Accept' => 'application/json',
+                'Authorization' => 'Basic ' . base64_encode($this->config->clientId . ':' . $this->config->clientSecret)];
+            try {
+                [$status, $body] = ($this->fetch)($this->config->issuer . '/oauth2/introspect', $headers, http_build_query(['token' => $key]));
+            } catch (\Throwable $e) {
+                throw new InvalidTokenException('introspection failed', 0, $e);
+            }
+            $r = json_decode($body, true);
+            if ($status !== 200 || !is_array($r)) {
+                throw new InvalidTokenException("introspection failed: status {$status}");
+            }
+            $live = ($r['active'] ?? false) === true && ($r['token_type'] ?? '') === 'api_key';
+            $this->cache->set($cacheKey, $r, $live ? self::KEY_TTL : self::DEAD_KEY_TTL);
+        }
+        if (($r['active'] ?? false) !== true || ($r['token_type'] ?? '') !== 'api_key') {
+            throw new InvalidTokenException('inactive API key');
+        }
+        return new Principal(
+            sub: (string) ($r['sub'] ?? ''),
+            tenantId: (string) ($r['tid'] ?? ''),
+            orgId: null,
+            clientId: '',
+            roles: [],
+            permissions: self::strings($r['permissions'] ?? []),
+            scopes: array_values(array_filter(explode(' ', (string) ($r['scope'] ?? '')))),
+            amr: [],
+            authTime: 0,
+            rv: 0,
+            apiKey: true,
+            ownerType: (string) ($r['owner_type'] ?? ''),
         );
     }
 
@@ -168,14 +218,17 @@ final class Gatekeeper
      * @param array<string, string> $headers
      * @return array{int, string}
      */
-    private static function httpGet(string $url, array $headers): array
+    public static function http(string $url, array $headers, ?string $body = null): array
     {
         $lines = [];
         foreach ($headers as $k => $v) {
             $lines[] = "{$k}: {$v}";
         }
-        $ctx = stream_context_create(['http' => ['method' => 'GET', 'header' => implode("\r\n", $lines),
-            'timeout' => 5, 'ignore_errors' => true]]);
+        $opts = ['method' => $body === null ? 'GET' : 'POST', 'header' => implode("\r\n", $lines), 'timeout' => 5, 'ignore_errors' => true];
+        if ($body !== null) {
+            $opts['content'] = $body;
+        }
+        $ctx = stream_context_create(['http' => $opts]);
         $body = @file_get_contents($url, false, $ctx);
         $status = 0;
         foreach ($http_response_header ?? [] as $h) {
