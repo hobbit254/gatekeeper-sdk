@@ -44,7 +44,17 @@ type vectors struct {
 		EndsAt int64  `json:"ends_at"`
 		Plain  string `json:"plain"`
 	} `json:"impersonation"`
-	APIKeys struct {
+	DPoP struct {
+		Token  string `json:"token"`
+		JKT    string `json:"jkt"`
+		Now    int64  `json:"now"`
+		Method string `json:"method"`
+		URL    string `json:"url"`
+		Cases  []struct {
+			Name, Proof, Expect string
+		} `json:"cases"`
+	} `json:"dpop"`
+		APIKeys struct {
 		Introspection map[string]json.RawMessage `json:"introspection"`
 		Subject       string                     `json:"subject"`
 		Cases         []struct {
@@ -229,5 +239,36 @@ func TestContractAPIKeys(t *testing.T) {
 				t.Fatalf("got %s, want %s (%v)", got, c.Expect, err)
 			}
 		})
+	}
+}
+
+func TestContractDPoP(t *testing.T) {
+	v := loadVectors(t)
+	sdk := vectorSDK(v)
+	sdk.now = func() time.Time { return time.Unix(v.DPoP.Now, 0) }
+	p, err := sdk.Verify(context.Background(), v.DPoP.Token)
+	if err != nil || p.JKT != v.DPoP.JKT {
+		t.Fatalf("bound token: %+v %v", p, err)
+	}
+	for _, c := range v.DPoP.Cases { // in order: one replay cache
+		err := sdk.VerifyDPoP(p, v.DPoP.Token, c.Proof, v.DPoP.Method, v.DPoP.URL)
+		if got := map[bool]string{true: "allow", false: "reject"}[err == nil]; got != c.Expect {
+			t.Fatalf("%s: got %s, want %s (%v)", c.Name, got, c.Expect, err)
+		}
+	}
+}
+
+func TestDPoPMiddlewareRefusesABoundTokenAsBearer(t *testing.T) {
+	v := loadVectors(t)
+	sdk := vectorSDK(v)
+	h := sdk.Middleware()(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	for _, auth := range []string{"Bearer " + v.DPoP.Token, "DPoP " + v.DPoP.Token, "DPoP " + v.Impersonation.Plain} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, v.DPoP.URL, nil)
+		req.Header.Set("Authorization", auth)
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusUnauthorized || rec.Header().Get("WWW-Authenticate") == "" {
+			t.Fatalf("%.20s: status %d", auth, rec.Code)
+		}
 	}
 }

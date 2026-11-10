@@ -28,6 +28,9 @@ type Config struct {
 	HTTPClient   *http.Client
 	// Leeway is the clock skew allowed on exp (default and maximum 60 s).
 	Leeway time.Duration
+	// PublicURL is this API's external origin (https://api.example.com) for
+	// checking DPoP proofs behind a proxy; empty uses the request's own.
+	PublicURL string
 }
 
 // Principal is the authenticated subject of a request.
@@ -52,6 +55,8 @@ type Principal struct {
 	// "user" or "service_account".
 	APIKey    bool
 	OwnerType string
+	// JKT is the DPoP key the token is bound to (cnf.jkt), or "" (ADR-0070).
+	JKT string
 }
 
 // Can reports whether the principal holds permission (exact key; wildcards
@@ -66,6 +71,7 @@ type SDK struct {
 	cfg  Config
 	deny Denylist
 	now  func() time.Time
+	jtis jtiCache
 
 	keyMu    sync.Mutex
 	keyCache map[[32]byte]keyEntry
@@ -87,6 +93,7 @@ func New(cfg Config) *SDK {
 		cfg.Leeway = time.Minute
 	}
 	cfg.Issuer = strings.TrimSuffix(cfg.Issuer, "/")
+	cfg.PublicURL = strings.TrimSuffix(cfg.PublicURL, "/")
 	return &SDK{cfg: cfg, now: time.Now}
 }
 
@@ -132,6 +139,9 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 			Sub    string `json:"sub"`
 			EndsAt int64  `json:"ends_at"`
 		} `json:"act"`
+		Cnf *struct {
+			JKT string `json:"jkt"`
+		} `json:"cnf"`
 	}
 	if err := json.Unmarshal(payload, &c); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrInvalidToken)
@@ -159,6 +169,9 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		SID: c.SID, JTI: c.JTI}
 	if c.Act != nil {
 		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
+	}
+	if c.Cnf != nil {
+		p.JKT = c.Cnf.JKT
 	}
 	return p, nil
 }
@@ -256,18 +269,37 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 	return p, ok
 }
 
-// Middleware verifies the bearer token on every request. Failures are 401
-// with WWW-Authenticate: Bearer error="invalid_token" (TOKENS.md).
+// Middleware verifies the access token on every request. Failures are 401
+// with WWW-Authenticate: Bearer error="invalid_token" (TOKENS.md). A
+// DPoP-bound token is accepted only as "DPoP <token>" with a valid proof in
+// the DPoP header (ADR-0070).
 func (s *SDK) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			dpop := false
+			if !ok {
+				raw, dpop = strings.CutPrefix(r.Header.Get("Authorization"), "DPoP ")
+				ok = dpop
+			}
 			if !ok || raw == "" {
 				w.Header().Set("WWW-Authenticate", `Bearer`)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 			p, err := s.Verify(r.Context(), raw)
+			switch {
+			case err != nil:
+			case p.JKT != "" && !dpop, p.JKT == "" && dpop:
+				err = fmt.Errorf("%w: wrong scheme", ErrInvalidDPoP)
+			case p.JKT != "":
+				err = s.VerifyDPoP(p, raw, r.Header.Get("DPoP"), r.Method, s.requestURL(r))
+			}
+			if err != nil && (dpop || (p != nil && p.JKT != "")) {
+				w.Header().Set("WWW-Authenticate", `DPoP error="invalid_token", algs="ES256 RS256 EdDSA"`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 			if err != nil {
 				w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
 				http.Error(w, "unauthorized", http.StatusUnauthorized)

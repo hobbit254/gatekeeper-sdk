@@ -77,7 +77,85 @@ final class Gatekeeper
             jti: $jti,
             actor: isset($claims->act->sub) && is_string($claims->act->sub) ? $claims->act->sub : null,
             impersonationEndsAt: isset($claims->act->ends_at) && is_int($claims->act->ends_at) ? $claims->act->ends_at : null,
+            jkt: isset($claims->cnf->jkt) && is_string($claims->cnf->jkt) ? $claims->cnf->jkt : '',
         );
+    }
+
+    private const DPOP_SKEW = 60;
+    private const DPOP_ALGS = ['ES256', 'RS256', 'EdDSA'];
+
+    /**
+     * Checks a request's DPoP proof for a DPoP-bound principal (RFC 9449,
+     * ADR-0070): signed by the bound key, for this method and URL (query
+     * ignored), with ath of $accessToken, iat within 60 s, a jti not seen before.
+     */
+    public function verifyDPoP(Principal $p, string $accessToken, string $proof, string $method, string $url, ?int $now = null): void
+    {
+        $now ??= time();
+        if ($p->jkt === '') {
+            throw new InvalidTokenException('DPoP: the token is not DPoP-bound');
+        }
+        $parts = explode('.', $proof);
+        $header = count($parts) === 3 ? json_decode(JWT::urlsafeB64Decode($parts[0]), true) : null;
+        $jwk = is_array($header) ? ($header['jwk'] ?? null) : null;
+        $alg = is_array($header) ? (string) ($header['alg'] ?? '') : '';
+        if (!is_array($jwk) || ($header['typ'] ?? '') !== 'dpop+jwt' || isset($jwk['d']) || !in_array($alg, self::DPOP_ALGS, true)) {
+            throw new InvalidTokenException('DPoP: header');
+        }
+        [$previousTime, $previousLeeway] = [JWT::$timestamp, JWT::$leeway]; // php-jwt's clock is static: restore it
+        [JWT::$timestamp, JWT::$leeway] = [$now, self::DPOP_SKEW];
+        try {
+            $claims = (array) JWT::decode($proof, JWK::parseKey($jwk, $alg));
+        } catch (\Throwable $e) {
+            throw new InvalidTokenException('DPoP: signature', 0, $e);
+        } finally {
+            [JWT::$timestamp, JWT::$leeway] = [$previousTime, $previousLeeway];
+        }
+        if (($claims['htm'] ?? null) !== $method || !is_string($claims['htu'] ?? null) || self::htu($claims['htu']) === null
+            || self::htu($claims['htu']) !== self::htu($url)) {
+            throw new InvalidTokenException('DPoP: htm or htu');
+        }
+        if (!is_int($claims['iat'] ?? null) || abs($claims['iat'] - $now) > self::DPOP_SKEW) {
+            throw new InvalidTokenException('DPoP: iat');
+        }
+        if (!hash_equals(JWT::urlsafeB64Encode(hash('sha256', $accessToken, true)), (string) ($claims['ath'] ?? ''))) {
+            throw new InvalidTokenException('DPoP: ath');
+        }
+        if (!hash_equals($p->jkt, self::thumbprint($jwk))) {
+            throw new InvalidTokenException('DPoP: another key');
+        }
+        $jti = $claims['jti'] ?? '';
+        $seen = 'gatekeeper.dpop.' . hash('sha256', $p->jkt . ':' . (is_string($jti) ? $jti : ''));
+        if (!is_string($jti) || $jti === '' || $this->cache->has($seen)) {
+            throw new InvalidTokenException('DPoP: replayed');
+        }
+        $this->cache->set($seen, true, 2 * self::DPOP_SKEW);
+    }
+
+    /** A URL without query and fragment, as htu compares it, or null. */
+    private static function htu(string $url): ?string
+    {
+        $u = parse_url($url);
+        if (!is_array($u) || !isset($u['scheme'], $u['host'])) {
+            return null;
+        }
+        return strtolower($u['scheme']) . '://' . strtolower($u['host']) . (isset($u['port']) ? ':' . $u['port'] : '') . ($u['path'] ?? '/');
+    }
+
+    /** RFC 7638 SHA-256 JWK thumbprint, base64url. @param array<string, mixed> $jwk */
+    public static function thumbprint(array $jwk): string
+    {
+        $members = match ($jwk['kty'] ?? '') {
+            'EC' => ['crv', 'kty', 'x', 'y'],
+            'RSA' => ['e', 'kty', 'n'],
+            'OKP' => ['crv', 'kty', 'x'],
+            default => throw new InvalidTokenException('DPoP: key type'),
+        };
+        $req = [];
+        foreach ($members as $m) {
+            $req[$m] = (string) ($jwk[$m] ?? '');
+        }
+        return JWT::urlsafeB64Encode(hash('sha256', (string) json_encode($req, JSON_UNESCAPED_SLASHES), true));
     }
 
     /**

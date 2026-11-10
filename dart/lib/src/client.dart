@@ -114,14 +114,32 @@ class GatekeeperException implements Exception {
   String toString() => 'GatekeeperException: $message';
 }
 
+/// Signs DPoP proofs (RFC 9449, ADR-0070) with a key the app holds. Back it
+/// with the platform keystore (iOS Secure Enclave, Android Keystore) so the
+/// key can't leave the device; the SDK never sees the private key.
+abstract class DpopSigner {
+  /// The public key as a JWK: kty, crv, x, y for ES256 (no private members).
+  Map<String, String> get publicJwk;
+
+  /// ES256 (default), RS256 or EdDSA.
+  String get alg => 'ES256';
+
+  /// Signs [input], the JWS signing input, and returns the JWS signature
+  /// bytes (for ES256 the 64-byte r||s, not DER).
+  Future<List<int>> sign(List<int> input);
+}
+
 /// The SDK. One per app; safe to share.
 class Gatekeeper {
-  Gatekeeper(this.config, {TokenStore? store, http.Client? httpClient, DateTime Function()? clock})
+  Gatekeeper(this.config, {TokenStore? store, http.Client? httpClient, DateTime Function()? clock, this.dpop})
       : store = store ?? MemoryTokenStore(),
         _http = httpClient ?? http.Client(),
         _now = clock ?? (() => DateTime.now().toUtc());
 
   final GatekeeperConfig config;
+
+  /// Binds this app's tokens to a device key with DPoP when set (ADR-0070).
+  final DpopSigner? dpop;
   final TokenStore store;
   final http.Client _http;
   final DateTime Function() _now;
@@ -191,7 +209,8 @@ class Gatekeeper {
     }();
   }
 
-  /// An HTTP client for the product's API: adds the bearer token, refreshes
+  /// An HTTP client for the product's API: adds the token (as DPoP with a
+  /// fresh proof when a [DpopSigner] is set), refreshes
   /// once on invalid_token, and throws [StepUpRequired] on an RFC 9470 challenge.
   http.Client authorizedClient() => _AuthorizedClient(this, _http);
 
@@ -208,8 +227,28 @@ class Gatekeeper {
   /// Forgets the tokens on this device.
   Future<void> signOutLocally() => store.write(null);
 
+  /// A DPoP proof for [method] on [url] (query and fragment dropped); with
+  /// [accessToken] it carries ath, as API requests need.
+  Future<String> dpopProof(String method, Uri url, {String? accessToken}) async {
+    final signer = dpop;
+    if (signer == null) throw GatekeeperException('no DPoP signer configured');
+    String b64(List<int> b) => base64Url.encode(b).replaceAll('=', '');
+    final header = {'typ': 'dpop+jwt', 'alg': signer.alg, 'jwk': signer.publicJwk};
+    final claims = <String, Object>{
+      'htm': method,
+      'htu': Uri(scheme: url.scheme, host: url.host, port: url.hasPort ? url.port : null, path: url.path).toString(),
+      'iat': _now().millisecondsSinceEpoch ~/ 1000,
+      'jti': _random(16),
+      if (accessToken != null) 'ath': b64(sha256.convert(ascii.encode(accessToken)).bytes),
+    };
+    final input = '${b64(utf8.encode(jsonEncode(header)))}.${b64(utf8.encode(jsonEncode(claims)))}';
+    return '$input.${b64(await signer.sign(ascii.encode(input)))}';
+  }
+
   Future<Tokens> _token(Map<String, String> form) async {
-    final res = await _http.post(Uri.parse('${config.issuer}/oauth2/token'), body: form);
+    final tokenUrl = Uri.parse('${config.issuer}/oauth2/token');
+    final res = await _http.post(tokenUrl, body: form,
+        headers: dpop == null ? null : {'DPoP': await dpopProof('POST', tokenUrl)});
     final body = jsonDecode(res.body) as Map<String, dynamic>;
     if (res.statusCode != 200) {
       if (form['grant_type'] == 'refresh_token') await store.write(null); // a dead family signs the user out
@@ -253,10 +292,14 @@ class _AuthorizedClient extends http.BaseClient {
     return res;
   }
 
-  Future<http.StreamedResponse> _send(http.BaseRequest original, String token, List<int>? body) {
-    final r = http.Request(original.method, original.url)
-      ..headers.addAll(original.headers)
-      ..headers['Authorization'] = 'Bearer $token';
+  Future<http.StreamedResponse> _send(http.BaseRequest original, String token, List<int>? body) async {
+    final r = http.Request(original.method, original.url)..headers.addAll(original.headers);
+    if (_gk.dpop != null) {
+      r.headers['Authorization'] = 'DPoP $token';
+      r.headers['DPoP'] = await _gk.dpopProof(original.method, original.url, accessToken: token);
+    } else {
+      r.headers['Authorization'] = 'Bearer $token';
+    }
     if (body != null) r.bodyBytes = body;
     return _inner.send(r);
   }

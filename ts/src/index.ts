@@ -2,7 +2,10 @@
 // Principal, resolve permissions from the client's role map and guard routes
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
-import { createLocalJWKSet, errors, jwtVerify, type JSONWebKeySet, type JWTPayload } from "jose";
+import {
+  calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
+  type JSONWebKeySet, type JWK, type JWTPayload,
+} from "jose";
 
 /** Configures one API. `issuer` is https://auth.<domain>/t/<tenant>. */
 export interface GatekeeperConfig {
@@ -21,6 +24,11 @@ export interface GatekeeperConfig {
    * token. Rejections refuse too (fail closed). With ioredis:
    * `(sid, jti) => redis.exists(`gk:deny:sid:${sid}`, `gk:deny:jti:${jti}`).then((n) => n > 0)` */
   denylist?: (sid: string, jti: string) => Promise<boolean>;
+  /** This API's external origin (https://api.example.com) for checking DPoP
+   * proofs behind a proxy; defaults to the request's own (ADR-0070). */
+  publicUrl?: string;
+  /** Injected clock in milliseconds (tests). */
+  now?: () => number;
 }
 
 /** The authenticated subject of a request. */
@@ -43,6 +51,8 @@ export interface Principal {
   /** True for a principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
   apiKey?: boolean;
   ownerType?: string;
+  /** The DPoP key the token is bound to (cnf.jkt), if any (ADR-0070). */
+  jkt?: string;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
 }
@@ -59,6 +69,11 @@ export class InvalidTokenError extends Error {
 export interface Req {
   headers: Record<string, string | string[] | undefined>;
   gatekeeper?: Principal;
+  /** Express fields, used to check DPoP proofs. */
+  method?: string;
+  originalUrl?: string;
+  url?: string;
+  protocol?: string;
 }
 export interface Res {
   status(code: number): Res;
@@ -71,8 +86,26 @@ export type Middleware = (req: Req, res: Res, next: Next) => void;
 export interface Gatekeeper {
   /** Runs the TOKENS.md checklist and returns the Principal. */
   verify(token: string): Promise<Principal>;
-  /** Express middleware: verifies the bearer token, or answers 401. */
+  /** Checks a request's DPoP proof for a DPoP-bound principal (RFC 9449, ADR-0070). */
+  verifyDPoP(p: Principal, accessToken: string, proof: string, method: string, url: string): Promise<void>;
+  /** Express middleware: verifies the token ("Bearer", or "DPoP" with a proof), or answers 401. */
   express(): Middleware;
+}
+
+const DPOP_SKEW_SEC = 60;
+const DPOP_ALGS = ["ES256", "RS256", "EdDSA"];
+const JTI_CAPACITY = 100_000;
+
+/** A URL without query and fragment, as htu compares it. */
+function htu(raw: string): string | undefined {
+  try {
+    const u = new URL(raw);
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 const JWKS_COOLDOWN_MS = 30_000;
@@ -87,6 +120,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   const issuer = config.issuer.replace(/\/$/, "");
   const doFetch = config.fetch ?? fetch;
   const leeway = Math.min(config.leewaySec && config.leewaySec > 0 ? config.leewaySec : 60, 60);
+  const now = config.now ?? Date.now;
+  // shortcut: per process; replicas keep their own, so a proof could replay once per replica within 2 minutes.
+  const jtis = new Map<string, number>();
 
   let keys: ReturnType<typeof createLocalJWKSet> | undefined;
   let keysInflight: Promise<boolean> | undefined;
@@ -214,29 +250,79 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       sid: String(c.sid ?? ""),
       jti: String(c.jti ?? ""),
       ...impersonation(c.act),
+      ...(typeof (c.cnf as { jkt?: unknown } | undefined)?.jkt === "string" ? { jkt: (c.cnf as { jkt: string }).jkt } : {}),
       can: (p: string) => perms.includes(p),
     };
   }
 
+  async function verifyDPoP(p: Principal, accessToken: string, proof: string, method: string, url: string): Promise<void> {
+    const bad = (why: string) => new InvalidTokenError(`DPoP proof: ${why}`);
+    if (!p.jkt) throw bad("the token is not DPoP-bound");
+    let header: ReturnType<typeof decodeProtectedHeader>;
+    try {
+      header = decodeProtectedHeader(proof);
+    } catch {
+      throw bad("parse");
+    }
+    const jwk = header.jwk as JWK | undefined;
+    if (header.typ !== "dpop+jwt" || !jwk || "d" in jwk || !DPOP_ALGS.includes(String(header.alg))) throw bad("header");
+    let claims: Record<string, unknown>;
+    try {
+      const key = await importJWK(jwk, String(header.alg));
+      const { payload } = await compactVerify(proof, key, { algorithms: DPOP_ALGS });
+      claims = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;
+    } catch {
+      throw bad("signature");
+    }
+    const want = htu(url);
+    if (!want || claims.htm !== method || typeof claims.htu !== "string" || htu(claims.htu) !== want) throw bad("htm or htu");
+    const nowSec = now() / 1000;
+    if (typeof claims.iat !== "number" || Math.abs(claims.iat - nowSec) > DPOP_SKEW_SEC) throw bad("iat");
+    if (claims.ath !== createHash("sha256").update(accessToken).digest("base64url")) throw bad("ath");
+    if ((await calculateJwkThumbprint(jwk, "sha256")) !== p.jkt) throw bad("another key");
+    if (typeof claims.jti !== "string" || !claims.jti) throw bad("jti");
+    const id = `${p.jkt}:${claims.jti}`;
+    const t = now();
+    if (jtis.size >= JTI_CAPACITY) for (const [k, until] of jtis) if (until < t) jtis.delete(k);
+    if (jtis.size >= JTI_CAPACITY || (jtis.get(id) ?? 0) > t) throw bad("replayed"); // full: refuse rather than forget
+    jtis.set(id, t + 2 * DPOP_SKEW_SEC * 1000);
+  }
+
   return {
     verify,
+    verifyDPoP,
     express(): Middleware {
       return (req, res, next) => {
         const header = req.headers.authorization;
-        const raw = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : "";
+        const dpop = typeof header === "string" && header.startsWith("DPoP ");
+        const raw = typeof header === "string" && (header.startsWith("Bearer ") || dpop) ? header.slice(dpop ? 5 : 7) : "";
         if (!raw) {
           res.setHeader("WWW-Authenticate", "Bearer");
           res.status(401).end("unauthorized");
           return;
         }
-        verify(raw).then(
-          (p) => { req.gatekeeper = p; next(); },
-          (e) => {
-            if (!(e instanceof InvalidTokenError)) return next(e); // JWKS or role map unreachable: a 5xx, not a 401
-            res.setHeader("WWW-Authenticate", 'Bearer error="invalid_token"');
-            res.status(401).end("unauthorized");
-          },
-        );
+        let bound = false;
+        verify(raw)
+          .then(async (p) => {
+            bound = !!p.jkt;
+            if (bound !== dpop) throw new InvalidTokenError("wrong authorization scheme for this token");
+            if (bound) {
+              const proof = req.headers.dpop;
+              const base = config.publicUrl?.replace(/\/$/, "") ?? `${req.protocol ?? "http"}://${String(req.headers.host ?? "")}`;
+              const path = (req.originalUrl ?? req.url ?? "/").split("?")[0];
+              await verifyDPoP(p, raw, typeof proof === "string" ? proof : "", req.method ?? "GET", base + path);
+            }
+            return p;
+          })
+          .then(
+            (p) => { req.gatekeeper = p; next(); },
+            (e) => {
+              if (!(e instanceof InvalidTokenError)) return next(e); // JWKS or role map unreachable: a 5xx, not a 401
+              res.setHeader("WWW-Authenticate", dpop || bound
+                ? 'DPoP error="invalid_token", algs="ES256 RS256 EdDSA"' : 'Bearer error="invalid_token"');
+              res.status(401).end("unauthorized");
+            },
+          );
       };
     },
   };

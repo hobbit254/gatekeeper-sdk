@@ -32,6 +32,8 @@ final readonly class Principal
         /** A principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
         public bool $apiKey = false,
         public string $ownerType = '',
+        /** The DPoP key the token is bound to (cnf.jkt), or '' (ADR-0070). */
+        public string $jkt = '',
     ) {
     }
 

@@ -20,6 +20,8 @@ final readonly class Config
         public string $clientSecret = '',
         /** Clock skew allowed on exp, seconds (default and maximum 60). */
         public int $leewaySec = 60,
+        /** This API's external origin (https://api.example.com) for checking DPoP proofs behind a proxy (ADR-0070). */
+        public string $publicUrl = '',
     ) {
         $this->issuer = rtrim($issuer, '/');
     }
