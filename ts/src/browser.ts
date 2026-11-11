@@ -1,7 +1,10 @@
 // Sign-in by redirect for browser apps (FR-A21, ADR-0089). PKCE, state and
 // nonce live in sessionStorage for the round trip only; tokens stay in memory.
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } from "jose";
+import { dpopSigner, generateDPoPKey, indexedDBKeyStore, type DPoPKeyStore, type DPoPSigner } from "./dpop.js";
 import { challenge, random, same, tokenRequest, type TokenResponse } from "./pkce.js";
+
+export type { DPoPKeyStore } from "./dpop.js";
 
 export interface BrowserClientConfig {
   /** https://auth.<domain>/t/<tenant> */
@@ -17,6 +20,13 @@ export interface BrowserClientConfig {
   navigate?: (url: string) => void;
   /** Milliseconds; tests. */
   now?: () => number;
+  /**
+   * Bind tokens to a non-extractable P-256 key (FR-S13, ADR-0096): sign-in
+   * sends dpop_jkt, token requests carry proofs, and fetchWithDPoP calls APIs.
+   */
+  dpop?: boolean;
+  /** Where the key is kept; defaults to IndexedDB. */
+  dpopKeyStore?: DPoPKeyStore;
 }
 
 export interface LoginOptions {
@@ -52,6 +62,9 @@ export interface BrowserClient {
   handleRedirectCallback(url?: string): Promise<JWTPayload>;
   /** A valid access token, refreshed shortly before expiry. */
   getAccessToken(): Promise<string>;
+  /** fetch with the access token and a DPoP proof (needs dpop: true). */
+  fetchWithDPoP(url: string, init?: RequestInit): Promise<Response>;
+  /** Ends the session; with dpop, also deletes the key. */
   logout(opts?: { returnTo?: string }): Promise<void>;
 }
 
@@ -64,6 +77,21 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
   const key = `gk.tx.${config.clientId}`;
   let session: Session | null = null;
   let refreshing: Promise<string> | null = null;
+  const keys = config.dpop ? config.dpopKeyStore ?? indexedDBKeyStore(config.clientId) : undefined;
+  let signer: Promise<DPoPSigner> | undefined;
+
+  /** The page's DPoP signer, loading or creating the key once; undefined without dpop. */
+  function dpop(): Promise<DPoPSigner> | undefined {
+    if (!keys) return undefined;
+    return (signer ??= (async () => {
+      let k = await keys.load().catch(() => undefined); // no IndexedDB (some private modes): a key per page load
+      if (!k) {
+        k = await generateDPoPKey();
+        await keys.save(k).catch(() => undefined);
+      }
+      return dpopSigner(k);
+    })());
+  }
 
   async function verifyIDToken(raw: string, nonce: string): Promise<JWTPayload> {
     const resp = await f(`${issuer}/.well-known/jwks.json`);
@@ -88,6 +116,8 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
       if (opts.organization) q.set("organization", opts.organization);
       if (opts.prompt) q.set("prompt", opts.prompt);
       if (opts.uiLocales) q.set("ui_locales", opts.uiLocales);
+      const d = await dpop();
+      if (d) q.set("dpop_jkt", await d.thumbprint()); // the code is bound to the key (ADR-0095)
       navigate(`${issuer}/oauth2/authorize?${q}`);
     },
 
@@ -100,7 +130,7 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
       if (!same(params.get("state") ?? "", tx.state)) throw new Error("state doesn't match this sign-in");
       if (params.get("error")) throw new AuthorizeError(params.get("error") ?? "", params.get("error_description") ?? undefined);
       const t = await tokenRequest(f, issuer, { grant_type: "authorization_code", client_id: config.clientId,
-        code: params.get("code") ?? "", redirect_uri: config.redirectUri, code_verifier: tx.verifier });
+        code: params.get("code") ?? "", redirect_uri: config.redirectUri, code_verifier: tx.verifier }, await dpop());
       if (!t.id_token) throw new Error("no ID token: request the openid scope");
       const claims = await verifyIDToken(t.id_token, tx.nonce);
       keep(t);
@@ -114,11 +144,19 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
         session = null;
         throw new LoginRequiredError();
       }
-      refreshing ??= tokenRequest(f, issuer, { grant_type: "refresh_token", client_id: config.clientId, refresh_token: session.refresh })
+      const rt = session.refresh;
+      refreshing ??= (async () => tokenRequest(f, issuer, { grant_type: "refresh_token", client_id: config.clientId, refresh_token: rt },
+        await dpop()))()
         .then((t) => { keep(t); return t.access_token; })
         .catch((e) => { session = null; throw e instanceof Error ? new LoginRequiredError() : e; })
         .finally(() => { refreshing = null; });
       return refreshing;
+    },
+
+    async fetchWithDPoP(url, init = {}) {
+      const d = await dpop();
+      if (!d) throw new Error("fetchWithDPoP needs dpop: true");
+      return d.fetch(f, url, init, await this.getAccessToken());
     },
 
     async logout(opts = {}) {
@@ -126,6 +164,10 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
       if (session?.idToken) q.set("id_token_hint", session.idToken);
       if (opts.returnTo) q.set("post_logout_redirect_uri", opts.returnTo);
       session = null;
+      if (keys) {
+        signer = undefined;
+        await keys.delete().catch(() => undefined);
+      }
       navigate(`${issuer}/oauth2/logout?${q}`);
     },
   };

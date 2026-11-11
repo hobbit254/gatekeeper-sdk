@@ -169,7 +169,7 @@
             "type": "string"
           },
           "dpop_bound_access_tokens": {
-            "description": "Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients",
+            "description": "Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)",
             "type": "boolean"
           },
           "first_party": {
@@ -601,7 +601,7 @@
             "type": "string"
           },
           "dpop_bound_access_tokens": {
-            "description": "Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients",
+            "description": "Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)",
             "type": "boolean"
           },
           "first_party": {
@@ -2237,6 +2237,10 @@
             "minimum": 1,
             "type": "integer"
           },
+          "dpop_nonce": {
+            "description": "Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095)",
+            "type": "boolean"
+          },
           "lockout": {
             "properties": {
               "base_sec": {
@@ -2519,7 +2523,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.22.0"
+    "version": "0.23.0"
   },
   "openapi": "3.0.3",
   "paths": {

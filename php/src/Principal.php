@@ -12,6 +12,7 @@ final readonly class Principal
      * @param list<string> $permissions
      * @param list<string> $scopes
      * @param list<string> $amr
+     * @param array<string, int> $stepUp
      */
     public function __construct(
         public string $sub,
@@ -34,6 +35,8 @@ final readonly class Principal
         public string $ownerType = '',
         /** The DPoP key the token is bound to (cnf.jkt), or '' (ADR-0070). */
         public string $jkt = '',
+        /** Per-permission step-up windows in seconds from the role map (ADR-0097). */
+        public array $stepUp = [],
     ) {
     }
 
@@ -41,5 +44,11 @@ final readonly class Principal
     public function can(string $permission): bool
     {
         return in_array($permission, $this->permissions, true);
+    }
+
+    /** API keys and tokens without amr (client credentials) are machines; step-up doesn't apply to them. */
+    public function machine(): bool
+    {
+        return $this->apiKey || $this->amr === [];
     }
 }

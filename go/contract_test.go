@@ -38,6 +38,10 @@ type vectors struct {
 		MaxAge      int  `json:"max_age"`
 		Fresh       bool `json:"fresh"`
 	} `json:"step_up"`
+	PermissionStepUp []struct {
+		Name, Token, Permission, Expect string
+		MaxAge                          int `json:"max_age"`
+	} `json:"permission_step_up"`
 	Impersonation struct {
 		Token  string `json:"token"`
 		Actor  string `json:"actor"`
@@ -54,7 +58,7 @@ type vectors struct {
 			Name, Proof, Expect string
 		} `json:"cases"`
 	} `json:"dpop"`
-		APIKeys struct {
+	APIKeys struct {
 		Introspection map[string]json.RawMessage `json:"introspection"`
 		Subject       string                     `json:"subject"`
 		Cases         []struct {
@@ -270,5 +274,42 @@ func TestDPoPMiddlewareRefusesABoundTokenAsBearer(t *testing.T) {
 		if rec.Code != http.StatusUnauthorized || rec.Header().Get("WWW-Authenticate") == "" {
 			t.Fatalf("%.20s: status %d", auth, rec.Code)
 		}
+	}
+}
+
+func TestContractPermissionStepUp(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	if len(v.PermissionStepUp) == 0 {
+		t.Fatal("no permission_step_up cases")
+	}
+	for _, c := range v.PermissionStepUp {
+		t.Run(c.Name, func(t *testing.T) {
+			sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+				HTTPClient: &http.Client{Transport: fixedServer{v}}})
+			p, err := sdk.Verify(context.Background(), c.Token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/", nil).WithContext(context.WithValue(context.Background(), ctxKey{}, p))
+			RequirePermission(c.Permission)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})).ServeHTTP(rec, req)
+			want := map[string]int{"allow": http.StatusOK, "deny": http.StatusForbidden, "step_up": http.StatusUnauthorized}[c.Expect]
+			if rec.Code != want {
+				t.Fatalf("got %d, want %d", rec.Code, want)
+			}
+			if c.Expect == "step_up" && rec.Header().Get("WWW-Authenticate") !=
+				fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d", acr_values="mfa"`, c.MaxAge) {
+				t.Fatalf("challenge: %q", rec.Header().Get("WWW-Authenticate"))
+			}
+		})
 	}
 }

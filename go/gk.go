@@ -57,7 +57,13 @@ type Principal struct {
 	OwnerType string
 	// JKT is the DPoP key the token is bound to (cnf.jkt), or "" (ADR-0070).
 	JKT string
+	// StepUp is how recent a second factor each held permission needs, from
+	// the role map; RequirePermission enforces it (ADR-0097).
+	StepUp map[string]time.Duration
 }
+
+// machine principals (API keys, client-credentials tokens) are never asked to step up (ADR-0056).
+func (p *Principal) machine() bool { return p.APIKey || len(p.AMR) == 0 }
 
 // Can reports whether the principal holds permission (exact key; wildcards
 // are already expanded in the role map).
@@ -80,6 +86,7 @@ type SDK struct {
 	keys       jose.JSONWebKeySet
 	lastFetch  time.Time
 	roleMap    map[string][]string
+	roleStepUp map[string]int // permission → seconds (ADR-0097)
 	roleMapRV  int64
 	roleMapSet bool
 }
@@ -160,13 +167,13 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 			return nil, fmt.Errorf("%w: denied", errors.Join(ErrInvalidToken, err))
 		}
 	}
-	perms, err := s.permissions(ctx, c.Roles, c.RV)
+	perms, stepUp, err := s.permissions(ctx, c.Roles, c.RV)
 	if err != nil {
 		return nil, err
 	}
 	p := &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
 		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV,
-		SID: c.SID, JTI: c.JTI}
+		SID: c.SID, JTI: c.JTI, StepUp: stepUp}
 	if c.Act != nil {
 		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
 	}
@@ -201,30 +208,39 @@ func (s *SDK) key(ctx context.Context, kid string) (any, error) {
 
 // permissions resolves roles through the cached role map, refetching when the
 // token's rv is newer than the cached one.
-func (s *SDK) permissions(ctx context.Context, roles []string, rv int64) ([]string, error) {
+func (s *SDK) permissions(ctx context.Context, roles []string, rv int64) ([]string, map[string]time.Duration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.roleMapSet || rv > s.roleMapRV {
 		var rm struct {
-			RV    int64               `json:"rv"`
-			Roles map[string][]string `json:"roles"`
+			RV     int64               `json:"rv"`
+			Roles  map[string][]string `json:"roles"`
+			StepUp map[string]int      `json:"step_up"`
 		}
 		if err := s.getJSON(ctx, s.cfg.Issuer+"/v1/clients/"+s.cfg.ClientID+"/role-map", true, &rm); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		s.roleMap, s.roleMapRV, s.roleMapSet = rm.Roles, rm.RV, true
+		s.roleMap, s.roleStepUp, s.roleMapRV, s.roleMapSet = rm.Roles, rm.StepUp, rm.RV, true
 	}
 	seen := map[string]bool{}
 	var out []string
+	var stepUp map[string]time.Duration
 	for _, r := range roles {
 		for _, p := range s.roleMap[r] {
-			if !seen[p] {
-				seen[p] = true
-				out = append(out, p)
+			if seen[p] {
+				continue
+			}
+			seen[p] = true
+			out = append(out, p)
+			if w := s.roleStepUp[p]; w > 0 {
+				if stepUp == nil {
+					stepUp = map[string]time.Duration{}
+				}
+				stepUp[p] = time.Duration(w) * time.Second
 			}
 		}
 	}
-	return out, nil
+	return out, stepUp, nil
 }
 
 func (s *SDK) getJSON(ctx context.Context, url string, auth bool, v any) error {
@@ -310,14 +326,21 @@ func (s *SDK) Middleware() func(http.Handler) http.Handler {
 	}
 }
 
-// RequirePermission answers 403 unless the Principal holds permission.
-// Sensitive permissions and direct grants need /v1/authz/check (ADR-0005).
+// RequirePermission answers 403 unless the Principal holds permission, and
+// 401 with the RFC 9470 challenge when the permission's step-up window from
+// the role map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005).
 func RequirePermission(permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := FromContext(r.Context())
 			if !ok || !p.Can(permission) {
 				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if window := p.StepUp[permission]; window > 0 && !p.machine() && !p.FreshMFA(window) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d", acr_values="mfa"`,
+					int(window.Seconds())))
+				http.Error(w, "step-up required", http.StatusUnauthorized)
 				return
 			}
 			next.ServeHTTP(w, r)

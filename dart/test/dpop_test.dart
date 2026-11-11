@@ -134,4 +134,76 @@ void main() {
     expect(seen.last.headers['Authorization'], startsWith('Bearer '));
     await expectLater(gk.dpopProof('GET', Uri.parse('https://x.test/')), throwsA(isA<GatekeeperException>()));
   });
+
+  // FR-S11, FR-S13 (ADR-0095, ADR-0096).
+  test('sign-in and headless start send dpop_jkt, the RFC 7638 thumbprint', () async {
+    expect(Gatekeeper(config, dpop: Rfc7638Signer()).dpopJkt, 'NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs');
+    final signer = TestSigner();
+    final j = signer.publicJwk;
+    final want = b64(sha256.convert(utf8.encode('{"crv":"P-256","kty":"EC","x":"${j['x']}","y":"${j['y']}"}')).bytes);
+    Map<String, dynamic>? started;
+    final gk = Gatekeeper(config, dpop: signer, httpClient: MockClient((r) async {
+      started = jsonDecode(r.body) as Map<String, dynamic>;
+      return http.Response(jsonEncode({'flow_id': 'f1', 'methods': ['password']}), 200);
+    }));
+    expect(gk.authorizationRequest().url.queryParameters['dpop_jkt'], want);
+    await gk.startHeadless();
+    expect(started!['dpop_jkt'], want);
+    expect(Gatekeeper(config).authorizationRequest().url.queryParameters.containsKey('dpop_jkt'), isFalse);
+  });
+
+  test('token requests and API calls retry once with the server\'s nonce', () async {
+    final signer = TestSigner();
+    final nonces = <String?>[];
+    final at = jwt({'sub': 'u1'});
+    final gk = Gatekeeper(config, dpop: signer, clock: () => now, httpClient: MockClient((r) async {
+      final nonce = part(r.headers['DPoP']!, 1)['nonce'] as String?;
+      nonces.add(nonce);
+      final h = {'dpop-nonce': 'n-1'};
+      if (nonce != 'n-1') {
+        return r.url.path.endsWith('/oauth2/token')
+            ? http.Response(jsonEncode({'error': 'use_dpop_nonce'}), 400, headers: h)
+            : http.Response('', 401, headers: {...h, 'www-authenticate': 'DPoP error="use_dpop_nonce"'});
+      }
+      if (r.url.path.endsWith('/oauth2/token')) {
+        return http.Response(jsonEncode({'access_token': at, 'refresh_token': 'rt', 'expires_in': 600}), 200, headers: h);
+      }
+      return http.Response('{}', 200, headers: h);
+    }));
+    final req = gk.authorizationRequest();
+    await gk.handleRedirect(Uri.parse('com.acme.app:/cb?code=c&state=${req.state}'), req);
+    expect(nonces, [null, 'n-1']);
+    final res = await gk.authorizedClient().get(Uri.parse('https://api.acme.test/orders'));
+    expect(res.statusCode, 200);
+    expect(nonces.sublist(2), [null, 'n-1'], reason: "the API's origin has its own nonce");
+  });
+
+  test('a second nonce refusal is not retried', () async {
+    var calls = 0;
+    final gk = Gatekeeper(config, dpop: TestSigner(), httpClient: MockClient((r) async {
+      calls++;
+      return http.Response(jsonEncode({'error': 'use_dpop_nonce'}), 400, headers: {'dpop-nonce': 'n-$calls'});
+    }));
+    final req = gk.authorizationRequest();
+    await expectLater(gk.handleRedirect(Uri.parse('com.acme.app:/cb?code=c&state=${req.state}'), req),
+        throwsA(isA<GatekeeperException>()));
+    expect(calls, 2);
+  });
+}
+
+/// The RSA key of RFC 7638 §3.1, whose thumbprint the RFC gives.
+class Rfc7638Signer extends DpopSigner {
+  @override
+  Map<String, String> get publicJwk => {
+        'kty': 'RSA',
+        'n': '0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMs'
+            'tn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91'
+            'CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw',
+        'e': 'AQAB',
+        'alg': 'RS256',
+        'kid': '2011-04-29',
+      };
+
+  @override
+  Future<List<int>> sign(List<int> input) => throw UnimplementedError();
 }

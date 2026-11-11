@@ -34,6 +34,16 @@ type stepUpCase struct {
 	Fresh  bool   `json:"fresh"`
 }
 
+// permStepUpCase checks RequirePermission with the role map's step_up
+// windows (ADR-0097): expect is allow, deny (403) or step_up (401 with max_age).
+type permStepUpCase struct {
+	Name       string `json:"name"`
+	Token      string `json:"token"`
+	Permission string `json:"permission"`
+	Expect     string `json:"expect"`
+	MaxAge     int    `json:"max_age,omitempty"`
+}
+
 type testCase struct {
 	Name       string `json:"name"`
 	Token      string `json:"token"`
@@ -107,6 +117,22 @@ func main() {
 		{"password + TOTP, long ago", good(func(c map[string]any) { c["amr"] = []string{"pwd", "otp", "mfa"} }), 600, false},
 		{"password only, recent", good(func(c map[string]any) { c["auth_time"] = soon }), 600, false},
 		{"SMS code is a single factor", good(func(c map[string]any) { c["amr"] = []string{"otp", "sms"}; c["auth_time"] = soon }), 600, false},
+	}
+	admin := func(edit func(map[string]any)) string {
+		return good(func(c map[string]any) {
+			c["roles"] = []string{"admin"}
+			if edit != nil {
+				edit(c)
+			}
+		})
+	}
+	permStepUps := []permStepUpCase{
+		{"MFA within the permission's window", admin(func(c map[string]any) { c["amr"] = []string{"pwd", "otp", "mfa"}; c["auth_time"] = soon }), "subscriber:delete", "allow", 0},
+		{"MFA long ago", admin(func(c map[string]any) { c["amr"] = []string{"pwd", "otp", "mfa"} }), "subscriber:delete", "step_up", 300},
+		{"no second factor", admin(func(c map[string]any) { c["auth_time"] = soon }), "subscriber:delete", "step_up", 300},
+		{"a permission without a window", admin(nil), "subscriber:read", "allow", 0},
+		{"not granted", viewer, "subscriber:delete", "deny", 0},
+		{"a machine token is never asked", admin(func(c map[string]any) { delete(c, "amr"); delete(c, "auth_time") }), "subscriber:delete", "allow", 0},
 	}
 	// Denylist cases (ADR-0048): the checker denies sid "session-denied" and jti "jti-denied".
 	denyCases := []testCase{
@@ -194,13 +220,15 @@ func main() {
 		"issuer": issuer, "audience": audience, "client_id": clientID, "client_secret": "contract-secret",
 		"jwks": jose.JSONWebKeySet{Keys: []jose.JSONWebKey{pub}},
 		"role_map": map[string]any{"client_id": clientID, "rv": 3, "roles": map[string][]string{
-			"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"}}},
-		"cases":         cases,
-		"step_up":       stepUps,
-		"denylist":      map[string]any{"sids": []string{"session-denied"}, "jtis": []string{"jti-denied"}, "cases": denyCases},
-		"impersonation": impersonation,
-		"api_keys":      apiKeys,
-		"dpop":          dpop,
+			"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"}},
+			"step_up": map[string]int{"subscriber:delete": 300}}, // ADR-0097
+		"cases":              cases,
+		"step_up":            stepUps,
+		"permission_step_up": permStepUps,
+		"denylist":           map[string]any{"sids": []string{"session-denied"}, "jtis": []string{"jti-denied"}, "cases": denyCases},
+		"impersonation":      impersonation,
+		"api_keys":           apiKeys,
+		"dpop":               dpop,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

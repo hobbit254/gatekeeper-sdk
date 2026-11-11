@@ -1520,7 +1520,7 @@ export interface components {
             client_secret?: string;
             /** Format: date-time */
             created_at?: string;
-            /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients */
+            /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095) */
             dpop_bound_access_tokens?: boolean;
             first_party?: boolean;
             has_logo?: boolean;
@@ -1652,7 +1652,7 @@ export interface components {
             allowed_audiences?: string[];
             allowed_scopes?: string[];
             backchannel_logout_uri?: string;
-            /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients */
+            /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095) */
             dpop_bound_access_tokens?: boolean;
             /** @description First-party clients skip the consent screen; a client with headless_login must stay first-party (ADR-0087) */
             first_party?: boolean;
@@ -2144,6 +2144,8 @@ export interface components {
                 ip_failures?: number;
             };
             deletion_grace_days: number;
+            /** @description Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095) */
+            dpop_nonce?: boolean;
             lockout: {
                 base_sec: number;
                 max_sec: number;

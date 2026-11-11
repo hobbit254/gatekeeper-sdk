@@ -2,6 +2,7 @@
 // Principal, resolve permissions from the client's role map and guard routes
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
+import { dpopSigner } from "./dpop.js";
 import {
   calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
   type JSONWebKeySet, type JWK, type JWTPayload,
@@ -53,6 +54,8 @@ export interface Principal {
   ownerType?: string;
   /** The DPoP key the token is bound to (cnf.jkt), if any (ADR-0070). */
   jkt?: string;
+  /** Seconds within which each held permission needs a second factor, from the role map (ADR-0097). */
+  stepUp?: Record<string, number>;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
 }
@@ -113,6 +116,7 @@ const JWKS_COOLDOWN_MS = 30_000;
 interface RoleMap {
   rv: number;
   roles: Record<string, string[]>;
+  step_up?: Record<string, number>; // seconds per sensitive permission (ADR-0097)
 }
 
 /** Returns an SDK instance for one API; safe to share across requests. */
@@ -166,7 +170,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     }
   }
 
-  async function permissions(roles: string[], rv: number): Promise<string[]> {
+  async function permissions(roles: string[], rv: number): Promise<{ perms: string[]; stepUp?: Record<string, number> }> {
     if (!roleMap || rv > roleMap.rv) {
       // Single-flight: concurrent requests share one refetch.
       roleMapInflight ??= getJSON<RoleMap>(`${issuer}/v1/clients/${encodeURIComponent(config.clientId)}/role-map`, true)
@@ -175,7 +179,12 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     }
     const out = new Set<string>();
     for (const r of roles) for (const p of roleMap.roles[r] ?? []) out.add(p);
-    return [...out];
+    let stepUp: Record<string, number> | undefined;
+    for (const p of out) {
+      const w = roleMap.step_up?.[p];
+      if (w) (stepUp ??= {})[p] = w;
+    }
+    return { perms: [...out], stepUp };
   }
 
   // API keys: introspected with this API's client credentials, cached 60 s
@@ -235,8 +244,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     }
     const roles = strings(c.roles);
     const rv = typeof c.rv === "number" ? c.rv : 0;
-    const perms = await permissions(roles, rv);
+    const { perms, stepUp } = await permissions(roles, rv);
     return {
+      ...(stepUp ? { stepUp } : {}),
       sub: String(c.sub ?? ""),
       tenantId: String(c.tid ?? ""),
       orgId: typeof c.org === "string" ? c.org : undefined,
@@ -328,12 +338,21 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   };
 }
 
-/** Answers 403 unless the request's Principal holds permission. Sensitive
- * permissions and direct grants need /v1/authz/check (ADR-0005). */
+/** Answers 403 unless the request's Principal holds permission, and 401 with
+ * the RFC 9470 challenge when the permission's step-up window from the role
+ * map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005). */
 export function requirePermission(permission: string): Middleware {
   return (req, res, next) => {
-    if (!req.gatekeeper?.can(permission)) {
+    const p = req.gatekeeper;
+    if (!p?.can(permission)) {
       res.status(403).end("forbidden");
+      return;
+    }
+    const window = p.stepUp?.[permission];
+    const machine = p.apiKey === true || p.amr.length === 0; // never asked to step up (ADR-0056)
+    if (window && !machine && !freshMFA(p, window)) {
+      res.setHeader("WWW-Authenticate", `Bearer error="insufficient_user_authentication", max_age="${window}", acr_values="mfa"`);
+      res.status(401).end("step-up required");
       return;
     }
     next();
@@ -385,25 +404,36 @@ export interface ClientCredentialsConfig {
   scope?: string;
   audience?: string;
   fetch?: typeof fetch;
+  /** A P-256 key pair (generateDPoPKey) that binds the token to it (FR-S12, ADR-0096). */
+  dpopKey?: CryptoKeyPair;
 }
 
-/** Returns a token source: `token()` resolves a token valid for at least another minute; concurrent calls share one request. */
-export function createClientCredentials(config: ClientCredentialsConfig): { token(): Promise<string> } {
+export interface ClientCredentials {
+  /** A token valid for at least another minute; concurrent calls share one request. */
+  token(): Promise<string>;
+  /** A DPoP proof for an API call made with token (needs dpopKey). */
+  proof(method: string, url: string, token: string): Promise<string>;
+}
+
+/** Returns a token source for client credentials, bound to dpopKey when set. */
+export function createClientCredentials(config: ClientCredentialsConfig): ClientCredentials {
   const doFetch = config.fetch ?? fetch;
+  const dpop = config.dpopKey ? dpopSigner(config.dpopKey) : undefined;
   let cached: { token: string; until: number } | undefined;
   let inflight: Promise<string> | undefined;
   async function fetchToken(): Promise<string> {
     const body = new URLSearchParams({ grant_type: "client_credentials" });
     if (config.scope) body.set("scope", config.scope);
     if (config.audience) body.set("audience", config.audience);
-    const res = await doFetch(config.tokenUrl, {
+    const init: RequestInit = {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
         Authorization: "Basic " + Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret)}`).toString("base64"),
       },
       body: body.toString(),
-    });
+    };
+    const res = await (dpop ? dpop.fetch(doFetch, config.tokenUrl, init) : doFetch(config.tokenUrl, init));
     if (res.status !== 200) throw new Error(`gatekeeper: client credentials: status ${res.status}`);
     const r = (await res.json()) as { access_token?: string; expires_in?: number };
     if (!r.access_token) throw new Error("gatekeeper: client credentials: no access_token");
@@ -416,5 +446,11 @@ export function createClientCredentials(config: ClientCredentialsConfig): { toke
       inflight ??= fetchToken().finally(() => { inflight = undefined; });
       return inflight;
     },
+    proof(method, url, token) {
+      if (!dpop) return Promise.reject(new Error("gatekeeper: proof needs dpopKey"));
+      return dpop.proof(method, url, token);
+    },
   };
 }
+
+export { generateDPoPKey } from "./dpop.js";

@@ -146,7 +146,25 @@ class Gatekeeper {
   final http.Client _http;
   final DateTime Function() _now;
   Future<Tokens>? _refreshing;
+  final _nonces = <String, String>{}; // origin → latest DPoP-Nonce (ADR-0096)
   static final _rand = Random.secure();
+
+  /// The signer's RFC 7638 JWK thumbprint, sent as dpop_jkt to bind the code to the key (ADR-0095).
+  String? get dpopJkt {
+    final jwk = dpop?.publicJwk;
+    if (jwk == null) return null;
+    final members = switch (jwk['kty']) { 'EC' => ['crv', 'kty', 'x', 'y'], 'RSA' => ['e', 'kty', 'n'], _ => ['crv', 'kty', 'x'] };
+    final canonical = jsonEncode({for (final m in members) m: jwk[m]});
+    return base64Url.encode(sha256.convert(utf8.encode(canonical)).bytes).replaceAll('=', '');
+  }
+
+  /// Remembers [res]'s DPoP-Nonce for [url]'s origin; true when the server asked for one (RFC 9449 §8).
+  bool _askedForNonce(Uri url, http.BaseResponse res, {String? error}) {
+    final n = res.headers['dpop-nonce'];
+    if (n == null || n.isEmpty) return false;
+    _nonces[url.origin] = n;
+    return error == 'use_dpop_nonce' || (res.headers['www-authenticate'] ?? '').contains('use_dpop_nonce');
+  }
 
   /// Builds the authorize URL with PKCE S256, state and nonce. [acrValues]
   /// and [maxAge] request step-up; [uiLocales] picks the page language.
@@ -168,6 +186,7 @@ class Gatekeeper {
       if (maxAge != null) 'max_age': '$maxAge',
       if (uiLocales != null) 'ui_locales': uiLocales,
       if (prompt != null) 'prompt': prompt,
+      if (dpopJkt != null) 'dpop_jkt': dpopJkt!,
     };
     return AuthorizationRequest(Uri.parse('${config.issuer}/oauth2/authorize').replace(queryParameters: q), state, verifier);
   }
@@ -242,6 +261,7 @@ class Gatekeeper {
       if (organization != null) 'organization': organization,
       if (acrValues != null) 'acr_values': acrValues,
       if (maxAge != null) 'max_age': '$maxAge',
+      if (dpopJkt != null) 'dpop_jkt': dpopJkt!,
     });
     return HeadlessSignIn._(this, verifier, state, out['flow_id'] as String,
         [for (final m in out['methods'] as List) m as String], out['provider_nonce'] as String? ?? '');
@@ -262,6 +282,7 @@ class Gatekeeper {
       'htu': Uri(scheme: url.scheme, host: url.host, port: url.hasPort ? url.port : null, path: url.path).toString(),
       'iat': _now().millisecondsSinceEpoch ~/ 1000,
       'jti': _random(16),
+      if (_nonces[url.origin] != null) 'nonce': _nonces[url.origin]!,
       if (accessToken != null) 'ath': b64(sha256.convert(ascii.encode(accessToken)).bytes),
     };
     final input = '${b64(utf8.encode(jsonEncode(header)))}.${b64(utf8.encode(jsonEncode(claims)))}';
@@ -270,9 +291,15 @@ class Gatekeeper {
 
   Future<Tokens> _token(Map<String, String> form) async {
     final tokenUrl = Uri.parse('${config.issuer}/oauth2/token');
-    final res = await _http.post(tokenUrl, body: form,
-        headers: dpop == null ? null : {'DPoP': await dpopProof('POST', tokenUrl)});
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    Future<http.Response> post() async =>
+        _http.post(tokenUrl, body: form, headers: dpop == null ? null : {'DPoP': await dpopProof('POST', tokenUrl)});
+    var res = await post();
+    var body = jsonDecode(res.body) as Map<String, dynamic>;
+    if (dpop != null && res.statusCode == 400 && _askedForNonce(tokenUrl, res, error: body['error'] as String?)) {
+      res = await post(); // once, with the nonce just received
+      body = jsonDecode(res.body) as Map<String, dynamic>;
+    }
+    if (dpop != null) _askedForNonce(tokenUrl, res);
     if (res.statusCode != 200) {
       if (form['grant_type'] == 'refresh_token') await store.write(null); // a dead family signs the user out
       throw GatekeeperException((body['error_description'] ?? body['error'] ?? 'token request failed').toString());
@@ -301,7 +328,13 @@ class _AuthorizedClient extends http.BaseClient {
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
     final body = request is http.Request ? request.bodyBytes : null;
-    var res = await _send(request, await _gk.accessToken(), body);
+    final token = await _gk.accessToken();
+    var res = await _send(request, token, body);
+    if (_gk.dpop != null && res.statusCode == 401 && _gk._askedForNonce(request.url, res)) {
+      await res.stream.drain<void>();
+      res = await _send(request, token, body);
+    }
+    if (_gk.dpop != null) _gk._askedForNonce(request.url, res);
     var challenge = res.headers['www-authenticate'] ?? '';
     if (res.statusCode == 401 && challenge.contains('invalid_token')) {
       await res.stream.drain<void>();

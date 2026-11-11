@@ -437,7 +437,7 @@ type AdminClient struct {
 	ClientSecret *string    `json:"client_secret,omitempty"`
 	CreatedAt    *time.Time `json:"created_at,omitempty"`
 
-	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients
+	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)
 	DpopBoundAccessTokens *bool `json:"dpop_bound_access_tokens,omitempty"`
 	FirstParty            *bool `json:"first_party,omitempty"`
 	HasLogo               *bool `json:"has_logo,omitempty"`
@@ -605,7 +605,7 @@ type ClientPatch struct {
 	AllowedScopes        *[]string `json:"allowed_scopes,omitempty"`
 	BackchannelLogoutUri *string   `json:"backchannel_logout_uri,omitempty"`
 
-	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false; not for m2m clients
+	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)
 	DpopBoundAccessTokens *bool `json:"dpop_bound_access_tokens,omitempty"`
 
 	// FirstParty First-party clients skip the consent screen; a client with headless_login must stay first-party (ADR-0087)
@@ -1214,7 +1214,10 @@ type TenantPolicy struct {
 		IpFailures      *int  `json:"ip_failures,omitempty"`
 	} `json:"captcha,omitempty"`
 	DeletionGraceDays int `json:"deletion_grace_days"`
-	Lockout           struct {
+
+	// DpopNonce Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095)
+	DpopNonce *bool `json:"dpop_nonce,omitempty"`
+	Lockout   struct {
 		BaseSec   int `json:"base_sec"`
 		MaxSec    int `json:"max_sec"`
 		Threshold int `json:"threshold"`

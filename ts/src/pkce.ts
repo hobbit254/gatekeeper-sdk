@@ -1,5 +1,6 @@
 // Web Crypto helpers shared by the browser and headless sign-in (ADR-0089).
 // No Node imports: these modules run in browsers and React Native too.
+import type { DPoPSigner } from "./dpop.js";
 
 const b64url = (b: Uint8Array) => {
   let s = "";
@@ -35,11 +36,13 @@ export interface TokenResponse {
   scope?: string;
 }
 
-/** Posts form to the issuer's token endpoint and returns the tokens or throws. */
-export async function tokenRequest(f: typeof fetch, issuer: string, form: Record<string, string>): Promise<TokenResponse> {
-  const resp = await f(`${issuer}/oauth2/token`, {
+/** Posts form to the issuer's token endpoint (with a proof when dpop is set) and returns the tokens or throws. */
+export async function tokenRequest(f: typeof fetch, issuer: string, form: Record<string, string>, dpop?: DPoPSigner): Promise<TokenResponse> {
+  const init: RequestInit = {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString(),
-  });
+  };
+  const url = `${issuer}/oauth2/token`;
+  const resp = await (dpop ? dpop.fetch(f, url, init) : f(url, init));
   const body = await resp.json().catch(() => ({}));
   if (!resp.ok) throw new Error(`token endpoint: ${(body as { error?: string }).error ?? resp.status}`);
   return body as TokenResponse;

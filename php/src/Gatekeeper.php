@@ -23,12 +23,12 @@ final class Gatekeeper
     private const KEY_TTL = 60; // a revoked key works this long at most (ADR-0059)
     private const DEAD_KEY_TTL = 10;
 
-    /** @var callable(string, array<string, string>, ?string=): array{int, string} */
+    /** @var callable(string, array<string, string>, ?string=): array{0: int, 1: string, 2?: array<string, string>} */
     private $fetch;
 
     /**
      * @param ?CacheInterface $cache holds the JWKS and role map (Laravel's cache store, or per-process memory)
-     * @param ?callable(string, array<string, string>, ?string=): array{int, string} $fetch returns [status, body]; a body means POST; tests inject one
+     * @param ?callable(string, array<string, string>, ?string=): array{0: int, 1: string, 2?: array<string, string>} $fetch returns [status, body, lowercased response headers]; a body means POST; tests inject one
      */
     public function __construct(
         private readonly Config $config,
@@ -61,6 +61,7 @@ final class Gatekeeper
         }
         $roles = self::strings($claims->roles ?? []);
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
+        [$permissions, $stepUp] = $this->permissions($roles, $rv);
 
         return new Principal(
             sub: (string) ($claims->sub ?? ''),
@@ -68,7 +69,7 @@ final class Gatekeeper
             orgId: isset($claims->org) && is_string($claims->org) ? $claims->org : null,
             clientId: (string) ($claims->client_id ?? ''),
             roles: $roles,
-            permissions: $this->permissions($roles, $rv),
+            permissions: $permissions,
             scopes: array_values(array_filter(explode(' ', (string) ($claims->scope ?? '')))),
             amr: self::strings($claims->amr ?? []),
             authTime: is_int($claims->auth_time ?? null) ? $claims->auth_time : 0,
@@ -78,6 +79,7 @@ final class Gatekeeper
             actor: isset($claims->act->sub) && is_string($claims->act->sub) ? $claims->act->sub : null,
             impersonationEndsAt: isset($claims->act->ends_at) && is_int($claims->act->ends_at) ? $claims->act->ends_at : null,
             jkt: isset($claims->cnf->jkt) && is_string($claims->cnf->jkt) ? $claims->cnf->jkt : '',
+            stepUp: $stepUp,
         );
     }
 
@@ -258,7 +260,7 @@ final class Gatekeeper
      * rv is newer than the cached one.
      *
      * @param list<string> $roles
-     * @return list<string>
+     * @return array{list<string>, array<string, int>} permissions and their step-up windows (ADR-0097)
      */
     private function permissions(array $roles, int $rv): array
     {
@@ -274,7 +276,13 @@ final class Gatekeeper
                 $out[$p] = true;
             }
         }
-        return array_keys($out);
+        $stepUp = [];
+        foreach ($map['step_up'] ?? [] as $p => $sec) {
+            if (is_int($sec) && $sec > 0) {
+                $stepUp[(string) $p] = $sec;
+            }
+        }
+        return [array_keys($out), $stepUp];
     }
 
     /** @return array<string, mixed> */
@@ -294,7 +302,7 @@ final class Gatekeeper
 
     /**
      * @param array<string, string> $headers
-     * @return array{int, string}
+     * @return array{0: int, 1: string, 2?: array<string, string>}
      */
     public static function http(string $url, array $headers, ?string $body = null): array
     {
@@ -309,12 +317,16 @@ final class Gatekeeper
         $ctx = stream_context_create(['http' => $opts]);
         $body = @file_get_contents($url, false, $ctx);
         $status = 0;
+        $got = [];
         foreach ($http_response_header ?? [] as $h) {
             if (preg_match('#^HTTP/\S+ (\d{3})#', $h, $m)) {
-                $status = (int) $m[1];
+                [$status, $got] = [(int) $m[1], []]; // a redirect starts a new response
+            } elseif (str_contains($h, ':')) {
+                [$k, $v] = explode(':', $h, 2);
+                $got[strtolower(trim($k))] = trim($v);
             }
         }
-        return [$status, $body === false ? '' : $body];
+        return [$status, $body === false ? '' : $body, $got];
     }
 
     /** @return list<string> */
