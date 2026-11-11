@@ -372,6 +372,24 @@ func (e TenantPolicyMfa) Valid() bool {
 	}
 }
 
+// Defines values for AdminRotateOrgSSOKeyJSONBodyStep.
+const (
+	Activate AdminRotateOrgSSOKeyJSONBodyStep = "activate"
+	Prepare  AdminRotateOrgSSOKeyJSONBodyStep = "prepare"
+)
+
+// Valid indicates whether the value is a known member of the AdminRotateOrgSSOKeyJSONBodyStep enum.
+func (e AdminRotateOrgSSOKeyJSONBodyStep) Valid() bool {
+	switch e {
+	case Activate:
+		return true
+	case Prepare:
+		return true
+	default:
+		return false
+	}
+}
+
 // APIKey defines model for APIKey.
 type APIKey struct {
 	CreatedAt time.Time          `json:"created_at"`
@@ -1038,28 +1056,38 @@ type SSOConnection struct {
 		FamilyName *string `json:"family_name,omitempty"`
 		GivenName  *string `json:"given_name,omitempty"`
 	} `json:"attributes,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	Enabled   bool      `json:"enabled"`
-	Id        string    `json:"id"`
-	Oidc      *struct {
+
+	// CertificatesExpireAt Earliest expiry of the IdP's signing certificates and our SP certificate
+	CertificatesExpireAt *time.Time `json:"certificates_expire_at,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	Enabled              bool       `json:"enabled"`
+	Id                   string     `json:"id"`
+	Oidc                 *struct {
 		ClientId *string `json:"client_id,omitempty"`
 		Issuer   *string `json:"issuer,omitempty"`
 	} `json:"oidc,omitempty"`
-	OrgId    string                `json:"org_id"`
-	Protocol SSOConnectionProtocol `json:"protocol"`
-	Saml     *struct {
+	OrgId                      string                `json:"org_id"`
+	Protocol                   SSOConnectionProtocol `json:"protocol"`
+	RequireEncryptedAssertions *bool                 `json:"require_encrypted_assertions,omitempty"`
+	Saml                       *struct {
 		// Certificates signing certificates configured
-		Certificates *int    `json:"certificates,omitempty"`
-		IdpEntityId  *string `json:"idp_entity_id,omitempty"`
-		SsoUrl       *string `json:"sso_url,omitempty"`
+		Certificates      *int      `json:"certificates,omitempty"`
+		IdpEntityId       *string   `json:"idp_entity_id,omitempty"`
+		MetadataUrl       *string   `json:"metadata_url,omitempty"`
+		MfaContexts       *[]string `json:"mfa_contexts,omitempty"`
+		NextSpKeyPrepared *bool     `json:"next_sp_key_prepared,omitempty"`
+		SloUrl            *string   `json:"slo_url,omitempty"`
+		SsoUrl            *string   `json:"sso_url,omitempty"`
 	} `json:"saml,omitempty"`
 	Sp struct {
-		AcsUrl      string `json:"acs_url"`
-		EntityId    string `json:"entity_id"`
-		MetadataUrl string `json:"metadata_url"`
-		RedirectUri string `json:"redirect_uri"`
+		AcsUrl      string  `json:"acs_url"`
+		EntityId    string  `json:"entity_id"`
+		MetadataUrl string  `json:"metadata_url"`
+		RedirectUri string  `json:"redirect_uri"`
+		SloUrl      *string `json:"slo_url,omitempty"`
 	} `json:"sp"`
-	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+	TrustIdpMfa *bool      `json:"trust_idp_mfa,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 }
 
 // SSOConnectionProtocol defines model for SSOConnection.Protocol.
@@ -1082,9 +1110,21 @@ type SSOConnectionInput struct {
 	// Issuer OIDC: https issuer with /.well-known/openid-configuration
 	Issuer *string `json:"issuer,omitempty"`
 
+	// MetadataUrl SAML: the IdP's metadata URL (https, public), fetched now and refreshed daily; instead of metadata_xml (ADR-0092)
+	MetadataUrl *string `json:"metadata_url,omitempty"`
+
 	// MetadataXml SAML: the IdP's metadata (EntityDescriptor)
-	MetadataXml *string                    `json:"metadata_xml,omitempty"`
+	MetadataXml *string `json:"metadata_xml,omitempty"`
+
+	// MfaContexts SAML AuthnContextClassRefs that count as MFA; default the multi-factor classes
+	MfaContexts *[]string                  `json:"mfa_contexts,omitempty"`
 	Protocol    SSOConnectionInputProtocol `json:"protocol"`
+
+	// RequireEncryptedAssertions SAML: refuse assertions that aren't encrypted for our SP key (ADR-0091)
+	RequireEncryptedAssertions *bool `json:"require_encrypted_assertions,omitempty"`
+
+	// TrustIdpMfa Count the IdP's MFA as Gatekeeper's second factor; off by default (ADR-0094)
+	TrustIdpMfa *bool `json:"trust_idp_mfa,omitempty"`
 }
 
 // SSOConnectionInputProtocol defines model for SSOConnectionInput.Protocol.
@@ -1349,6 +1389,14 @@ type AdminListInvitationsParams struct {
 	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
 }
 
+// AdminRotateOrgSSOKeyJSONBody defines parameters for AdminRotateOrgSSOKey.
+type AdminRotateOrgSSOKeyJSONBody struct {
+	Step AdminRotateOrgSSOKeyJSONBodyStep `json:"step"`
+}
+
+// AdminRotateOrgSSOKeyJSONBodyStep defines parameters for AdminRotateOrgSSOKey.
+type AdminRotateOrgSSOKeyJSONBodyStep string
+
 // AdminListPermissionsParams defines parameters for AdminListPermissions.
 type AdminListPermissionsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1448,6 +1496,9 @@ type AdminSetSCIMGroupRolesJSONRequestBody = RoleNames
 
 // AdminPutOrgSSOJSONRequestBody defines body for AdminPutOrgSSO for application/json ContentType.
 type AdminPutOrgSSOJSONRequestBody = SSOConnectionInput
+
+// AdminRotateOrgSSOKeyJSONRequestBody defines body for AdminRotateOrgSSOKey for application/json ContentType.
+type AdminRotateOrgSSOKeyJSONRequestBody AdminRotateOrgSSOKeyJSONBody
 
 // AdminCreateRoleJSONRequestBody defines body for AdminCreateRole for application/json ContentType.
 type AdminCreateRoleJSONRequestBody = RoleCreate
@@ -1991,6 +2042,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/orgs/{id}/sso (the `AdminPutOrgSSO` operationId).
 	AdminPutOrgSSO(ctx context.Context, id string, body AdminPutOrgSSOJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRotateOrgSSOKeyWithBody Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+	AdminRotateOrgSSOKeyWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRotateOrgSSOKey Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+	AdminRotateOrgSSOKey(ctx context.Context, id string, body AdminRotateOrgSSOKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminOverview Dashboard health: logins, lockouts, MFA adoption, security events, webhook failures, outbox lag
 	//
@@ -3522,6 +3591,44 @@ func (c *Client) AdminPutOrgSSOWithBody(ctx context.Context, id string, contentT
 // Corresponds with PUT /v1/admin/orgs/{id}/sso (the `AdminPutOrgSSO` operationId).
 func (c *Client) AdminPutOrgSSO(ctx context.Context, id string, body AdminPutOrgSSOJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminPutOrgSSORequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRotateOrgSSOKeyWithBody Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+func (c *Client) AdminRotateOrgSSOKeyWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRotateOrgSSOKeyRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRotateOrgSSOKey Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+func (c *Client) AdminRotateOrgSSOKey(ctx context.Context, id string, body AdminRotateOrgSSOKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRotateOrgSSOKeyRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6741,6 +6848,53 @@ func NewAdminPutOrgSSORequestWithBody(server string, id string, contentType stri
 	return req, nil
 }
 
+// NewAdminRotateOrgSSOKeyRequest calls the generic AdminRotateOrgSSOKey builder with application/json body
+func NewAdminRotateOrgSSOKeyRequest(server string, id string, body AdminRotateOrgSSOKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminRotateOrgSSOKeyRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminRotateOrgSSOKeyRequestWithBody constructs an http.Request for the AdminRotateOrgSSOKey method, with any body, and a specified content type
+func NewAdminRotateOrgSSOKeyRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/sso/sp-key", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminOverviewRequest constructs an http.Request for the AdminOverview method
 func NewAdminOverviewRequest(server string) (*http.Request, error) {
 	var err error
@@ -9517,6 +9671,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/orgs/{id}/sso (the `AdminPutOrgSSO` operationId).
 	AdminPutOrgSSOWithResponse(ctx context.Context, id string, body AdminPutOrgSSOJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgSSOResponse, error)
+
+	// AdminRotateOrgSSOKeyWithBodyWithResponse Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+	AdminRotateOrgSSOKeyWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRotateOrgSSOKeyResponse, error)
+
+	// AdminRotateOrgSSOKeyWithResponse Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+	AdminRotateOrgSSOKeyWithResponse(ctx context.Context, id string, body AdminRotateOrgSSOKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRotateOrgSSOKeyResponse, error)
 
 	// AdminOverviewWithResponse Dashboard health: logins, lockouts, MFA adoption, security events, webhook failures, outbox lag
 	//
@@ -13026,6 +13198,75 @@ func (r AdminPutOrgSSOResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminPutOrgSSOResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRotateOrgSSOKeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SSOConnection
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminRotateOrgSSOKeyResponse) GetJSON200() *SSOConnection {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRotateOrgSSOKeyResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRotateOrgSSOKeyResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRotateOrgSSOKeyResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminRotateOrgSSOKeyResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRotateOrgSSOKeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRotateOrgSSOKeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRotateOrgSSOKeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRotateOrgSSOKeyResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17693,6 +17934,36 @@ func (c *ClientWithResponses) AdminPutOrgSSOWithResponse(ctx context.Context, id
 	return ParseAdminPutOrgSSOResponse(rsp)
 }
 
+// AdminRotateOrgSSOKeyWithBodyWithResponse Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+func (c *ClientWithResponses) AdminRotateOrgSSOKeyWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRotateOrgSSOKeyResponse, error) {
+	rsp, err := c.AdminRotateOrgSSOKeyWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRotateOrgSSOKeyResponse(rsp)
+}
+
+// AdminRotateOrgSSOKeyWithResponse Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/sso/sp-key (the `AdminRotateOrgSSOKey` operationId).
+func (c *ClientWithResponses) AdminRotateOrgSSOKeyWithResponse(ctx context.Context, id string, body AdminRotateOrgSSOKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRotateOrgSSOKeyResponse, error) {
+	rsp, err := c.AdminRotateOrgSSOKey(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRotateOrgSSOKeyResponse(rsp)
+}
+
 // AdminOverviewWithResponse Dashboard health: logins, lockouts, MFA adoption, security events, webhook failures, outbox lag
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token (ADR-0064); audited (ADR-0030, ADR-0046).
@@ -20991,6 +21262,60 @@ func ParseAdminPutOrgSSOResponse(rsp *http.Response) (*AdminPutOrgSSOResponse, e
 	}
 
 	response := &AdminPutOrgSSOResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SSOConnection
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRotateOrgSSOKeyResponse parses an HTTP response from a AdminRotateOrgSSOKeyWithResponse call
+func ParseAdminRotateOrgSSOKeyResponse(rsp *http.Response) (*AdminRotateOrgSSOKeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRotateOrgSSOKeyResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

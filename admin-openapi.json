@@ -1812,6 +1812,11 @@
             },
             "type": "object"
           },
+          "certificates_expire_at": {
+            "description": "Earliest expiry of the IdP's signing certificates and our SP certificate",
+            "format": "date-time",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "type": "string"
@@ -1843,6 +1848,9 @@
             ],
             "type": "string"
           },
+          "require_encrypted_assertions": {
+            "type": "boolean"
+          },
           "saml": {
             "properties": {
               "certificates": {
@@ -1850,6 +1858,21 @@
                 "type": "integer"
               },
               "idp_entity_id": {
+                "type": "string"
+              },
+              "metadata_url": {
+                "type": "string"
+              },
+              "mfa_contexts": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "next_sp_key_prepared": {
+                "type": "boolean"
+              },
+              "slo_url": {
                 "type": "string"
               },
               "sso_url": {
@@ -1871,6 +1894,9 @@
               },
               "redirect_uri": {
                 "type": "string"
+              },
+              "slo_url": {
+                "type": "string"
               }
             },
             "required": [
@@ -1880,6 +1906,9 @@
               "redirect_uri"
             ],
             "type": "object"
+          },
+          "trust_idp_mfa": {
+            "type": "boolean"
           },
           "updated_at": {
             "format": "date-time",
@@ -1928,10 +1957,22 @@
             "description": "OIDC: https issuer with /.well-known/openid-configuration",
             "type": "string"
           },
+          "metadata_url": {
+            "description": "SAML: the IdP's metadata URL (https, public), fetched now and refreshed daily; instead of metadata_xml (ADR-0092)",
+            "type": "string"
+          },
           "metadata_xml": {
             "description": "SAML: the IdP's metadata (EntityDescriptor)",
             "maxLength": 262144,
             "type": "string"
+          },
+          "mfa_contexts": {
+            "description": "SAML AuthnContextClassRefs that count as MFA; default the multi-factor classes",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "type": "array"
           },
           "protocol": {
             "enum": [
@@ -1939,6 +1980,14 @@
               "oidc"
             ],
             "type": "string"
+          },
+          "require_encrypted_assertions": {
+            "description": "SAML: refuse assertions that aren't encrypted for our SP key (ADR-0091)",
+            "type": "boolean"
+          },
+          "trust_idp_mfa": {
+            "description": "Count the IdP's MFA as Gatekeeper's second factor; off by default (ADR-0094)",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2470,7 +2519,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.21.0"
+    "version": "0.22.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -4522,6 +4571,74 @@
           }
         ],
         "summary": "Create or replace an organization's SAML or OIDC connection"
+      }
+    },
+    "/v1/admin/orgs/{id}/sso/sp-key": {
+      "post": {
+        "description": "Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).",
+        "operationId": "adminRotateOrgSSOKey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "step": {
+                    "enum": [
+                      "prepare",
+                      "activate"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "step"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SSOConnection"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)"
       }
     },
     "/v1/admin/overview": {

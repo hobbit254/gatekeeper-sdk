@@ -634,6 +634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/sso/sp-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate the connection's SAML SP key: prepare publishes the next certificate, activate switches to it (ADR-0091)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        post: operations["adminRotateOrgSSOKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/overview": {
         parameters: {
             query?: never;
@@ -1993,6 +2013,11 @@ export interface components {
                 family_name?: string;
                 given_name?: string;
             };
+            /**
+             * Format: date-time
+             * @description Earliest expiry of the IdP's signing certificates and our SP certificate
+             */
+            certificates_expire_at?: string;
             /** Format: date-time */
             created_at: string;
             enabled: boolean;
@@ -2004,10 +2029,15 @@ export interface components {
             org_id: string;
             /** @enum {string} */
             protocol: "saml" | "oidc";
+            require_encrypted_assertions?: boolean;
             saml?: {
                 /** @description signing certificates configured */
                 certificates?: number;
                 idp_entity_id?: string;
+                metadata_url?: string;
+                mfa_contexts?: string[];
+                next_sp_key_prepared?: boolean;
+                slo_url?: string;
                 sso_url?: string;
             };
             sp: {
@@ -2015,7 +2045,9 @@ export interface components {
                 entity_id: string;
                 metadata_url: string;
                 redirect_uri: string;
+                slo_url?: string;
             };
+            trust_idp_mfa?: boolean;
             /** Format: date-time */
             updated_at?: string;
         };
@@ -2032,10 +2064,18 @@ export interface components {
             enabled?: boolean;
             /** @description OIDC: https issuer with /.well-known/openid-configuration */
             issuer?: string;
+            /** @description SAML: the IdP's metadata URL (https, public), fetched now and refreshed daily; instead of metadata_xml (ADR-0092) */
+            metadata_url?: string;
             /** @description SAML: the IdP's metadata (EntityDescriptor) */
             metadata_xml?: string;
+            /** @description SAML AuthnContextClassRefs that count as MFA; default the multi-factor classes */
+            mfa_contexts?: string[];
             /** @enum {string} */
             protocol: "saml" | "oidc";
+            /** @description SAML: refuse assertions that aren't encrypted for our SP key (ADR-0091) */
+            require_encrypted_assertions?: boolean;
+            /** @description Count the IdP's MFA as Gatekeeper's second factor; off by default (ADR-0094) */
+            trust_idp_mfa?: boolean;
         };
         SecretRotation: {
             client_id: string;
@@ -3353,6 +3393,39 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    adminRotateOrgSSOKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    step: "prepare" | "activate";
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SSOConnection"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     adminOverview: {
