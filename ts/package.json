@@ -1,25 +1,50 @@
 {
   "name": "@gatekeeper/sdk",
   "version": "0.1.0",
-  "description": "Gatekeeper TypeScript SDK: verify access tokens, resolve permissions, guard routes (ADR-0038)",
+  "description": "Gatekeeper TypeScript SDK: verify access tokens, guard routes, sign in by redirect or headless, typed admin client (ADR-0038, ADR-0088, ADR-0089)",
   "license": "UNLICENSED",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "files": ["dist"],
-  "engines": { "node": ">=22" },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gen:admin": "openapi-typescript ../admin-openapi.json -o src/admin/schema.ts"
   },
   "dependencies": {
-    "jose": "5.9.6"
+    "jose": "5.9.6",
+    "openapi-fetch": "0.13.8"
   },
   "devDependencies": {
     "@types/node": "22.10.2",
+    "openapi-typescript": "7.4.1",
     "typescript": "5.7.2",
     "vitest": "2.1.8"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./admin": {
+      "types": "./dist/admin/index.d.ts",
+      "default": "./dist/admin/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "default": "./dist/browser.js"
+    },
+    "./headless": {
+      "types": "./dist/headless.d.ts",
+      "default": "./dist/headless.js"
+    }
   }
 }

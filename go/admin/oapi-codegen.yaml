@@ -1,0 +1,6 @@
+# Generated admin API client (FR-D13, ADR-0088). Regenerate with `make sdk-clients`.
+package: admin
+output: sdk/go/admin/admin.gen.go
+generate:
+  client: true
+  models: true

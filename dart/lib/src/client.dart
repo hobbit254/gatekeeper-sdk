@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
+part 'headless.dart';
+
 /// Configures one app: [issuer] is `https://auth.<domain>/t/<tenant>`,
 /// [redirectUri] the app's custom-scheme callback.
 class GatekeeperConfig {
@@ -222,6 +224,27 @@ class Gatekeeper {
       if (postLogoutRedirect != null) 'post_logout_redirect_uri': postLogoutRedirect.toString(),
       if (state != null) 'state': state,
     });
+  }
+
+  /// Starts a headless sign-in (FR-A22, ADR-0089) for a client with
+  /// headless_login: the app shows its own screens and calls the steps.
+  Future<HeadlessSignIn> startHeadless({String? organization, String? acrValues, int? maxAge}) async {
+    final verifier = _random(32);
+    final state = _random(16);
+    final out = await _post(this, '/start', {
+      'client_id': config.clientId,
+      'redirect_uri': config.redirectUri.toString(),
+      'scope': config.scopes.join(' '),
+      'state': state,
+      'nonce': _random(16),
+      'code_challenge': base64Url.encode(sha256.convert(ascii.encode(verifier)).bytes).replaceAll('=', ''),
+      'code_challenge_method': 'S256',
+      if (organization != null) 'organization': organization,
+      if (acrValues != null) 'acr_values': acrValues,
+      if (maxAge != null) 'max_age': '$maxAge',
+    });
+    return HeadlessSignIn._(this, verifier, state, out['flow_id'] as String,
+        [for (final m in out['methods'] as List) m as String], out['provider_nonce'] as String? ?? '');
   }
 
   /// Forgets the tokens on this device.
