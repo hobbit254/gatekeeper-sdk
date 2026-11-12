@@ -332,6 +332,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/fga/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+         */
+        post: operations["adminFGACheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/fga/model": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The relationship model as DSL, its relation map and history (FR-D19)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+         */
+        get: operations["adminFGAModel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/invitations": {
         parameters: {
             query?: never;
@@ -1848,6 +1888,31 @@ export interface components {
             features: string[];
             plan: string;
         };
+        FGAModel: {
+            dsl: string;
+            enabled: boolean;
+            history: {
+                /** Format: date-time */
+                created_at: string;
+                current: boolean;
+                id: string;
+            }[];
+            model_id: string;
+            relations: {
+                [key: string]: string;
+            };
+        };
+        FGATestCheck: {
+            org_id?: string;
+            permission: string;
+            resource?: string;
+            /** Format: uuid */
+            user_id: string;
+        };
+        FGATestDecision: {
+            allow: boolean;
+            matched_by: string;
+        };
         IdentityProvider: {
             client_id: string;
             enabled: boolean;
@@ -3029,6 +3094,57 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    adminFGACheck: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FGATestCheck"];
+            };
+        };
+        responses: {
+            /** @description Decision */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FGATestDecision"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminFGAModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FGAModel"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     adminListInvitations: {

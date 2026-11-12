@@ -953,6 +953,93 @@
         ],
         "type": "object"
       },
+      "FGAModel": {
+        "properties": {
+          "dsl": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "history": {
+            "items": {
+              "properties": {
+                "created_at": {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                "current": {
+                  "type": "boolean"
+                },
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "created_at",
+                "current"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "relations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "enabled",
+          "model_id",
+          "dsl",
+          "relations",
+          "history"
+        ],
+        "type": "object"
+      },
+      "FGATestCheck": {
+        "properties": {
+          "org_id": {
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "user_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "permission"
+        ],
+        "type": "object"
+      },
+      "FGATestDecision": {
+        "properties": {
+          "allow": {
+            "type": "boolean"
+          },
+          "matched_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "allow",
+          "matched_by"
+        ],
+        "type": "object"
+      },
       "IdentityProvider": {
         "properties": {
           "client_id": {
@@ -2887,7 +2974,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -3953,6 +4040,85 @@
           }
         },
         "summary": "Data exports, newest first (status only)"
+      }
+    },
+    "/v1/admin/fga/check": {
+      "post": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).",
+        "operationId": "adminFGACheck",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FGATestCheck"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FGATestDecision"
+                }
+              }
+            },
+            "description": "Decision"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Test a decision for a user: RBAC and relations, without step-up (FR-D19)"
+      }
+    },
+    "/v1/admin/fga/model": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).",
+        "operationId": "adminFGAModel",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FGAModel"
+                }
+              }
+            },
+            "description": "Model"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The relationship model as DSL, its relation map and history (FR-D19)"
       }
     },
     "/v1/admin/invitations": {

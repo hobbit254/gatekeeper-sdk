@@ -767,6 +767,33 @@ type Entitlements struct {
 	Plan     string   `json:"plan"`
 }
 
+// FGAModel defines model for FGAModel.
+type FGAModel struct {
+	Dsl     string `json:"dsl"`
+	Enabled bool   `json:"enabled"`
+	History []struct {
+		CreatedAt time.Time `json:"created_at"`
+		Current   bool      `json:"current"`
+		Id        string    `json:"id"`
+	} `json:"history"`
+	ModelId   string            `json:"model_id"`
+	Relations map[string]string `json:"relations"`
+}
+
+// FGATestCheck defines model for FGATestCheck.
+type FGATestCheck struct {
+	OrgId      *string            `json:"org_id,omitempty"`
+	Permission string             `json:"permission"`
+	Resource   *string            `json:"resource,omitempty"`
+	UserId     openapi_types.UUID `json:"user_id"`
+}
+
+// FGATestDecision defines model for FGATestDecision.
+type FGATestDecision struct {
+	Allow     bool   `json:"allow"`
+	MatchedBy string `json:"matched_by"`
+}
+
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
 	ClientId string  `json:"client_id"`
@@ -1653,6 +1680,9 @@ type AdminCreateClientJSONRequestBody = ClientCreate
 // AdminPatchClientJSONRequestBody defines body for AdminPatchClient for application/json ContentType.
 type AdminPatchClientJSONRequestBody = ClientPatch
 
+// AdminFGACheckJSONRequestBody defines body for AdminFGACheck for application/json ContentType.
+type AdminFGACheckJSONRequestBody = FGATestCheck
+
 // AdminCreateInvitationJSONRequestBody defines body for AdminCreateInvitation for application/json ContentType.
 type AdminCreateInvitationJSONRequestBody = InvitationCreate
 
@@ -1990,6 +2020,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/admin/data-exports (the `AdminListDataExports` operationId).
 	AdminListDataExports(ctx context.Context, params *AdminListDataExportsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminFGACheckWithBody Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+	AdminFGACheckWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminFGACheck Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+	AdminFGACheck(ctx context.Context, body AdminFGACheckJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminFGAModel The relationship model as DSL, its relation map and history (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
+	AdminFGAModel(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListInvitations Live invitations (FR-D2, ADR-0062)
 	//
@@ -3309,6 +3364,61 @@ func (c *Client) AdminComplianceReport(ctx context.Context, params *AdminComplia
 // Corresponds with GET /v1/admin/data-exports (the `AdminListDataExports` operationId).
 func (c *Client) AdminListDataExports(ctx context.Context, params *AdminListDataExportsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminListDataExportsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminFGACheckWithBody Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+func (c *Client) AdminFGACheckWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminFGACheckRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminFGACheck Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+func (c *Client) AdminFGACheck(ctx context.Context, body AdminFGACheckJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminFGACheckRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminFGAModel The relationship model as DSL, its relation map and history (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
+func (c *Client) AdminFGAModel(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminFGAModelRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -6364,6 +6474,73 @@ func NewAdminListDataExportsRequest(server string, params *AdminListDataExportsP
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
 		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminFGACheckRequest calls the generic AdminFGACheck builder with application/json body
+func NewAdminFGACheckRequest(server string, body AdminFGACheckJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminFGACheckRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAdminFGACheckRequestWithBody constructs an http.Request for the AdminFGACheck method, with any body, and a specified content type
+func NewAdminFGACheckRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/fga/check")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminFGAModelRequest constructs an http.Request for the AdminFGAModel method
+func NewAdminFGAModelRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/fga/model")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -10049,6 +10226,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/data-exports (the `AdminListDataExports` operationId).
 	AdminListDataExportsWithResponse(ctx context.Context, params *AdminListDataExportsParams, reqEditors ...RequestEditorFn) (*AdminListDataExportsResponse, error)
 
+	// AdminFGACheckWithBodyWithResponse Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+	AdminFGACheckWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminFGACheckResponse, error)
+
+	// AdminFGACheckWithResponse Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+	AdminFGACheckWithResponse(ctx context.Context, body AdminFGACheckJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminFGACheckResponse, error)
+
+	// AdminFGAModelWithResponse The relationship model as DSL, its relation map and history (FR-D19)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
+	AdminFGAModelWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminFGAModelResponse, error)
+
 	// AdminListInvitationsWithResponse Live invitations (FR-D2, ADR-0062)
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -12526,6 +12730,137 @@ func (r AdminListDataExportsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminListDataExportsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminFGACheckResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *FGATestDecision
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminFGACheckResponse) GetJSON200() *FGATestDecision {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminFGACheckResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminFGACheckResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminFGACheckResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminFGACheckResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminFGACheckResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminFGACheckResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminFGACheckResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminFGAModelResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *FGAModel
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminFGAModelResponse) GetJSON200() *FGAModel {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminFGAModelResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminFGAModelResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminFGAModelResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r AdminFGAModelResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminFGAModelResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminFGAModelResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminFGAModelResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminFGAModelResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -18612,6 +18947,51 @@ func (c *ClientWithResponses) AdminListDataExportsWithResponse(ctx context.Conte
 	return ParseAdminListDataExportsResponse(rsp)
 }
 
+// AdminFGACheckWithBodyWithResponse Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+func (c *ClientWithResponses) AdminFGACheckWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminFGACheckResponse, error) {
+	rsp, err := c.AdminFGACheckWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminFGACheckResponse(rsp)
+}
+
+// AdminFGACheckWithResponse Test a decision for a user: RBAC and relations, without step-up (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/fga/check (the `AdminFGACheck` operationId).
+func (c *ClientWithResponses) AdminFGACheckWithResponse(ctx context.Context, body AdminFGACheckJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminFGACheckResponse, error) {
+	rsp, err := c.AdminFGACheck(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminFGACheckResponse(rsp)
+}
+
+// AdminFGAModelWithResponse The relationship model as DSL, its relation map and history (FR-D19)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0108).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
+func (c *ClientWithResponses) AdminFGAModelWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminFGAModelResponse, error) {
+	rsp, err := c.AdminFGAModel(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminFGAModelResponse(rsp)
+}
+
 // AdminListInvitationsWithResponse Live invitations (FR-D2, ADR-0062)
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -21460,6 +21840,107 @@ func ParseAdminListDataExportsResponse(rsp *http.Response) (*AdminListDataExport
 			return nil, err
 		}
 		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminFGACheckResponse parses an HTTP response from a AdminFGACheckWithResponse call
+func ParseAdminFGACheckResponse(rsp *http.Response) (*AdminFGACheckResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminFGACheckResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FGATestDecision
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminFGAModelResponse parses an HTTP response from a AdminFGAModelWithResponse call
+func ParseAdminFGAModelResponse(rsp *http.Response) (*AdminFGAModelResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminFGAModelResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest FGAModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
 
 	}
 
