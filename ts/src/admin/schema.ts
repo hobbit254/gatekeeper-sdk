@@ -4,6 +4,66 @@
  */
 
 export interface paths {
+    "/v1/admin/access-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The approval queue (FR-D20)
+         * @description Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.
+         */
+        get: operations["adminListAccessRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/access-requests/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve: the grant applies now; a jit grant ends minutes after approval
+         * @description Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+         */
+        post: operations["adminApproveAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/access-requests/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject: nothing is granted
+         * @description Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+         */
+        post: operations["adminRejectAccessRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/analytics/logins": {
         parameters: {
             query?: never;
@@ -1388,7 +1448,7 @@ export interface paths {
         put?: never;
         /**
          * Grant a direct allow or deny on an exact key (FR-Z4)
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
          */
         post: operations["adminGrantPermission"];
         /**
@@ -1469,7 +1529,7 @@ export interface paths {
         put?: never;
         /**
          * Grant a role tenant-wide, optionally until expires_at
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
          */
         post: operations["adminGrantRole"];
         /**
@@ -1645,6 +1705,56 @@ export interface components {
         };
         APIKeyList: {
             api_keys: components["schemas"]["APIKey"][];
+        };
+        AccessDecision: {
+            comment?: string;
+        };
+        AccessRequest: {
+            /**
+             * Format: date-time
+             * @description When approved jit access ends
+             */
+            access_until?: string | null;
+            comment?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            decided_at?: string | null;
+            /** Format: uuid */
+            decided_by?: string | null;
+            /** @enum {string} */
+            effect?: "allow" | "deny";
+            /**
+             * Format: date-time
+             * @description A grant's own expiry
+             */
+            expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description grant: an admin's protected grant; jit: a user's request for time-boxed access
+             * @enum {string}
+             */
+            kind: "grant" | "jit";
+            /** @description A jit request's duration */
+            minutes?: number;
+            /** Format: uuid */
+            org_id?: string | null;
+            permission?: string;
+            reason?: string;
+            /** Format: uuid */
+            requested_by: string;
+            role?: string;
+            /** @enum {string} */
+            status: "pending" | "approved" | "rejected" | "cancelled" | "lapsed" | "expired";
+            /**
+             * Format: uuid
+             * @description Who gets the access
+             */
+            user_id: string;
+        };
+        AccessRequestList: {
+            requests: components["schemas"]["AccessRequest"][];
         };
         AdminClient: {
             access_ttl_sec?: number;
@@ -1912,6 +2022,12 @@ export interface components {
         FGATestDecision: {
             allow: boolean;
             matched_by: string;
+        };
+        GrantPending: {
+            /** Format: uuid */
+            request_id: string;
+            /** @enum {string} */
+            status: "pending";
         };
         IdentityProvider: {
             client_id: string;
@@ -2402,6 +2518,17 @@ export interface components {
             deletion_grace_days: number;
             /** @description Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095) */
             dpop_nonce?: boolean;
+            /** @description Omitted keeps the stored setting; every name must be an existing role or declared permission, else 422 (ADR-0110) */
+            governance?: {
+                /** @description Allowing these directly needs a second admin's approval */
+                protected_permissions?: string[];
+                /** @description Granting these needs a second admin's approval */
+                protected_roles?: string[];
+                /** @description Users may request an allow on these for 15–480 minutes */
+                requestable_permissions?: string[];
+                /** @description Users may request these for 15–480 minutes */
+                requestable_roles?: string[];
+            };
             lockout: {
                 base_sec: number;
                 max_sec: number;
@@ -2509,6 +2636,91 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    adminListAccessRequests: {
+        parameters: {
+            query?: {
+                status?: "pending" | "approved" | "rejected" | "cancelled" | "lapsed" | "expired";
+                org_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 requests, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequestList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    adminApproveAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AccessDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    adminRejectAccessRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AccessDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessRequest"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
     adminLoginAnalytics: {
         parameters: {
             query: {
@@ -5023,6 +5235,15 @@ export interface operations {
                     "application/json": components["schemas"]["PermissionGrantResult"];
                 };
             };
+            /** @description Protected: waiting for a second admin (ADR-0110) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantPending"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
@@ -5166,6 +5387,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RoleGrantResult"];
+                };
+            };
+            /** @description Protected: waiting for a second admin (ADR-0110) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantPending"];
                 };
             };
             401: components["responses"]["Problem"];

@@ -133,6 +133,128 @@
         ],
         "type": "object"
       },
+      "AccessDecision": {
+        "properties": {
+          "comment": {
+            "maxLength": 500,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "AccessRequest": {
+        "properties": {
+          "access_until": {
+            "description": "When approved jit access ends",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "decided_by": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "effect": {
+            "enum": [
+              "allow",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "A grant's own expiry",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "kind": {
+            "description": "grant: an admin's protected grant; jit: a user's request for time-boxed access",
+            "enum": [
+              "grant",
+              "jit"
+            ],
+            "type": "string"
+          },
+          "minutes": {
+            "description": "A jit request's duration",
+            "type": "integer"
+          },
+          "org_id": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "permission": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "requested_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "cancelled",
+              "lapsed",
+              "expired"
+            ],
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Who gets the access",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "user_id",
+          "status",
+          "requested_by",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "AccessRequestList": {
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRequest"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "type": "object"
+      },
       "AdminClient": {
         "properties": {
           "access_ttl_sec": {
@@ -1037,6 +1159,25 @@
         "required": [
           "allow",
           "matched_by"
+        ],
+        "type": "object"
+      },
+      "GrantPending": {
+        "properties": {
+          "request_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "status"
         ],
         "type": "object"
       },
@@ -2645,6 +2786,48 @@
             "description": "Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095)",
             "type": "boolean"
           },
+          "governance": {
+            "description": "Omitted keeps the stored setting; every name must be an existing role or declared permission, else 422 (ADR-0110)",
+            "properties": {
+              "protected_permissions": {
+                "description": "Allowing these directly needs a second admin's approval",
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              "protected_roles": {
+                "description": "Granting these needs a second admin's approval",
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              "requestable_permissions": {
+                "description": "Users may request an allow on these for 15–480 minutes",
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              "requestable_roles": {
+                "description": "Users may request these for 15–480 minutes",
+                "items": {
+                  "maxLength": 128,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
           "lockout": {
             "properties": {
               "base_sec": {
@@ -2974,10 +3157,178 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.27.0"
+    "version": "0.28.0"
   },
   "openapi": "3.0.3",
   "paths": {
+    "/v1/admin/access-requests": {
+      "get": {
+        "description": "Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.",
+        "operationId": "adminListAccessRequests",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled",
+                "lapsed",
+                "expired"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "org_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestList"
+                }
+              }
+            },
+            "description": "Up to 200 requests, newest first"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The approval queue (FR-D20)"
+      }
+    },
+    "/v1/admin/access-requests/{id}/approve": {
+      "post": {
+        "description": "Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).",
+        "operationId": "adminApproveAccessRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessDecision"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            },
+            "description": "Decided"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve: the grant applies now; a jit grant ends minutes after approval"
+      }
+    },
+    "/v1/admin/access-requests/{id}/reject": {
+      "post": {
+        "description": "Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).",
+        "operationId": "adminRejectAccessRequest",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccessDecision"
+              }
+            }
+          },
+          "required": false
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequest"
+                }
+              }
+            },
+            "description": "Decided"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reject: nothing is granted"
+      }
+    },
     "/v1/admin/analytics/logins": {
       "get": {
         "description": "Tenant admins only; audited (ADR-0103).",
@@ -7409,7 +7760,7 @@
         "summary": "Remove a direct grant"
       },
       "post": {
-        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).",
         "operationId": "adminGrantPermission",
         "parameters": [
           {
@@ -7450,6 +7801,16 @@
               }
             },
             "description": "Grant"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantPending"
+                }
+              }
+            },
+            "description": "Protected: waiting for a second admin (ADR-0110)"
           },
           "401": {
             "$ref": "#/components/responses/Problem"
@@ -7670,7 +8031,7 @@
         "summary": "Revoke a role"
       },
       "post": {
-        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).",
         "operationId": "adminGrantRole",
         "parameters": [
           {
@@ -7711,6 +8072,16 @@
               }
             },
             "description": "Grant"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantPending"
+                }
+              }
+            },
+            "description": "Protected: waiting for a second admin (ADR-0110)"
           },
           "401": {
             "$ref": "#/components/responses/Problem"

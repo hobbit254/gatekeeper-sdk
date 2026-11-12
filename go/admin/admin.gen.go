@@ -18,6 +18,72 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AccessRequestEffect.
+const (
+	AccessRequestEffectAllow AccessRequestEffect = "allow"
+	AccessRequestEffectDeny  AccessRequestEffect = "deny"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestEffect enum.
+func (e AccessRequestEffect) Valid() bool {
+	switch e {
+	case AccessRequestEffectAllow:
+		return true
+	case AccessRequestEffectDeny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRequestKind.
+const (
+	Grant AccessRequestKind = "grant"
+	Jit   AccessRequestKind = "jit"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestKind enum.
+func (e AccessRequestKind) Valid() bool {
+	switch e {
+	case Grant:
+		return true
+	case Jit:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AccessRequestStatus.
+const (
+	AccessRequestStatusApproved  AccessRequestStatus = "approved"
+	AccessRequestStatusCancelled AccessRequestStatus = "cancelled"
+	AccessRequestStatusExpired   AccessRequestStatus = "expired"
+	AccessRequestStatusLapsed    AccessRequestStatus = "lapsed"
+	AccessRequestStatusPending   AccessRequestStatus = "pending"
+	AccessRequestStatusRejected  AccessRequestStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AccessRequestStatus enum.
+func (e AccessRequestStatus) Valid() bool {
+	switch e {
+	case AccessRequestStatusApproved:
+		return true
+	case AccessRequestStatusCancelled:
+		return true
+	case AccessRequestStatusExpired:
+		return true
+	case AccessRequestStatusLapsed:
+		return true
+	case AccessRequestStatusPending:
+		return true
+	case AccessRequestStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminClientType.
 const (
 	AdminClientTypeConfidential AdminClientType = "confidential"
@@ -123,6 +189,21 @@ func (e DeliveryStatus) Valid() bool {
 	case DeliveryStatusPending:
 		return true
 	case DeliveryStatusSucceeded:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GrantPendingStatus.
+const (
+	GrantPendingStatusPending GrantPendingStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the GrantPendingStatus enum.
+func (e GrantPendingStatus) Valid() bool {
+	switch e {
+	case GrantPendingStatusPending:
 		return true
 	default:
 		return false
@@ -390,6 +471,36 @@ func (e TenantPolicyMfa) Valid() bool {
 	}
 }
 
+// Defines values for AdminListAccessRequestsParamsStatus.
+const (
+	AdminListAccessRequestsParamsStatusApproved  AdminListAccessRequestsParamsStatus = "approved"
+	AdminListAccessRequestsParamsStatusCancelled AdminListAccessRequestsParamsStatus = "cancelled"
+	AdminListAccessRequestsParamsStatusExpired   AdminListAccessRequestsParamsStatus = "expired"
+	AdminListAccessRequestsParamsStatusLapsed    AdminListAccessRequestsParamsStatus = "lapsed"
+	AdminListAccessRequestsParamsStatusPending   AdminListAccessRequestsParamsStatus = "pending"
+	AdminListAccessRequestsParamsStatusRejected  AdminListAccessRequestsParamsStatus = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AdminListAccessRequestsParamsStatus enum.
+func (e AdminListAccessRequestsParamsStatus) Valid() bool {
+	switch e {
+	case AdminListAccessRequestsParamsStatusApproved:
+		return true
+	case AdminListAccessRequestsParamsStatusCancelled:
+		return true
+	case AdminListAccessRequestsParamsStatusExpired:
+		return true
+	case AdminListAccessRequestsParamsStatusLapsed:
+		return true
+	case AdminListAccessRequestsParamsStatusPending:
+		return true
+	case AdminListAccessRequestsParamsStatusRejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminLoginAnalyticsParamsDays.
 const (
 	N30 AdminLoginAnalyticsParamsDays = 30
@@ -456,6 +567,55 @@ type APIKeyCreate struct {
 // APIKeyList defines model for APIKeyList.
 type APIKeyList struct {
 	ApiKeys []APIKey `json:"api_keys"`
+}
+
+// AccessDecision defines model for AccessDecision.
+type AccessDecision struct {
+	Comment *string `json:"comment,omitempty"`
+}
+
+// AccessRequest defines model for AccessRequest.
+type AccessRequest struct {
+	// AccessUntil When approved jit access ends
+	AccessUntil *time.Time           `json:"access_until,omitempty"`
+	Comment     *string              `json:"comment,omitempty"`
+	CreatedAt   time.Time            `json:"created_at"`
+	DecidedAt   *time.Time           `json:"decided_at,omitempty"`
+	DecidedBy   *openapi_types.UUID  `json:"decided_by,omitempty"`
+	Effect      *AccessRequestEffect `json:"effect,omitempty"`
+
+	// ExpiresAt A grant's own expiry
+	ExpiresAt *time.Time         `json:"expires_at,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Kind grant: an admin's protected grant; jit: a user's request for time-boxed access
+	Kind AccessRequestKind `json:"kind"`
+
+	// Minutes A jit request's duration
+	Minutes     *int                `json:"minutes,omitempty"`
+	OrgId       *openapi_types.UUID `json:"org_id,omitempty"`
+	Permission  *string             `json:"permission,omitempty"`
+	Reason      *string             `json:"reason,omitempty"`
+	RequestedBy openapi_types.UUID  `json:"requested_by"`
+	Role        *string             `json:"role,omitempty"`
+	Status      AccessRequestStatus `json:"status"`
+
+	// UserId Who gets the access
+	UserId openapi_types.UUID `json:"user_id"`
+}
+
+// AccessRequestEffect defines model for AccessRequest.Effect.
+type AccessRequestEffect string
+
+// AccessRequestKind grant: an admin's protected grant; jit: a user's request for time-boxed access
+type AccessRequestKind string
+
+// AccessRequestStatus defines model for AccessRequest.Status.
+type AccessRequestStatus string
+
+// AccessRequestList defines model for AccessRequestList.
+type AccessRequestList struct {
+	Requests []AccessRequest `json:"requests"`
 }
 
 // AdminClient defines model for AdminClient.
@@ -793,6 +953,15 @@ type FGATestDecision struct {
 	Allow     bool   `json:"allow"`
 	MatchedBy string `json:"matched_by"`
 }
+
+// GrantPending defines model for GrantPending.
+type GrantPending struct {
+	RequestId openapi_types.UUID `json:"request_id"`
+	Status    GrantPendingStatus `json:"status"`
+}
+
+// GrantPendingStatus defines model for GrantPending.Status.
+type GrantPendingStatus string
 
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
@@ -1388,7 +1557,22 @@ type TenantPolicy struct {
 
 	// DpopNonce Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095)
 	DpopNonce *bool `json:"dpop_nonce,omitempty"`
-	Lockout   struct {
+
+	// Governance Omitted keeps the stored setting; every name must be an existing role or declared permission, else 422 (ADR-0110)
+	Governance *struct {
+		// ProtectedPermissions Allowing these directly needs a second admin's approval
+		ProtectedPermissions *[]string `json:"protected_permissions,omitempty"`
+
+		// ProtectedRoles Granting these needs a second admin's approval
+		ProtectedRoles *[]string `json:"protected_roles,omitempty"`
+
+		// RequestablePermissions Users may request an allow on these for 15–480 minutes
+		RequestablePermissions *[]string `json:"requestable_permissions,omitempty"`
+
+		// RequestableRoles Users may request these for 15–480 minutes
+		RequestableRoles *[]string `json:"requestable_roles,omitempty"`
+	} `json:"governance,omitempty"`
+	Lockout struct {
 		BaseSec   int `json:"base_sec"`
 		MaxSec    int `json:"max_sec"`
 		Threshold int `json:"threshold"`
@@ -1496,6 +1680,15 @@ type Cursor = string
 
 // Limit defines model for Limit.
 type Limit = int
+
+// AdminListAccessRequestsParams defines parameters for AdminListAccessRequests.
+type AdminListAccessRequestsParams struct {
+	Status *AdminListAccessRequestsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	OrgId  *string                              `form:"org_id,omitempty" json:"org_id,omitempty"`
+}
+
+// AdminListAccessRequestsParamsStatus defines parameters for AdminListAccessRequests.
+type AdminListAccessRequestsParamsStatus string
 
 // AdminLoginAnalyticsParams defines parameters for AdminLoginAnalytics.
 type AdminLoginAnalyticsParams struct {
@@ -1670,6 +1863,12 @@ type AdminGrantRoleParams struct {
 	// IdempotencyKey Replays the stored response for 24 h (API.md)
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
+
+// AdminApproveAccessRequestJSONRequestBody defines body for AdminApproveAccessRequest for application/json ContentType.
+type AdminApproveAccessRequestJSONRequestBody = AccessDecision
+
+// AdminRejectAccessRequestJSONRequestBody defines body for AdminRejectAccessRequest for application/json ContentType.
+type AdminRejectAccessRequestJSONRequestBody = AccessDecision
 
 // AdminCreateAPIKeyJSONRequestBody defines body for AdminCreateAPIKey for application/json ContentType.
 type AdminCreateAPIKeyJSONRequestBody = APIKeyCreate
@@ -1846,6 +2045,49 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// AdminListAccessRequests The approval queue (FR-D20)
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.
+	//
+	// Corresponds with GET /v1/admin/access-requests (the `AdminListAccessRequests` operationId).
+	AdminListAccessRequests(ctx context.Context, params *AdminListAccessRequestsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminApproveAccessRequestWithBody Approve: the grant applies now; a jit grant ends minutes after approval
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+	AdminApproveAccessRequestWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminApproveAccessRequest Approve: the grant applies now; a jit grant ends minutes after approval
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+	AdminApproveAccessRequest(ctx context.Context, id string, body AdminApproveAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRejectAccessRequestWithBody Reject: nothing is granted
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+	AdminRejectAccessRequestWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRejectAccessRequest Reject: nothing is granted
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+	AdminRejectAccessRequest(ctx context.Context, id string, body AdminRejectAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminLoginAnalytics Login analytics (FR-D17)
 	//
@@ -2810,7 +3052,7 @@ type ClientInterface interface {
 
 	// AdminGrantPermissionWithBody Grant a direct allow or deny on an exact key (FR-Z4)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2819,7 +3061,7 @@ type ClientInterface interface {
 
 	// AdminGrantPermission Grant a direct allow or deny on an exact key (FR-Z4)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2865,7 +3107,7 @@ type ClientInterface interface {
 
 	// AdminGrantRoleWithBody Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2874,7 +3116,7 @@ type ClientInterface interface {
 
 	// AdminGrantRole Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2958,6 +3200,99 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/admin/webhooks/{id}/test (the `AdminTestWebhook` operationId).
 	AdminTestWebhook(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// AdminListAccessRequests The approval queue (FR-D20)
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.
+//
+// Corresponds with GET /v1/admin/access-requests (the `AdminListAccessRequests` operationId).
+func (c *Client) AdminListAccessRequests(ctx context.Context, params *AdminListAccessRequestsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListAccessRequestsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminApproveAccessRequestWithBody Approve: the grant applies now; a jit grant ends minutes after approval
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+func (c *Client) AdminApproveAccessRequestWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminApproveAccessRequestRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminApproveAccessRequest Approve: the grant applies now; a jit grant ends minutes after approval
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+func (c *Client) AdminApproveAccessRequest(ctx context.Context, id string, body AdminApproveAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminApproveAccessRequestRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRejectAccessRequestWithBody Reject: nothing is granted
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+func (c *Client) AdminRejectAccessRequestWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRejectAccessRequestRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRejectAccessRequest Reject: nothing is granted
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+func (c *Client) AdminRejectAccessRequest(ctx context.Context, id string, body AdminRejectAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRejectAccessRequestRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // AdminLoginAnalytics Login analytics (FR-D17)
@@ -5133,7 +5468,7 @@ func (c *Client) AdminRevokePermission(ctx context.Context, id string, body Admi
 
 // AdminGrantPermissionWithBody Grant a direct allow or deny on an exact key (FR-Z4)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5152,7 +5487,7 @@ func (c *Client) AdminGrantPermissionWithBody(ctx context.Context, id string, pa
 
 // AdminGrantPermission Grant a direct allow or deny on an exact key (FR-Z4)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5258,7 +5593,7 @@ func (c *Client) AdminRevokeRole(ctx context.Context, id string, body AdminRevok
 
 // AdminGrantRoleWithBody Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5277,7 +5612,7 @@ func (c *Client) AdminGrantRoleWithBody(ctx context.Context, id string, params *
 
 // AdminGrantRole Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -5470,6 +5805,166 @@ func (c *Client) AdminTestWebhook(ctx context.Context, id string, reqEditors ...
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewAdminListAccessRequestsRequest constructs an http.Request for the AdminListAccessRequests method
+func NewAdminListAccessRequestsRequest(server string, params *AdminListAccessRequestsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/access-requests")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.OrgId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "org_id", *params.OrgId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminApproveAccessRequestRequest calls the generic AdminApproveAccessRequest builder with application/json body
+func NewAdminApproveAccessRequestRequest(server string, id string, body AdminApproveAccessRequestJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminApproveAccessRequestRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminApproveAccessRequestRequestWithBody constructs an http.Request for the AdminApproveAccessRequest method, with any body, and a specified content type
+func NewAdminApproveAccessRequestRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/access-requests/%s/approve", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminRejectAccessRequestRequest calls the generic AdminRejectAccessRequest builder with application/json body
+func NewAdminRejectAccessRequestRequest(server string, id string, body AdminRejectAccessRequestJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminRejectAccessRequestRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminRejectAccessRequestRequestWithBody constructs an http.Request for the AdminRejectAccessRequest method, with any body, and a specified content type
+func NewAdminRejectAccessRequestRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/access-requests/%s/reject", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
 }
 
 // NewAdminLoginAnalyticsRequest constructs an http.Request for the AdminLoginAnalytics method
@@ -10018,6 +10513,51 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// AdminListAccessRequestsWithResponse The approval queue (FR-D20)
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/access-requests (the `AdminListAccessRequests` operationId).
+	AdminListAccessRequestsWithResponse(ctx context.Context, params *AdminListAccessRequestsParams, reqEditors ...RequestEditorFn) (*AdminListAccessRequestsResponse, error)
+
+	// AdminApproveAccessRequestWithBodyWithResponse Approve: the grant applies now; a jit grant ends minutes after approval
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+	AdminApproveAccessRequestWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminApproveAccessRequestResponse, error)
+
+	// AdminApproveAccessRequestWithResponse Approve: the grant applies now; a jit grant ends minutes after approval
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+	AdminApproveAccessRequestWithResponse(ctx context.Context, id string, body AdminApproveAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminApproveAccessRequestResponse, error)
+
+	// AdminRejectAccessRequestWithBodyWithResponse Reject: nothing is granted
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+	AdminRejectAccessRequestWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRejectAccessRequestResponse, error)
+
+	// AdminRejectAccessRequestWithResponse Reject: nothing is granted
+	//
+	// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+	AdminRejectAccessRequestWithResponse(ctx context.Context, id string, body AdminRejectAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRejectAccessRequestResponse, error)
+
 	// AdminLoginAnalyticsWithResponse Login analytics (FR-D17)
 	//
 	// Tenant admins only; audited (ADR-0103).
@@ -11099,7 +11639,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantPermissionWithBodyWithResponse Grant a direct allow or deny on an exact key (FR-Z4)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11108,7 +11648,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantPermissionWithResponse Grant a direct allow or deny on an exact key (FR-Z4)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11160,7 +11700,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantRoleWithBodyWithResponse Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11169,7 +11709,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantRoleWithResponse Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11265,6 +11805,199 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/webhooks/{id}/test (the `AdminTestWebhook` operationId).
 	AdminTestWebhookWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminTestWebhookResponse, error)
+}
+
+type AdminListAccessRequestsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AccessRequestList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListAccessRequestsResponse) GetJSON200() *AccessRequestList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListAccessRequestsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListAccessRequestsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListAccessRequestsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListAccessRequestsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListAccessRequestsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListAccessRequestsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminApproveAccessRequestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AccessRequest
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminApproveAccessRequestResponse) GetJSON200() *AccessRequest {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminApproveAccessRequestResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminApproveAccessRequestResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminApproveAccessRequestResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminApproveAccessRequestResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminApproveAccessRequestResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminApproveAccessRequestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminApproveAccessRequestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminApproveAccessRequestResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRejectAccessRequestResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AccessRequest
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminRejectAccessRequestResponse) GetJSON200() *AccessRequest {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRejectAccessRequestResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRejectAccessRequestResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRejectAccessRequestResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminRejectAccessRequestResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRejectAccessRequestResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRejectAccessRequestResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRejectAccessRequestResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRejectAccessRequestResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type AdminLoginAnalyticsResponse struct {
@@ -17609,6 +18342,8 @@ type AdminGrantPermissionResponse struct {
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *PermissionGrantResult
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *GrantPending
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -17626,6 +18361,11 @@ type AdminGrantPermissionResponse struct {
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
 func (r AdminGrantPermissionResponse) GetJSON201() *PermissionGrantResult {
 	return r.JSON201
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r AdminGrantPermissionResponse) GetJSON202() *GrantPending {
+	return r.JSON202
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -17996,6 +18736,8 @@ type AdminGrantRoleResponse struct {
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
 	JSON201 *RoleGrantResult
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *GrantPending
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -18013,6 +18755,11 @@ type AdminGrantRoleResponse struct {
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
 func (r AdminGrantRoleResponse) GetJSON201() *RoleGrantResult {
 	return r.JSON201
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r AdminGrantRoleResponse) GetJSON202() *GrantPending {
+	return r.JSON202
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -18593,6 +19340,81 @@ func (r AdminTestWebhookResponse) ContentType() string {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
+}
+
+// AdminListAccessRequestsWithResponse The approval queue (FR-D20)
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); org admins see only their org's.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/access-requests (the `AdminListAccessRequests` operationId).
+func (c *ClientWithResponses) AdminListAccessRequestsWithResponse(ctx context.Context, params *AdminListAccessRequestsParams, reqEditors ...RequestEditorFn) (*AdminListAccessRequestsResponse, error) {
+	rsp, err := c.AdminListAccessRequests(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListAccessRequestsResponse(rsp)
+}
+
+// AdminApproveAccessRequestWithBodyWithResponse Approve: the grant applies now; a jit grant ends minutes after approval
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+func (c *ClientWithResponses) AdminApproveAccessRequestWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminApproveAccessRequestResponse, error) {
+	rsp, err := c.AdminApproveAccessRequestWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminApproveAccessRequestResponse(rsp)
+}
+
+// AdminApproveAccessRequestWithResponse Approve: the grant applies now; a jit grant ends minutes after approval
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/approve (the `AdminApproveAccessRequest` operationId).
+func (c *ClientWithResponses) AdminApproveAccessRequestWithResponse(ctx context.Context, id string, body AdminApproveAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminApproveAccessRequestResponse, error) {
+	rsp, err := c.AdminApproveAccessRequest(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminApproveAccessRequestResponse(rsp)
+}
+
+// AdminRejectAccessRequestWithBodyWithResponse Reject: nothing is granted
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+func (c *ClientWithResponses) AdminRejectAccessRequestWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRejectAccessRequestResponse, error) {
+	rsp, err := c.AdminRejectAccessRequestWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRejectAccessRequestResponse(rsp)
+}
+
+// AdminRejectAccessRequestWithResponse Reject: nothing is granted
+//
+// Requires a tenant:admin token of an owner/admin, or an org:admin token for requests in that org (ADR-0061); never the requester or the subject (403); 409 once decided; audited (ADR-0110).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/access-requests/{id}/reject (the `AdminRejectAccessRequest` operationId).
+func (c *ClientWithResponses) AdminRejectAccessRequestWithResponse(ctx context.Context, id string, body AdminRejectAccessRequestJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRejectAccessRequestResponse, error) {
+	rsp, err := c.AdminRejectAccessRequest(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRejectAccessRequestResponse(rsp)
 }
 
 // AdminLoginAnalyticsWithResponse Login analytics (FR-D17)
@@ -20402,7 +21224,7 @@ func (c *ClientWithResponses) AdminRevokePermissionWithResponse(ctx context.Cont
 
 // AdminGrantPermissionWithBodyWithResponse Grant a direct allow or deny on an exact key (FR-Z4)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20417,7 +21239,7 @@ func (c *ClientWithResponses) AdminGrantPermissionWithBodyWithResponse(ctx conte
 
 // AdminGrantPermissionWithResponse Grant a direct allow or deny on an exact key (FR-Z4)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20505,7 +21327,7 @@ func (c *ClientWithResponses) AdminRevokeRoleWithResponse(ctx context.Context, i
 
 // AdminGrantRoleWithBodyWithResponse Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20520,7 +21342,7 @@ func (c *ClientWithResponses) AdminGrantRoleWithBodyWithResponse(ctx context.Con
 
 // AdminGrantRoleWithResponse Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -20681,6 +21503,154 @@ func (c *ClientWithResponses) AdminTestWebhookWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseAdminTestWebhookResponse(rsp)
+}
+
+// ParseAdminListAccessRequestsResponse parses an HTTP response from a AdminListAccessRequestsWithResponse call
+func ParseAdminListAccessRequestsResponse(rsp *http.Response) (*AdminListAccessRequestsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListAccessRequestsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccessRequestList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminApproveAccessRequestResponse parses an HTTP response from a AdminApproveAccessRequestWithResponse call
+func ParseAdminApproveAccessRequestResponse(rsp *http.Response) (*AdminApproveAccessRequestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminApproveAccessRequestResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccessRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRejectAccessRequestResponse parses an HTTP response from a AdminRejectAccessRequestWithResponse call
+func ParseAdminRejectAccessRequestResponse(rsp *http.Response) (*AdminRejectAccessRequestResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRejectAccessRequestResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AccessRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseAdminLoginAnalyticsResponse parses an HTTP response from a AdminLoginAnalyticsWithResponse call
@@ -25718,6 +26688,13 @@ func ParseAdminGrantPermissionResponse(rsp *http.Response) (*AdminGrantPermissio
 		}
 		response.JSON201 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest GrantPending
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -26035,6 +27012,13 @@ func ParseAdminGrantRoleResponse(rsp *http.Response) (*AdminGrantRoleResponse, e
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest GrantPending
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
