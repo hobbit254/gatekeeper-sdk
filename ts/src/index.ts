@@ -56,8 +56,24 @@ export interface Principal {
   jkt?: string;
   /** Seconds within which each held permission needs a second factor, from the role map (ADR-0097). */
   stepUp?: Record<string, number>;
+  /** The customer's plan and features from the token; absent when the tenant set none (ADR-0098). */
+  entitlements?: Entitlements;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
+  /** Whether the token's entitlements include feature. */
+  hasFeature(feature: string): boolean;
+}
+
+/** A customer's plan and paid-for features (ADR-0098). */
+export interface Entitlements {
+  plan: string;
+  features: string[];
+}
+
+function entitlements(e: unknown): Entitlements | undefined {
+  const x = e as { plan?: unknown; features?: unknown } | undefined;
+  if (typeof x?.plan !== "string" || !Array.isArray(x.features)) return undefined;
+  return { plan: x.plan, features: x.features.filter((f): f is string => typeof f === "string") };
 }
 
 /** Every verification failure. */
@@ -216,6 +232,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
           sub: String(r.sub ?? ""), tenantId: String(r.tid ?? ""), clientId: "", roles: [], permissions: perms,
           scopes: typeof r.scope === "string" ? r.scope.split(" ").filter(Boolean) : [], amr: [], authTime: new Date(0),
           rv: 0, sid: "", jti: "", apiKey: true, ownerType: String(r.owner_type ?? ""), can: (x: string) => perms.includes(x),
+          hasFeature: () => false,
         };
       }
       e = { p, until: Date.now() + (p ? 60_000 : 10_000) };
@@ -245,6 +262,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     const roles = strings(c.roles);
     const rv = typeof c.rv === "number" ? c.rv : 0;
     const { perms, stepUp } = await permissions(roles, rv);
+    const ents = entitlements(c.entitlements);
     return {
       ...(stepUp ? { stepUp } : {}),
       sub: String(c.sub ?? ""),
@@ -261,7 +279,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       jti: String(c.jti ?? ""),
       ...impersonation(c.act),
       ...(typeof (c.cnf as { jkt?: unknown } | undefined)?.jkt === "string" ? { jkt: (c.cnf as { jkt: string }).jkt } : {}),
+      ...(ents ? { entitlements: ents } : {}),
       can: (p: string) => perms.includes(p),
+      hasFeature: (f: string) => ents?.features.includes(f) ?? false,
     };
   }
 

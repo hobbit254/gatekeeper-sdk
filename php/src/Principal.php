@@ -13,6 +13,7 @@ final readonly class Principal
      * @param list<string> $scopes
      * @param list<string> $amr
      * @param array<string, int> $stepUp
+     * @param array{plan: string, features: list<string>}|null $entitlements
      */
     public function __construct(
         public string $sub,
@@ -37,6 +38,8 @@ final readonly class Principal
         public string $jkt = '',
         /** Per-permission step-up windows in seconds from the role map (ADR-0097). */
         public array $stepUp = [],
+        /** The customer's plan and features, ['plan' => string, 'features' => list<string>], or null (ADR-0098). */
+        public ?array $entitlements = null,
     ) {
     }
 
@@ -44,6 +47,12 @@ final readonly class Principal
     public function can(string $permission): bool
     {
         return in_array($permission, $this->permissions, true);
+    }
+
+    /** Whether the token's entitlements include $feature. */
+    public function hasFeature(string $feature): bool
+    {
+        return in_array($feature, $this->entitlements['features'] ?? [], true);
     }
 
     /** API keys and tokens without amr (client credentials) are machines; step-up doesn't apply to them. */

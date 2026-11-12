@@ -134,6 +134,15 @@ func main() {
 		{"not granted", viewer, "subscriber:delete", "deny", 0},
 		{"a machine token is never asked", admin(func(c map[string]any) { delete(c, "amr"); delete(c, "auth_time") }), "subscriber:delete", "allow", 0},
 	}
+	// Entitlements (ADR-0098): the plan and features ride in the token.
+	entitlements := map[string]any{
+		"token": good(func(c map[string]any) {
+			c["entitlements"] = map[string]any{"plan": "pro", "features": []string{"bulk_sms", "reports"}}
+		}),
+		"plan": "pro", "features": []string{"bulk_sms", "reports"},
+		"has": []string{"bulk_sms", "reports"}, "lacks": []string{"sso", "bulk"},
+		"plain": viewer,
+	}
 	// Denylist cases (ADR-0048): the checker denies sid "session-denied" and jti "jti-denied".
 	denyCases := []testCase{
 		{"live session", viewer, "subscriber:read", "allow"},
@@ -229,6 +238,7 @@ func main() {
 		"impersonation":      impersonation,
 		"api_keys":           apiKeys,
 		"dpop":               dpop,
+		"entitlements":       entitlements,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

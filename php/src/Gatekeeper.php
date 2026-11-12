@@ -80,6 +80,7 @@ final class Gatekeeper
             impersonationEndsAt: isset($claims->act->ends_at) && is_int($claims->act->ends_at) ? $claims->act->ends_at : null,
             jkt: isset($claims->cnf->jkt) && is_string($claims->cnf->jkt) ? $claims->cnf->jkt : '',
             stepUp: $stepUp,
+            entitlements: self::entitlements($claims->entitlements ?? null),
         );
     }
 
@@ -327,6 +328,15 @@ final class Gatekeeper
             }
         }
         return [$status, $body === false ? '' : $body, $got];
+    }
+
+    /** @return array{plan: string, features: list<string>}|null */
+    private static function entitlements(mixed $e): ?array
+    {
+        if (!is_object($e) || !is_string($e->plan ?? null) || !is_array($e->features ?? null)) {
+            return null;
+        }
+        return ['plan' => $e->plan, 'features' => self::strings($e->features)];
     }
 
     /** @return list<string> */

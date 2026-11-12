@@ -60,6 +60,20 @@ type Principal struct {
 	// StepUp is how recent a second factor each held permission needs, from
 	// the role map; RequirePermission enforces it (ADR-0097).
 	StepUp map[string]time.Duration
+	// Entitlements are the customer's plan and features from the token, or
+	// nil when the tenant set none (ADR-0098).
+	Entitlements *Entitlements
+}
+
+// Entitlements are a customer's plan and paid-for features (ADR-0098).
+type Entitlements struct {
+	Plan     string   `json:"plan"`
+	Features []string `json:"features"`
+}
+
+// HasFeature reports whether the token's entitlements include feature.
+func (p *Principal) HasFeature(feature string) bool {
+	return p.Entitlements != nil && slices.Contains(p.Entitlements.Features, feature)
 }
 
 // machine principals (API keys, client-credentials tokens) are never asked to step up (ADR-0056).
@@ -149,6 +163,7 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		Cnf *struct {
 			JKT string `json:"jkt"`
 		} `json:"cnf"`
+		Entitlements *Entitlements `json:"entitlements"`
 	}
 	if err := json.Unmarshal(payload, &c); err != nil {
 		return nil, fmt.Errorf("%w: claims", ErrInvalidToken)
@@ -173,7 +188,7 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 	}
 	p := &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
 		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV,
-		SID: c.SID, JTI: c.JTI, StepUp: stepUp}
+		SID: c.SID, JTI: c.JTI, StepUp: stepUp, Entitlements: c.Entitlements}
 	if c.Act != nil {
 		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
 	}

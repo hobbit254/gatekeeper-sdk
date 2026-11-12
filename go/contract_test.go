@@ -42,6 +42,11 @@ type vectors struct {
 		Name, Token, Permission, Expect string
 		MaxAge                          int `json:"max_age"`
 	} `json:"permission_step_up"`
+	Entitlements struct {
+		Token, Plan, Plain string
+		Features, Has      []string
+		Lacks              []string
+	} `json:"entitlements"`
 	Impersonation struct {
 		Token  string `json:"token"`
 		Actor  string `json:"actor"`
@@ -210,6 +215,31 @@ func loadVectors(t *testing.T) vectors {
 func vectorSDK(v vectors) *SDK {
 	return New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
 		HTTPClient: &http.Client{Transport: fixedServer{v}}})
+}
+
+func TestContractEntitlements(t *testing.T) {
+	v := loadVectors(t)
+	p, err := vectorSDK(v).Verify(context.Background(), v.Entitlements.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Entitlements == nil || p.Entitlements.Plan != v.Entitlements.Plan || !slices.Equal(p.Entitlements.Features, v.Entitlements.Features) {
+		t.Fatalf("entitlements %+v", p.Entitlements)
+	}
+	for _, f := range v.Entitlements.Has {
+		if !p.HasFeature(f) {
+			t.Errorf("HasFeature(%q) = false", f)
+		}
+	}
+	for _, f := range v.Entitlements.Lacks {
+		if p.HasFeature(f) {
+			t.Errorf("HasFeature(%q) = true", f)
+		}
+	}
+	p, err = vectorSDK(v).Verify(context.Background(), v.Entitlements.Plain)
+	if err != nil || p.Entitlements != nil || p.HasFeature(v.Entitlements.Has[0]) {
+		t.Fatalf("a token without the claim has none: %+v %v", p.Entitlements, err)
+	}
 }
 
 func TestContractImpersonation(t *testing.T) {
