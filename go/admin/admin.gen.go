@@ -1306,6 +1306,19 @@ type ProfilePatch struct {
 	Timezone *string                 `json:"timezone,omitempty"`
 }
 
+// PushApprover defines model for PushApprover.
+type PushApprover struct {
+	CreatedAt  time.Time          `json:"created_at"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"last_used_at,omitempty"`
+	Name       string             `json:"name"`
+}
+
+// PushApproverList defines model for PushApproverList.
+type PushApproverList struct {
+	Approvers []PushApprover `json:"approvers"`
+}
+
 // RoleCreate defines model for RoleCreate.
 type RoleCreate struct {
 	Description *string `json:"description,omitempty"`
@@ -1579,6 +1592,12 @@ type TenantPolicy struct {
 	} `json:"lockout"`
 	Mfa TenantPolicyMfa `json:"mfa"`
 
+	// MfaPush Omitted keeps the stored setting (ADR-0111)
+	MfaPush *struct {
+		// Enabled Offer push approval at the second-factor step
+		Enabled *bool `json:"enabled,omitempty"`
+	} `json:"mfa_push,omitempty"`
+
 	// Otp ADR-0041
 	Otp struct {
 		AllowedCountries       []string `json:"allowed_countries"`
@@ -1609,13 +1628,14 @@ type TenantPolicy struct {
 		// StepUp Score at which a second factor is required
 		StepUp *int `json:"step_up,omitempty"`
 
-		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40); 0 turns a signal off (ADR-0101)
+		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40); 0 turns a signal off (ADR-0101)
 		Weights *struct {
 			AccountFailures   *int `json:"account_failures,omitempty"`
 			FastCountryChange *int `json:"fast_country_change,omitempty"`
 			IpFailures        *int `json:"ip_failures,omitempty"`
 			NewCountry        *int `json:"new_country,omitempty"`
 			NewDevice         *int `json:"new_device,omitempty"`
+			PushReported      *int `json:"push_reported,omitempty"`
 			TorExit           *int `json:"tor_exit,omitempty"`
 		} `json:"weights,omitempty"`
 	} `json:"risk,omitempty"`
@@ -3067,6 +3087,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 	AdminGrantPermission(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListPushApprovers A user's push approvers (FR-D22)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+	//
+	// Corresponds with GET /v1/admin/users/{id}/push-approvers (the `AdminListPushApprovers` operationId).
+	AdminListPushApprovers(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminDeletePushApprover Remove a user's push approver
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/push-approvers/{approver_id} (the `AdminDeletePushApprover` operationId).
+	AdminDeletePushApprover(ctx context.Context, id string, approverId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminResetUserMFA Remove TOTP, recovery codes, passkeys and trusted devices, end every session, email the user (FR-D11)
 	//
@@ -5494,6 +5528,40 @@ func (c *Client) AdminGrantPermissionWithBody(ctx context.Context, id string, pa
 // Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 func (c *Client) AdminGrantPermission(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminGrantPermissionRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListPushApprovers A user's push approvers (FR-D22)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+//
+// Corresponds with GET /v1/admin/users/{id}/push-approvers (the `AdminListPushApprovers` operationId).
+func (c *Client) AdminListPushApprovers(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListPushApproversRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminDeletePushApprover Remove a user's push approver
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/push-approvers/{approver_id} (the `AdminDeletePushApprover` operationId).
+func (c *Client) AdminDeletePushApprover(ctx context.Context, id string, approverId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeletePushApproverRequest(c.Server, id, approverId)
 	if err != nil {
 		return nil, err
 	}
@@ -9974,6 +10042,81 @@ func NewAdminGrantPermissionRequestWithBody(server string, id string, params *Ad
 	return req, nil
 }
 
+// NewAdminListPushApproversRequest constructs an http.Request for the AdminListPushApprovers method
+func NewAdminListPushApproversRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/push-approvers", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminDeletePushApproverRequest constructs an http.Request for the AdminDeletePushApprover method
+func NewAdminDeletePushApproverRequest(server string, id string, approverId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "approver_id", approverId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/push-approvers/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminResetUserMFARequest constructs an http.Request for the AdminResetUserMFA method
 func NewAdminResetUserMFARequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -11654,6 +11797,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 	AdminGrantPermissionWithResponse(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminGrantPermissionResponse, error)
+
+	// AdminListPushApproversWithResponse A user's push approvers (FR-D22)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/users/{id}/push-approvers (the `AdminListPushApprovers` operationId).
+	AdminListPushApproversWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListPushApproversResponse, error)
+
+	// AdminDeletePushApproverWithResponse Remove a user's push approver
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/push-approvers/{approver_id} (the `AdminDeletePushApprover` operationId).
+	AdminDeletePushApproverWithResponse(ctx context.Context, id string, approverId string, reqEditors ...RequestEditorFn) (*AdminDeletePushApproverResponse, error)
 
 	// AdminResetUserMFAWithResponse Remove TOTP, recovery codes, passkeys and trusted devices, end every session, email the user (FR-D11)
 	//
@@ -18427,6 +18588,123 @@ func (r AdminGrantPermissionResponse) ContentType() string {
 	return ""
 }
 
+type AdminListPushApproversResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PushApproverList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListPushApproversResponse) GetJSON200() *PushApproverList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListPushApproversResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListPushApproversResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListPushApproversResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListPushApproversResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListPushApproversResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListPushApproversResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListPushApproversResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminDeletePushApproverResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminDeletePushApproverResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminDeletePushApproverResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminDeletePushApproverResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminDeletePushApproverResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminDeletePushApproverResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminDeletePushApproverResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminDeletePushApproverResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminResetUserMFAResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -21250,6 +21528,36 @@ func (c *ClientWithResponses) AdminGrantPermissionWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseAdminGrantPermissionResponse(rsp)
+}
+
+// AdminListPushApproversWithResponse A user's push approvers (FR-D22)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/users/{id}/push-approvers (the `AdminListPushApprovers` operationId).
+func (c *ClientWithResponses) AdminListPushApproversWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListPushApproversResponse, error) {
+	rsp, err := c.AdminListPushApprovers(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListPushApproversResponse(rsp)
+}
+
+// AdminDeletePushApproverWithResponse Remove a user's push approver
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/push-approvers/{approver_id} (the `AdminDeletePushApprover` operationId).
+func (c *ClientWithResponses) AdminDeletePushApproverWithResponse(ctx context.Context, id string, approverId string, reqEditors ...RequestEditorFn) (*AdminDeletePushApproverResponse, error) {
+	rsp, err := c.AdminDeletePushApprover(ctx, id, approverId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminDeletePushApproverResponse(rsp)
 }
 
 // AdminResetUserMFAWithResponse Remove TOTP, recovery codes, passkeys and trusted devices, end every session, email the user (FR-D11)
@@ -26736,6 +27044,96 @@ func ParseAdminGrantPermissionResponse(rsp *http.Response) (*AdminGrantPermissio
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListPushApproversResponse parses an HTTP response from a AdminListPushApproversWithResponse call
+func ParseAdminListPushApproversResponse(rsp *http.Response) (*AdminListPushApproversResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListPushApproversResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PushApproverList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminDeletePushApproverResponse parses an HTTP response from a AdminDeletePushApproverWithResponse call
+func ParseAdminDeletePushApproverResponse(rsp *http.Response) (*AdminDeletePushApproverResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminDeletePushApproverResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 
