@@ -538,3 +538,4 @@ export function createClientCredentials(config: ClientCredentialsConfig): Client
 }
 
 export { generateDPoPKey } from "./dpop.js";
+export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";

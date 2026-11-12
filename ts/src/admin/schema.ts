@@ -1461,6 +1461,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{id}/push-approvers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A user's push approvers (FR-D22)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+         */
+        get: operations["adminListPushApprovers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/push-approvers/{approver_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a user's push approver
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0111).
+         */
+        delete: operations["adminDeletePushApprover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{id}/reset-mfa": {
         parameters: {
             query?: never;
@@ -2313,6 +2353,18 @@ export interface components {
             metadata?: Record<string, never>;
             timezone?: string;
         };
+        PushApprover: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            name: string;
+        };
+        PushApproverList: {
+            approvers: components["schemas"]["PushApprover"][];
+        };
         RoleCreate: {
             description?: string;
             name: string;
@@ -2536,6 +2588,11 @@ export interface components {
             };
             /** @enum {string} */
             mfa: "off" | "optional" | "required" | "required_for_admins";
+            /** @description Omitted keeps the stored setting (ADR-0111) */
+            mfa_push?: {
+                /** @description Offer push approval at the second-factor step */
+                enabled?: boolean;
+            };
             /** @description ADR-0041 */
             otp: {
                 allowed_countries: string[];
@@ -2562,13 +2619,14 @@ export interface components {
                 enabled?: boolean;
                 /** @description Score at which a second factor is required */
                 step_up?: number;
-                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40); 0 turns a signal off (ADR-0101) */
+                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40); 0 turns a signal off (ADR-0101) */
                 weights?: {
                     account_failures?: number;
                     fast_country_change?: number;
                     ip_failures?: number;
                     new_country?: number;
                     new_device?: number;
+                    push_reported?: number;
                     tor_exit?: number;
                 };
             };
@@ -5280,6 +5338,55 @@ export interface operations {
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    adminListPushApprovers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approvers */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushApproverList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminDeletePushApprover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                approver_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     adminResetUserMFA: {
