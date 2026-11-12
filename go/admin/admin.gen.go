@@ -390,6 +390,24 @@ func (e TenantPolicyMfa) Valid() bool {
 	}
 }
 
+// Defines values for AdminLoginAnalyticsParamsDays.
+const (
+	N30 AdminLoginAnalyticsParamsDays = 30
+	N90 AdminLoginAnalyticsParamsDays = 90
+)
+
+// Valid indicates whether the value is a known member of the AdminLoginAnalyticsParamsDays enum.
+func (e AdminLoginAnalyticsParamsDays) Valid() bool {
+	switch e {
+	case N30:
+		return true
+	case N90:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminRotateOrgSSOKeyJSONBodyStep.
 const (
 	Activate AdminRotateOrgSSOKeyJSONBodyStep = "activate"
@@ -673,6 +691,13 @@ type ClientPatch struct {
 	RefreshTtlSec  *int      `json:"refresh_ttl_sec,omitempty"`
 }
 
+// CompliancePackList defines model for CompliancePackList.
+type CompliancePackList struct {
+	Packs []struct {
+		Month string `json:"month"`
+	} `json:"packs"`
+}
+
 // ConsentPurpose defines model for ConsentPurpose.
 type ConsentPurpose struct {
 	Description string    `json:"description"`
@@ -891,6 +916,37 @@ type LegalDocumentList struct {
 	// Current The version in effect per kind
 	Current   map[string]LegalDocument `json:"current"`
 	Documents []LegalDocument          `json:"documents"`
+}
+
+// LoginAnalytics Sign-ins over the last 30 or 90 UTC days, today included (ADR-0103)
+type LoginAnalytics struct {
+	Clients []struct {
+		// ClientId "unknown" for sign-ins recorded before Sprint 25
+		ClientId string `json:"client_id"`
+		SignIns  int    `json:"sign_ins"`
+	} `json:"clients"`
+	Days []struct {
+		Blocked  int                `json:"blocked"`
+		Date     openapi_types.Date `json:"date"`
+		Failures int                `json:"failures"`
+		SignIns  int                `json:"sign_ins"`
+		StepUp   int                `json:"step_up"`
+	} `json:"days"`
+
+	// Methods By first factor: password, passkey, code, social, sso, other
+	Methods     map[string]int `json:"methods"`
+	MfaAdoption struct {
+		Enrolled int `json:"enrolled"`
+		Users    int `json:"users"`
+	} `json:"mfa_adoption"`
+	SignIns    int `json:"sign_ins"`
+	TopSignals []struct {
+		Count  int    `json:"count"`
+		Signal string `json:"signal"`
+	} `json:"top_signals"`
+
+	// WithMfa Completed sign-ins with a second factor
+	WithMfa int `json:"with_mfa"`
 }
 
 // Member defines model for Member.
@@ -1295,6 +1351,12 @@ type TenantPolicy struct {
 		Enabled         *bool `json:"enabled,omitempty"`
 		IpFailures      *int  `json:"ip_failures,omitempty"`
 	} `json:"captcha,omitempty"`
+
+	// Compliance Omitted keeps the stored setting (ADR-0102)
+	Compliance *struct {
+		// MonthlyPack Store last month's compliance pack on the 1st; needs audit archive storage, else 422
+		MonthlyPack *bool `json:"monthly_pack,omitempty"`
+	} `json:"compliance,omitempty"`
 	DeletionGraceDays int `json:"deletion_grace_days"`
 
 	// DpopNonce Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095)
@@ -1315,6 +1377,12 @@ type TenantPolicy struct {
 		SenderId               string   `json:"sender_id"`
 		SmsEnabled             bool     `json:"sms_enabled"`
 	} `json:"otp"`
+
+	// Passkey Passkey rules; omitted keeps the stored ones (ADR-0104)
+	Passkey *struct {
+		// RequireDeviceBound Refuse passkeys that may sync to other devices, at registration and sign-in
+		RequireDeviceBound *bool `json:"require_device_bound,omitempty"`
+	} `json:"passkey,omitempty"`
 	Password struct {
 		CheckBreached bool `json:"check_breached"`
 		MaxLength     int  `json:"max_length"`
@@ -1401,6 +1469,14 @@ type Cursor = string
 
 // Limit defines model for Limit.
 type Limit = int
+
+// AdminLoginAnalyticsParams defines parameters for AdminLoginAnalytics.
+type AdminLoginAnalyticsParams struct {
+	Days AdminLoginAnalyticsParamsDays `form:"days" json:"days"`
+}
+
+// AdminLoginAnalyticsParamsDays defines parameters for AdminLoginAnalytics.
+type AdminLoginAnalyticsParamsDays int
 
 // AdminListAuditEventsParams defines parameters for AdminListAuditEvents.
 type AdminListAuditEventsParams struct {
@@ -1741,6 +1817,13 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// AdminLoginAnalytics Login analytics (FR-D17)
+	//
+	// Tenant admins only; audited (ADR-0103).
+	//
+	// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
+	AdminLoginAnalytics(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListAPIKeys Live API keys (FR-M2, ADR-0057); never the key
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -1888,7 +1971,17 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/admin/clients/{id}/rotate-secret (the `AdminRotateClientSecret` operationId).
 	AdminRotateClientSecret(ctx context.Context, id string, params *AdminRotateClientSecretParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminComplianceReport Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073)
+	// AdminListCompliancePacks Stored monthly compliance packs, newest first (FR-D15)
+	//
+	// Corresponds with GET /v1/admin/compliance/packs (the `AdminListCompliancePacks` operationId).
+	AdminListCompliancePacks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminGetCompliancePack Download a stored monthly pack (FR-D15)
+	//
+	// Corresponds with GET /v1/admin/compliance/packs/{month} (the `AdminGetCompliancePack` operationId).
+	AdminGetCompliancePack(ctx context.Context, month string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminComplianceReport Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102)
 	//
 	// Corresponds with GET /v1/admin/compliance/report.zip (the `AdminComplianceReport` operationId).
 	AdminComplianceReport(ctx context.Context, params *AdminComplianceReportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2812,6 +2905,23 @@ type ClientInterface interface {
 	AdminTestWebhook(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
+// AdminLoginAnalytics Login analytics (FR-D17)
+//
+// Tenant admins only; audited (ADR-0103).
+//
+// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
+func (c *Client) AdminLoginAnalytics(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminLoginAnalyticsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListAPIKeys Live API keys (FR-M2, ADR-0057); never the key
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -3149,7 +3259,37 @@ func (c *Client) AdminRotateClientSecret(ctx context.Context, id string, params 
 	return c.Client.Do(req)
 }
 
-// AdminComplianceReport Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073)
+// AdminListCompliancePacks Stored monthly compliance packs, newest first (FR-D15)
+//
+// Corresponds with GET /v1/admin/compliance/packs (the `AdminListCompliancePacks` operationId).
+func (c *Client) AdminListCompliancePacks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListCompliancePacksRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminGetCompliancePack Download a stored monthly pack (FR-D15)
+//
+// Corresponds with GET /v1/admin/compliance/packs/{month} (the `AdminGetCompliancePack` operationId).
+func (c *Client) AdminGetCompliancePack(ctx context.Context, month string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminGetCompliancePackRequest(c.Server, month)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminComplianceReport Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102)
 //
 // Corresponds with GET /v1/admin/compliance/report.zip (the `AdminComplianceReport` operationId).
 func (c *Client) AdminComplianceReport(ctx context.Context, params *AdminComplianceReportParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5222,6 +5362,56 @@ func (c *Client) AdminTestWebhook(ctx context.Context, id string, reqEditors ...
 	return c.Client.Do(req)
 }
 
+// NewAdminLoginAnalyticsRequest constructs an http.Request for the AdminLoginAnalytics method
+func NewAdminLoginAnalyticsRequest(server string, params *AdminLoginAnalyticsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/analytics/logins")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "days", params.Days, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListAPIKeysRequest constructs an http.Request for the AdminListAPIKeys method
 func NewAdminListAPIKeysRequest(server string) (*http.Request, error) {
 	var err error
@@ -6006,6 +6196,67 @@ func NewAdminRotateClientSecretRequest(server string, id string, params *AdminRo
 			req.Header.Set("Idempotency-Key", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewAdminListCompliancePacksRequest constructs an http.Request for the AdminListCompliancePacks method
+func NewAdminListCompliancePacksRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/compliance/packs")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminGetCompliancePackRequest constructs an http.Request for the AdminGetCompliancePack method
+func NewAdminGetCompliancePackRequest(server string, month string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "month", month, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/compliance/packs/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -9590,6 +9841,15 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// AdminLoginAnalyticsWithResponse Login analytics (FR-D17)
+	//
+	// Tenant admins only; audited (ADR-0103).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
+	AdminLoginAnalyticsWithResponse(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*AdminLoginAnalyticsResponse, error)
+
 	// AdminListAPIKeysWithResponse Live API keys (FR-M2, ADR-0057); never the key
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -9761,7 +10021,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/admin/clients/{id}/rotate-secret (the `AdminRotateClientSecret` operationId).
 	AdminRotateClientSecretWithResponse(ctx context.Context, id string, params *AdminRotateClientSecretParams, reqEditors ...RequestEditorFn) (*AdminRotateClientSecretResponse, error)
 
-	// AdminComplianceReportWithResponse Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073)
+	// AdminListCompliancePacksWithResponse Stored monthly compliance packs, newest first (FR-D15)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/compliance/packs (the `AdminListCompliancePacks` operationId).
+	AdminListCompliancePacksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListCompliancePacksResponse, error)
+
+	// AdminGetCompliancePackWithResponse Download a stored monthly pack (FR-D15)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/compliance/packs/{month} (the `AdminGetCompliancePack` operationId).
+	AdminGetCompliancePackWithResponse(ctx context.Context, month string, reqEditors ...RequestEditorFn) (*AdminGetCompliancePackResponse, error)
+
+	// AdminComplianceReportWithResponse Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102)
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -10787,6 +11061,75 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/webhooks/{id}/test (the `AdminTestWebhook` operationId).
 	AdminTestWebhookWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminTestWebhookResponse, error)
+}
+
+type AdminLoginAnalyticsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *LoginAnalytics
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminLoginAnalyticsResponse) GetJSON200() *LoginAnalytics {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminLoginAnalyticsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminLoginAnalyticsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminLoginAnalyticsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminLoginAnalyticsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminLoginAnalyticsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminLoginAnalyticsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminLoginAnalyticsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminLoginAnalyticsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type AdminListAPIKeysResponse struct {
@@ -11956,6 +12299,123 @@ func (r AdminRotateClientSecretResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminRotateClientSecretResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListCompliancePacksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CompliancePackList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListCompliancePacksResponse) GetJSON200() *CompliancePackList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListCompliancePacksResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListCompliancePacksResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListCompliancePacksResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListCompliancePacksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListCompliancePacksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListCompliancePacksResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminGetCompliancePackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminGetCompliancePackResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminGetCompliancePackResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminGetCompliancePackResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminGetCompliancePackResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminGetCompliancePackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminGetCompliancePackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminGetCompliancePackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminGetCompliancePackResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -17800,6 +18260,21 @@ func (r AdminTestWebhookResponse) ContentType() string {
 	return ""
 }
 
+// AdminLoginAnalyticsWithResponse Login analytics (FR-D17)
+//
+// Tenant admins only; audited (ADR-0103).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
+func (c *ClientWithResponses) AdminLoginAnalyticsWithResponse(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*AdminLoginAnalyticsResponse, error) {
+	rsp, err := c.AdminLoginAnalytics(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminLoginAnalyticsResponse(rsp)
+}
+
 // AdminListAPIKeysWithResponse Live API keys (FR-M2, ADR-0057); never the key
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -18085,7 +18560,33 @@ func (c *ClientWithResponses) AdminRotateClientSecretWithResponse(ctx context.Co
 	return ParseAdminRotateClientSecretResponse(rsp)
 }
 
-// AdminComplianceReportWithResponse Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073)
+// AdminListCompliancePacksWithResponse Stored monthly compliance packs, newest first (FR-D15)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/compliance/packs (the `AdminListCompliancePacks` operationId).
+func (c *ClientWithResponses) AdminListCompliancePacksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListCompliancePacksResponse, error) {
+	rsp, err := c.AdminListCompliancePacks(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListCompliancePacksResponse(rsp)
+}
+
+// AdminGetCompliancePackWithResponse Download a stored monthly pack (FR-D15)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/compliance/packs/{month} (the `AdminGetCompliancePack` operationId).
+func (c *ClientWithResponses) AdminGetCompliancePackWithResponse(ctx context.Context, month string, reqEditors ...RequestEditorFn) (*AdminGetCompliancePackResponse, error) {
+	rsp, err := c.AdminGetCompliancePack(ctx, month, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminGetCompliancePackResponse(rsp)
+}
+
+// AdminComplianceReportWithResponse Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102)
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -19802,6 +20303,60 @@ func (c *ClientWithResponses) AdminTestWebhookWithResponse(ctx context.Context, 
 	return ParseAdminTestWebhookResponse(rsp)
 }
 
+// ParseAdminLoginAnalyticsResponse parses an HTTP response from a AdminLoginAnalyticsWithResponse call
+func ParseAdminLoginAnalyticsResponse(rsp *http.Response) (*AdminLoginAnalyticsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminLoginAnalyticsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LoginAnalytics
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListAPIKeysResponse parses an HTTP response from a AdminListAPIKeysWithResponse call
 func ParseAdminListAPIKeysResponse(rsp *http.Response) (*AdminListAPIKeysResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20731,6 +21286,93 @@ func ParseAdminRotateClientSecretResponse(rsp *http.Response) (*AdminRotateClien
 			return nil, err
 		}
 		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListCompliancePacksResponse parses an HTTP response from a AdminListCompliancePacksWithResponse call
+func ParseAdminListCompliancePacksResponse(rsp *http.Response) (*AdminListCompliancePacksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListCompliancePacksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CompliancePackList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminGetCompliancePackResponse parses an HTTP response from a AdminGetCompliancePackWithResponse call
+func ParseAdminGetCompliancePackResponse(rsp *http.Response) (*AdminGetCompliancePackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminGetCompliancePackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Problem

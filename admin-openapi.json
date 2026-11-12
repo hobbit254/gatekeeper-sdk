@@ -718,6 +718,29 @@
         },
         "type": "object"
       },
+      "CompliancePackList": {
+        "properties": {
+          "packs": {
+            "items": {
+              "properties": {
+                "month": {
+                  "pattern": "^\\d{4}-\\d{2}$",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "month"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "packs"
+        ],
+        "type": "object"
+      },
       "ConsentPurpose": {
         "properties": {
           "description": {
@@ -1353,6 +1376,119 @@
         "required": [
           "documents",
           "current"
+        ],
+        "type": "object"
+      },
+      "LoginAnalytics": {
+        "description": "Sign-ins over the last 30 or 90 UTC days, today included (ADR-0103)",
+        "properties": {
+          "clients": {
+            "items": {
+              "properties": {
+                "client_id": {
+                  "description": "\"unknown\" for sign-ins recorded before Sprint 25",
+                  "type": "string"
+                },
+                "sign_ins": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "client_id",
+                "sign_ins"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "days": {
+            "items": {
+              "properties": {
+                "blocked": {
+                  "type": "integer"
+                },
+                "date": {
+                  "format": "date",
+                  "type": "string"
+                },
+                "failures": {
+                  "type": "integer"
+                },
+                "sign_ins": {
+                  "type": "integer"
+                },
+                "step_up": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "date",
+                "sign_ins",
+                "failures",
+                "step_up",
+                "blocked"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "methods": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "By first factor: password, passkey, code, social, sso, other",
+            "type": "object"
+          },
+          "mfa_adoption": {
+            "properties": {
+              "enrolled": {
+                "type": "integer"
+              },
+              "users": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "users",
+              "enrolled"
+            ],
+            "type": "object"
+          },
+          "sign_ins": {
+            "type": "integer"
+          },
+          "top_signals": {
+            "items": {
+              "properties": {
+                "count": {
+                  "type": "integer"
+                },
+                "signal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "signal",
+                "count"
+              ],
+              "type": "object"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "with_mfa": {
+            "description": "Completed sign-ins with a second factor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "sign_ins",
+          "with_mfa",
+          "methods",
+          "clients",
+          "top_signals",
+          "mfa_adoption"
         ],
         "type": "object"
       },
@@ -2403,6 +2539,16 @@
             },
             "type": "object"
           },
+          "compliance": {
+            "description": "Omitted keeps the stored setting (ADR-0102)",
+            "properties": {
+              "monthly_pack": {
+                "description": "Store last month's compliance pack on the 1st; needs audit archive storage, else 422",
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
           "deletion_grace_days": {
             "maximum": 365,
             "minimum": 1,
@@ -2483,6 +2629,16 @@
               "sms_enabled",
               "sender_id"
             ],
+            "type": "object"
+          },
+          "passkey": {
+            "description": "Passkey rules; omitted keeps the stored ones (ADR-0104)",
+            "properties": {
+              "require_device_bound": {
+                "description": "Refuse passkeys that may sync to other devices, at registration and sign-in",
+                "type": "boolean"
+              }
+            },
             "type": "object"
           },
           "password": {
@@ -2731,10 +2887,60 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.24.0"
+    "version": "0.25.0"
   },
   "openapi": "3.0.3",
   "paths": {
+    "/v1/admin/analytics/logins": {
+      "get": {
+        "description": "Tenant admins only; audited (ADR-0103).",
+        "operationId": "adminLoginAnalytics",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": true,
+            "schema": {
+              "enum": [
+                30,
+                90
+              ],
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginAnalytics"
+                }
+              }
+            },
+            "description": "Analytics"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Login analytics (FR-D17)"
+      }
+    },
     "/v1/admin/api-keys": {
       "get": {
         "description": "Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).",
@@ -3591,6 +3797,82 @@
         "summary": "Issue a new secret; the old one works for 24 h more (FR-T3, ADR-0035)"
       }
     },
+    "/v1/admin/compliance/packs": {
+      "get": {
+        "operationId": "adminListCompliancePacks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompliancePackList"
+                }
+              }
+            },
+            "description": "Packs"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Stored monthly compliance packs, newest first (FR-D15)"
+      }
+    },
+    "/v1/admin/compliance/packs/{month}": {
+      "get": {
+        "operationId": "adminGetCompliancePack",
+        "parameters": [
+          {
+            "description": "YYYY-MM",
+            "in": "path",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "ZIP"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Download a stored monthly pack (FR-D15)"
+      }
+    },
     "/v1/admin/compliance/report.zip": {
       "get": {
         "operationId": "adminComplianceReport",
@@ -3636,7 +3918,7 @@
             "$ref": "#/components/responses/Problem"
           }
         },
-        "summary": "Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073)"
+        "summary": "Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102)"
       }
     },
     "/v1/admin/data-exports": {

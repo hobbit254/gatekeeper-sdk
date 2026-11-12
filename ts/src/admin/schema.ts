@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/v1/admin/analytics/logins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Login analytics (FR-D17)
+         * @description Tenant admins only; audited (ADR-0103).
+         */
+        get: operations["adminLoginAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/api-keys": {
         parameters: {
             query?: never;
@@ -244,6 +264,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/compliance/packs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Stored monthly compliance packs, newest first (FR-D15) */
+        get: operations["adminListCompliancePacks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/compliance/packs/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a stored monthly pack (FR-D15) */
+        get: operations["adminGetCompliancePack"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/compliance/report.zip": {
         parameters: {
             query?: never;
@@ -251,7 +305,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Compliance report pack: CSVs and a signed manifest for [from, to), at most 400 days (FR-D7, ADR-0073) */
+        /** Compliance report pack: CSVs, a PDF summary and a signed manifest for [from, to), at most 400 days (FR-D7, FR-D16, ADR-0073, ADR-0102) */
         get: operations["adminComplianceReport"];
         put?: never;
         post?: never;
@@ -1730,6 +1784,11 @@ export interface components {
             redirect_uris?: string[];
             refresh_ttl_sec?: number;
         };
+        CompliancePackList: {
+            packs: {
+                month: string;
+            }[];
+        };
         ConsentPurpose: {
             description: string;
             key: string;
@@ -1914,6 +1973,37 @@ export interface components {
                 [key: string]: components["schemas"]["LegalDocument"];
             };
             documents: components["schemas"]["LegalDocument"][];
+        };
+        /** @description Sign-ins over the last 30 or 90 UTC days, today included (ADR-0103) */
+        LoginAnalytics: {
+            clients: {
+                /** @description "unknown" for sign-ins recorded before Sprint 25 */
+                client_id: string;
+                sign_ins: number;
+            }[];
+            days: {
+                blocked: number;
+                /** Format: date */
+                date: string;
+                failures: number;
+                sign_ins: number;
+                step_up: number;
+            }[];
+            /** @description By first factor: password, passkey, code, social, sso, other */
+            methods: {
+                [key: string]: number;
+            };
+            mfa_adoption: {
+                enrolled: number;
+                users: number;
+            };
+            sign_ins: number;
+            top_signals: {
+                count: number;
+                signal: string;
+            }[];
+            /** @description Completed sign-ins with a second factor */
+            with_mfa: number;
         };
         Member: {
             display_name?: string;
@@ -2239,6 +2329,11 @@ export interface components {
                 enabled?: boolean;
                 ip_failures?: number;
             };
+            /** @description Omitted keeps the stored setting (ADR-0102) */
+            compliance?: {
+                /** @description Store last month's compliance pack on the 1st; needs audit archive storage, else 422 */
+                monthly_pack?: boolean;
+            };
             deletion_grace_days: number;
             /** @description Require a server-issued DPoP-Nonce in every proof (RFC 9449 §8); off by default (ADR-0095) */
             dpop_nonce?: boolean;
@@ -2257,6 +2352,11 @@ export interface components {
                 require_known_identifier: boolean;
                 sender_id: string;
                 sms_enabled: boolean;
+            };
+            /** @description Passkey rules; omitted keeps the stored ones (ADR-0104) */
+            passkey?: {
+                /** @description Refuse passkeys that may sync to other devices, at registration and sign-in */
+                require_device_bound?: boolean;
             };
             password: {
                 check_breached: boolean;
@@ -2344,6 +2444,32 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    adminLoginAnalytics: {
+        parameters: {
+            query: {
+                days: 30 | 90;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analytics */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginAnalytics"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminListAPIKeys: {
         parameters: {
             query?: never;
@@ -2803,6 +2929,55 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminListCompliancePacks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Packs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompliancePackList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    adminGetCompliancePack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description YYYY-MM */
+                month: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ZIP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
