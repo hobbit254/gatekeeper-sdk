@@ -109,6 +109,24 @@ export interface Gatekeeper {
   verifyDPoP(p: Principal, accessToken: string, proof: string, method: string, url: string): Promise<void>;
   /** Express middleware: verifies the token ("Bearer", or "DPoP" with a proof), or answers 401. */
   express(): Middleware;
+  /** Asks Gatekeeper whether token's subject holds permission on resource ("campaign:42"); never cached (ADR-0108). */
+  canOn(token: string, permission: string, resource: string): Promise<ResourceDecision>;
+  /** canOn for many resources, in order, 200 to a request. */
+  canOnEach(token: string, permission: string, resources: string[]): Promise<ResourceDecision[]>;
+  /**
+   * Guards a route with a resource check, after express(): 403 when denied, 401 with the
+   * step-up challenge when a fresher second factor would allow it, 503 when Gatekeeper can't answer.
+   * A DPoP-bound token can't be forwarded without its holder's proof, so it is 403.
+   */
+  requirePermissionOn(permission: string, resource: (req: Req) => string): Middleware;
+}
+
+/** Gatekeeper's answer for one resource (FR-Z12). */
+export interface ResourceDecision {
+  allow: boolean;
+  matched_by: string;
+  /** Seconds within which a second factor would allow it. */
+  max_age?: number;
 }
 
 const DPOP_SKEW_SEC = 60;
@@ -318,9 +336,55 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     jtis.set(id, t + 2 * DPOP_SKEW_SEC * 1000);
   }
 
+  async function authz<T>(token: string, path: string, body: unknown): Promise<T> {
+    let res: Response;
+    try {
+      res = await doFetch(`${issuer}${path}`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body) });
+    } catch (e) {
+      throw new Error(`gatekeeper: resource check unavailable: ${String(e)}`);
+    }
+    if (res.status !== 200) throw new Error(`gatekeeper: resource check unavailable: status ${res.status}`);
+    return (await res.json()) as T;
+  }
+  const canOn = (token: string, permission: string, resource: string) =>
+    authz<ResourceDecision>(token, "/v1/authz/check", { permission, resource });
+  async function canOnEach(token: string, permission: string, resources: string[]): Promise<ResourceDecision[]> {
+    const out: ResourceDecision[] = [];
+    for (let i = 0; i < resources.length; i += 200) {
+      const chunk = resources.slice(i, i + 200);
+      const r = await authz<{ results: ResourceDecision[] }>(token, "/v1/authz/check-batch",
+        { checks: chunk.map((resource) => ({ permission, resource })) });
+      if (r.results.length !== chunk.length) throw new Error("gatekeeper: resource check unavailable: wrong number of answers");
+      out.push(...r.results);
+    }
+    return out;
+  }
+
   return {
     verify,
     verifyDPoP,
+    canOn,
+    canOnEach,
+    requirePermissionOn(permission, resource): Middleware {
+      return (req, res, next) => {
+        const header = req.headers.authorization;
+        const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : "";
+        if (!token || !req.gatekeeper) {
+          res.status(403).end("forbidden");
+          return;
+        }
+        canOn(token, permission, resource(req)).then((d) => {
+          if (d.allow) return next();
+          if (d.max_age) {
+            res.setHeader("WWW-Authenticate", `Bearer error="insufficient_user_authentication", max_age="${d.max_age}", acr_values="mfa"`);
+            res.status(401).end("step-up required");
+            return;
+          }
+          res.status(403).end("forbidden");
+        }, () => { res.status(503).end("authorization unavailable"); });
+      };
+    },
     express(): Middleware {
       return (req, res, next) => {
         const header = req.headers.authorization;

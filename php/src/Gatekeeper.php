@@ -286,6 +286,50 @@ final class Gatekeeper
         return [array_keys($out), $stepUp];
     }
 
+    /**
+     * Asks Gatekeeper whether $token's subject holds $permission on $resource
+     * ("campaign:42"), roles and relations; never cached (FR-Z12, ADR-0108).
+     *
+     * @return array{allow: bool, matched_by: string, max_age?: int}
+     * @throws \RuntimeException when Gatekeeper can't answer
+     */
+    public function canOn(string $token, string $permission, string $resource): array
+    {
+        return $this->authz($token, '/v1/authz/check', ['permission' => $permission, 'resource' => $resource]);
+    }
+
+    /**
+     * canOn for many resources, in order, 200 to a request.
+     *
+     * @param list<string> $resources
+     * @return list<array{allow: bool, matched_by: string, max_age?: int}>
+     */
+    public function canOnEach(string $token, string $permission, array $resources): array
+    {
+        $out = [];
+        foreach (array_chunk($resources, 200) as $chunk) {
+            $r = $this->authz($token, '/v1/authz/check-batch', ['checks' => array_map(
+                fn (string $res) => ['permission' => $permission, 'resource' => $res], $chunk)]);
+            if (!is_array($r['results'] ?? null) || count($r['results']) !== count($chunk)) {
+                throw new \RuntimeException('gatekeeper: resource check unavailable: wrong number of answers');
+            }
+            array_push($out, ...$r['results']);
+        }
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private function authz(string $token, string $path, array $body): array
+    {
+        [$status, $raw] = ($this->fetch)($this->config->issuer . $path,
+            ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Authorization' => 'Bearer ' . $token], json_encode($body));
+        $data = json_decode($raw, true);
+        if ($status !== 200 || !is_array($data)) {
+            throw new \RuntimeException("gatekeeper: resource check unavailable: status {$status}");
+        }
+        return $data;
+    }
+
     /** @return array<string, mixed> */
     private function getJSON(string $url, bool $auth): array
     {
