@@ -242,16 +242,34 @@ func (e LegalDocumentInputKind) Valid() bool {
 
 // Defines values for PermissionGrantEffect.
 const (
-	Allow PermissionGrantEffect = "allow"
-	Deny  PermissionGrantEffect = "deny"
+	PermissionGrantEffectAllow PermissionGrantEffect = "allow"
+	PermissionGrantEffectDeny  PermissionGrantEffect = "deny"
 )
 
 // Valid indicates whether the value is a known member of the PermissionGrantEffect enum.
 func (e PermissionGrantEffect) Valid() bool {
 	switch e {
-	case Allow:
+	case PermissionGrantEffectAllow:
 		return true
-	case Deny:
+	case PermissionGrantEffectDeny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PermissionGrantResultEffect.
+const (
+	PermissionGrantResultEffectAllow PermissionGrantResultEffect = "allow"
+	PermissionGrantResultEffectDeny  PermissionGrantResultEffect = "deny"
+)
+
+// Valid indicates whether the value is a known member of the PermissionGrantResultEffect enum.
+func (e PermissionGrantResultEffect) Valid() bool {
+	switch e {
+	case PermissionGrantResultEffectAllow:
+		return true
+	case PermissionGrantResultEffectDeny:
 		return true
 	default:
 		return false
@@ -464,13 +482,41 @@ type AdminClientPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// AdminPermission defines model for AdminPermission.
+type AdminPermission struct {
+	// ClientId The manifest's client
+	ClientId    string `json:"client_id"`
+	Description string `json:"description"`
+	Key         string `json:"key"`
+	Sensitive   bool   `json:"sensitive"`
+
+	// StepUpSec The permission's own step-up window; 0 = the tenant's for sensitive ones (ADR-0097)
+	StepUpSec int `json:"step_up_sec"`
+}
+
+// AdminPermissionPage defines model for AdminPermissionPage.
+type AdminPermissionPage struct {
+	Items []AdminPermission `json:"items"`
+
+	// NextCursor Pass as ?cursor= for the next page; null on the last
+	NextCursor *string `json:"next_cursor"`
+}
+
 // AdminRole defines model for AdminRole.
 type AdminRole struct {
-	Description *string   `json:"description,omitempty"`
-	Id          *string   `json:"id,omitempty"`
-	IsSystem    *bool     `json:"is_system,omitempty"`
-	Name        *string   `json:"name,omitempty"`
-	Permissions *[]string `json:"permissions,omitempty"`
+	Description string   `json:"description"`
+	Id          string   `json:"id"`
+	IsSystem    bool     `json:"is_system"`
+	Name        string   `json:"name"`
+	Permissions []string `json:"permissions"`
+}
+
+// AdminRoleList defines model for AdminRoleList.
+type AdminRoleList struct {
+	Items []AdminRole `json:"items"`
+
+	// NextCursor Pass as ?cursor= for the next page; null on the last
+	NextCursor *string `json:"next_cursor"`
 }
 
 // AdminSession defines model for AdminSession.
@@ -494,10 +540,13 @@ type AdminSession struct {
 // AdminTenant defines model for AdminTenant.
 type AdminTenant struct {
 	// Branding ADR-0049. accent must give white text 4.5:1 contrast.
-	Branding   *Branding `json:"branding,omitempty"`
-	FgaEnabled *bool     `json:"fga_enabled,omitempty"`
-	Id         *string   `json:"id,omitempty"`
-	Name       *string   `json:"name,omitempty"`
+	Branding *Branding `json:"branding,omitempty"`
+
+	// Entitlements A customer's plan and paid-for features, carried in access tokens as `entitlements` (ADR-0098)
+	Entitlements *Entitlements `json:"entitlements,omitempty"`
+	FgaEnabled   *bool         `json:"fga_enabled,omitempty"`
+	Id           *string       `json:"id,omitempty"`
+	Name         *string       `json:"name,omitempty"`
 
 	// Policy ADR-0035, ADR-0055. allowed_methods needs at least one of password, passkey, otp_email, otp_sms, magic_link.
 	Policy   *TenantPolicy           `json:"policy,omitempty"`
@@ -687,6 +736,12 @@ type DeliveryList struct {
 	Deliveries []Delivery `json:"deliveries"`
 }
 
+// Entitlements A customer's plan and paid-for features, carried in access tokens as `entitlements` (ADR-0098)
+type Entitlements struct {
+	Features []string `json:"features"`
+	Plan     string   `json:"plan"`
+}
+
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
 	ClientId string  `json:"client_id"`
@@ -858,11 +913,14 @@ type MemberList struct {
 
 // Org defines model for Org.
 type Org struct {
-	CreatedAt  time.Time          `json:"created_at"`
-	Id         openapi_types.UUID `json:"id"`
-	Name       string             `json:"name"`
-	RequireSso bool               `json:"require_sso"`
-	Slug       string             `json:"slug"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Entitlements A customer's plan and paid-for features, carried in access tokens as `entitlements` (ADR-0098)
+	Entitlements *Entitlements      `json:"entitlements,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Name         string             `json:"name"`
+	RequireSso   bool               `json:"require_sso"`
+	Slug         string             `json:"slug"`
 }
 
 // OrgCreate defines model for OrgCreate.
@@ -935,6 +993,20 @@ type PermissionGrant struct {
 // PermissionGrantEffect defines model for PermissionGrant.Effect.
 type PermissionGrantEffect string
 
+// PermissionGrantResult defines model for PermissionGrantResult.
+type PermissionGrantResult struct {
+	Effect    PermissionGrantResultEffect `json:"effect"`
+	ExpiresAt *time.Time                  `json:"expires_at"`
+
+	// OrgId null = tenant-wide
+	OrgId      *openapi_types.UUID `json:"org_id"`
+	Permission string              `json:"permission"`
+	UserId     openapi_types.UUID  `json:"user_id"`
+}
+
+// PermissionGrantResultEffect defines model for PermissionGrantResult.Effect.
+type PermissionGrantResultEffect string
+
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -995,6 +1067,16 @@ type RoleGrant struct {
 	// OrgId Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership.
 	OrgId *string `json:"org_id,omitempty"`
 	Role  string  `json:"role"`
+}
+
+// RoleGrantResult defines model for RoleGrantResult.
+type RoleGrantResult struct {
+	ExpiresAt *time.Time `json:"expires_at"`
+
+	// OrgId null = tenant-wide
+	OrgId  *openapi_types.UUID `json:"org_id"`
+	Role   string              `json:"role"`
+	UserId openapi_types.UUID  `json:"user_id"`
 }
 
 // RoleNames defines model for RoleNames.
@@ -1247,6 +1329,16 @@ type TenantPolicy struct {
 
 		// StepUp Score at which a second factor is required
 		StepUp *int `json:"step_up,omitempty"`
+
+		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40); 0 turns a signal off (ADR-0101)
+		Weights *struct {
+			AccountFailures   *int `json:"account_failures,omitempty"`
+			FastCountryChange *int `json:"fast_country_change,omitempty"`
+			IpFailures        *int `json:"ip_failures,omitempty"`
+			NewCountry        *int `json:"new_country,omitempty"`
+			NewDevice         *int `json:"new_device,omitempty"`
+			TorExit           *int `json:"tor_exit,omitempty"`
+		} `json:"weights,omitempty"`
 	} `json:"risk,omitempty"`
 	Session struct {
 		AbsoluteSec int `json:"absolute_sec"`
@@ -1458,6 +1550,12 @@ type AdminGetImportParams struct {
 	After *int `form:"after,omitempty" json:"after,omitempty"`
 }
 
+// AdminDeleteUserParams defines parameters for AdminDeleteUser.
+type AdminDeleteUserParams struct {
+	// Immediately Anonymise now, skipping the undo grace period: no undo email, restore answers 409. Needs a second factor within 5 minutes, otherwise 401 with max_age="300" (ADR-0099)
+	Immediately *bool `form:"immediately,omitempty" json:"immediately,omitempty"`
+}
+
 // AdminGrantPermissionParams defines parameters for AdminGrantPermission.
 type AdminGrantPermissionParams struct {
 	// IdempotencyKey Replays the stored response for 24 h (API.md)
@@ -1490,6 +1588,9 @@ type AdminPatchOrgJSONRequestBody = OrgPatch
 
 // AdminAddOrgDomainJSONRequestBody defines body for AdminAddOrgDomain for application/json ContentType.
 type AdminAddOrgDomainJSONRequestBody = OrgDomainInput
+
+// AdminPutOrgEntitlementsJSONRequestBody defines body for AdminPutOrgEntitlements for application/json ContentType.
+type AdminPutOrgEntitlementsJSONRequestBody = Entitlements
 
 // AdminAddOrgMemberJSONRequestBody defines body for AdminAddOrgMember for application/json ContentType.
 type AdminAddOrgMemberJSONRequestBody = MemberAdd
@@ -1526,6 +1627,9 @@ type AdminPutTenantBrandingJSONRequestBody = Branding
 
 // AdminPutConsentPurposeJSONRequestBody defines body for AdminPutConsentPurpose for application/json ContentType.
 type AdminPutConsentPurposeJSONRequestBody = ConsentPurposeInput
+
+// AdminPutTenantEntitlementsJSONRequestBody defines body for AdminPutTenantEntitlements for application/json ContentType.
+type AdminPutTenantEntitlementsJSONRequestBody = Entitlements
 
 // AdminPutIdentityProviderJSONRequestBody defines body for AdminPutIdentityProvider for application/json ContentType.
 type AdminPutIdentityProviderJSONRequestBody = IdentityProviderConfig
@@ -1936,6 +2040,31 @@ type ClientInterface interface {
 	// Corresponds with POST /v1/admin/orgs/{id}/domains/{domain_id}/verify (the `AdminVerifyOrgDomain` operationId).
 	AdminVerifyOrgDomain(ctx context.Context, id string, domainId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminDeleteOrgEntitlements Clear an organization's own entitlements; its tokens carry the tenant's (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/entitlements (the `AdminDeleteOrgEntitlements` operationId).
+	AdminDeleteOrgEntitlements(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutOrgEntitlementsWithBody Set an organization's own entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+	AdminPutOrgEntitlementsWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutOrgEntitlements Set an organization's own entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+	AdminPutOrgEntitlements(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListOrgMembers An organization's members
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -2317,6 +2446,24 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/admin/tenant/consent-purposes/{key} (the `AdminPutConsentPurpose` operationId).
 	AdminPutConsentPurpose(ctx context.Context, key string, body AdminPutConsentPurposeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminPutTenantEntitlementsWithBody Set the tenant's entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+	AdminPutTenantEntitlementsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutTenantEntitlements Set the tenant's entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+	AdminPutTenantEntitlements(ctx context.Context, body AdminPutTenantEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListIdentityProviders Configured Google, Apple and Microsoft sign-in, without secrets (FR-A7, ADR-0053)
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -2433,12 +2580,12 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/users/import/{id} (the `AdminGetImport` operationId).
 	AdminGetImport(ctx context.Context, id string, params *AdminGetImportParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5)
+	// AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
 	//
 	// Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
-	AdminDeleteUser(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AdminDeleteUser(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminGetUser Get a user
 	//
@@ -3354,6 +3501,61 @@ func (c *Client) AdminVerifyOrgDomain(ctx context.Context, id string, domainId s
 	return c.Client.Do(req)
 }
 
+// AdminDeleteOrgEntitlements Clear an organization's own entitlements; its tokens carry the tenant's (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/entitlements (the `AdminDeleteOrgEntitlements` operationId).
+func (c *Client) AdminDeleteOrgEntitlements(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeleteOrgEntitlementsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminPutOrgEntitlementsWithBody Set an organization's own entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+func (c *Client) AdminPutOrgEntitlementsWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutOrgEntitlementsRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminPutOrgEntitlements Set an organization's own entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+func (c *Client) AdminPutOrgEntitlements(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutOrgEntitlementsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListOrgMembers An organization's members
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -4205,6 +4407,44 @@ func (c *Client) AdminPutConsentPurpose(ctx context.Context, key string, body Ad
 	return c.Client.Do(req)
 }
 
+// AdminPutTenantEntitlementsWithBody Set the tenant's entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+func (c *Client) AdminPutTenantEntitlementsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutTenantEntitlementsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminPutTenantEntitlements Set the tenant's entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+func (c *Client) AdminPutTenantEntitlements(ctx context.Context, body AdminPutTenantEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutTenantEntitlementsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListIdentityProviders Configured Google, Apple and Microsoft sign-in, without secrets (FR-A7, ADR-0053)
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -4461,13 +4701,13 @@ func (c *Client) AdminGetImport(ctx context.Context, id string, params *AdminGet
 	return c.Client.Do(req)
 }
 
-// AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5)
+// AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
 //
 // Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
-func (c *Client) AdminDeleteUser(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAdminDeleteUserRequest(c.Server, id)
+func (c *Client) AdminDeleteUser(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeleteUserRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6417,6 +6657,87 @@ func NewAdminVerifyOrgDomainRequest(server string, id string, domainId string) (
 	return req, nil
 }
 
+// NewAdminDeleteOrgEntitlementsRequest constructs an http.Request for the AdminDeleteOrgEntitlements method
+func NewAdminDeleteOrgEntitlementsRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/entitlements", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminPutOrgEntitlementsRequest calls the generic AdminPutOrgEntitlements builder with application/json body
+func NewAdminPutOrgEntitlementsRequest(server string, id string, body AdminPutOrgEntitlementsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminPutOrgEntitlementsRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminPutOrgEntitlementsRequestWithBody constructs an http.Request for the AdminPutOrgEntitlements method, with any body, and a specified content type
+func NewAdminPutOrgEntitlementsRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/entitlements", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminListOrgMembersRequest constructs an http.Request for the AdminListOrgMembers method
 func NewAdminListOrgMembersRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -7799,6 +8120,46 @@ func NewAdminPutConsentPurposeRequestWithBody(server string, key string, content
 	return req, nil
 }
 
+// NewAdminPutTenantEntitlementsRequest calls the generic AdminPutTenantEntitlements builder with application/json body
+func NewAdminPutTenantEntitlementsRequest(server string, body AdminPutTenantEntitlementsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminPutTenantEntitlementsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAdminPutTenantEntitlementsRequestWithBody constructs an http.Request for the AdminPutTenantEntitlements method, with any body, and a specified content type
+func NewAdminPutTenantEntitlementsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/tenant/entitlements")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminListIdentityProvidersRequest constructs an http.Request for the AdminListIdentityProviders method
 func NewAdminListIdentityProvidersRequest(server string) (*http.Request, error) {
 	var err error
@@ -8325,7 +8686,7 @@ func NewAdminGetImportRequest(server string, id string, params *AdminGetImportPa
 }
 
 // NewAdminDeleteUserRequest constructs an http.Request for the AdminDeleteUser method
-func NewAdminDeleteUserRequest(server string, id string) (*http.Request, error) {
+func NewAdminDeleteUserRequest(server string, id string, params *AdminDeleteUserParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -8348,6 +8709,33 @@ func NewAdminDeleteUserRequest(server string, id string) (*http.Request, error) 
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Immediately != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "immediately", *params.Immediately, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -9549,6 +9937,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /v1/admin/orgs/{id}/domains/{domain_id}/verify (the `AdminVerifyOrgDomain` operationId).
 	AdminVerifyOrgDomainWithResponse(ctx context.Context, id string, domainId string, reqEditors ...RequestEditorFn) (*AdminVerifyOrgDomainResponse, error)
 
+	// AdminDeleteOrgEntitlementsWithResponse Clear an organization's own entitlements; its tokens carry the tenant's (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/entitlements (the `AdminDeleteOrgEntitlements` operationId).
+	AdminDeleteOrgEntitlementsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteOrgEntitlementsResponse, error)
+
+	// AdminPutOrgEntitlementsWithBodyWithResponse Set an organization's own entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+	AdminPutOrgEntitlementsWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error)
+
+	// AdminPutOrgEntitlementsWithResponse Set an organization's own entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+	AdminPutOrgEntitlementsWithResponse(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error)
+
 	// AdminListOrgMembersWithResponse An organization's members
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -9972,6 +10387,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/admin/tenant/consent-purposes/{key} (the `AdminPutConsentPurpose` operationId).
 	AdminPutConsentPurposeWithResponse(ctx context.Context, key string, body AdminPutConsentPurposeJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutConsentPurposeResponse, error)
 
+	// AdminPutTenantEntitlementsWithBodyWithResponse Set the tenant's entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+	AdminPutTenantEntitlementsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutTenantEntitlementsResponse, error)
+
+	// AdminPutTenantEntitlementsWithResponse Set the tenant's entitlements (FR-Z10)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+	AdminPutTenantEntitlementsWithResponse(ctx context.Context, body AdminPutTenantEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutTenantEntitlementsResponse, error)
+
 	// AdminListIdentityProvidersWithResponse Configured Google, Apple and Microsoft sign-in, without secrets (FR-A7, ADR-0053)
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -10098,14 +10531,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/users/import/{id} (the `AdminGetImport` operationId).
 	AdminGetImportWithResponse(ctx context.Context, id string, params *AdminGetImportParams, reqEditors ...RequestEditorFn) (*AdminGetImportResponse, error)
 
-	// AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5)
+	// AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
-	AdminDeleteUserWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteUserResponse, error)
+	AdminDeleteUserWithResponse(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*AdminDeleteUserResponse, error)
 
 	// AdminGetUserWithResponse Get a user
 	//
@@ -12539,6 +12972,151 @@ func (r AdminVerifyOrgDomainResponse) ContentType() string {
 	return ""
 }
 
+type AdminDeleteOrgEntitlementsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminDeleteOrgEntitlementsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminDeleteOrgEntitlementsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminDeleteOrgEntitlementsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminDeleteOrgEntitlementsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminDeleteOrgEntitlementsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminDeleteOrgEntitlementsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminDeleteOrgEntitlementsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminDeleteOrgEntitlementsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminDeleteOrgEntitlementsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminPutOrgEntitlementsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Entitlements
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminPutOrgEntitlementsResponse) GetJSON200() *Entitlements {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminPutOrgEntitlementsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminPutOrgEntitlementsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminPutOrgEntitlementsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminPutOrgEntitlementsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminPutOrgEntitlementsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminPutOrgEntitlementsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminPutOrgEntitlementsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminPutOrgEntitlementsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminPutOrgEntitlementsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListOrgMembersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13335,7 +13913,7 @@ type AdminListPermissionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *map[string]interface{}
+	JSON200 *AdminPermissionPage
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -13351,7 +13929,7 @@ type AdminListPermissionsResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r AdminListPermissionsResponse) GetJSON200() *map[string]interface{} {
+func (r AdminListPermissionsResponse) GetJSON200() *AdminPermissionPage {
 	return r.JSON200
 }
 
@@ -13501,7 +14079,7 @@ type AdminListRolesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *map[string]interface{}
+	JSON200 *AdminRoleList
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -13517,7 +14095,7 @@ type AdminListRolesResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r AdminListRolesResponse) GetJSON200() *map[string]interface{} {
+func (r AdminListRolesResponse) GetJSON200() *AdminRoleList {
 	return r.JSON200
 }
 
@@ -14927,6 +15505,82 @@ func (r AdminPutConsentPurposeResponse) ContentType() string {
 	return ""
 }
 
+type AdminPutTenantEntitlementsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Entitlements
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminPutTenantEntitlementsResponse) GetJSON200() *Entitlements {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminPutTenantEntitlementsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminPutTenantEntitlementsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminPutTenantEntitlementsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminPutTenantEntitlementsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminPutTenantEntitlementsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminPutTenantEntitlementsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminPutTenantEntitlementsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminPutTenantEntitlementsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminPutTenantEntitlementsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListIdentityProvidersResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -16159,7 +16813,7 @@ type AdminGrantPermissionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *map[string]interface{}
+	JSON201 *PermissionGrantResult
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -16175,7 +16829,7 @@ type AdminGrantPermissionResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r AdminGrantPermissionResponse) GetJSON201() *map[string]interface{} {
+func (r AdminGrantPermissionResponse) GetJSON201() *PermissionGrantResult {
 	return r.JSON201
 }
 
@@ -16546,7 +17200,7 @@ type AdminGrantRoleResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON201 the response for an HTTP 201 `application/json` response
-	JSON201 *map[string]interface{}
+	JSON201 *RoleGrantResult
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
@@ -16562,7 +17216,7 @@ type AdminGrantRoleResponse struct {
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
-func (r AdminGrantRoleResponse) GetJSON201() *map[string]interface{} {
+func (r AdminGrantRoleResponse) GetJSON201() *RoleGrantResult {
 	return r.JSON201
 }
 
@@ -17727,6 +18381,51 @@ func (c *ClientWithResponses) AdminVerifyOrgDomainWithResponse(ctx context.Conte
 	return ParseAdminVerifyOrgDomainResponse(rsp)
 }
 
+// AdminDeleteOrgEntitlementsWithResponse Clear an organization's own entitlements; its tokens carry the tenant's (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/entitlements (the `AdminDeleteOrgEntitlements` operationId).
+func (c *ClientWithResponses) AdminDeleteOrgEntitlementsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteOrgEntitlementsResponse, error) {
+	rsp, err := c.AdminDeleteOrgEntitlements(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminDeleteOrgEntitlementsResponse(rsp)
+}
+
+// AdminPutOrgEntitlementsWithBodyWithResponse Set an organization's own entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+func (c *ClientWithResponses) AdminPutOrgEntitlementsWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error) {
+	rsp, err := c.AdminPutOrgEntitlementsWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutOrgEntitlementsResponse(rsp)
+}
+
+// AdminPutOrgEntitlementsWithResponse Set an organization's own entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
+func (c *ClientWithResponses) AdminPutOrgEntitlementsWithResponse(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error) {
+	rsp, err := c.AdminPutOrgEntitlements(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutOrgEntitlementsResponse(rsp)
+}
+
 // AdminListOrgMembersWithResponse An organization's members
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -18432,6 +19131,36 @@ func (c *ClientWithResponses) AdminPutConsentPurposeWithResponse(ctx context.Con
 	return ParseAdminPutConsentPurposeResponse(rsp)
 }
 
+// AdminPutTenantEntitlementsWithBodyWithResponse Set the tenant's entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+func (c *ClientWithResponses) AdminPutTenantEntitlementsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutTenantEntitlementsResponse, error) {
+	rsp, err := c.AdminPutTenantEntitlementsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutTenantEntitlementsResponse(rsp)
+}
+
+// AdminPutTenantEntitlementsWithResponse Set the tenant's entitlements (FR-Z10)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/tenant/entitlements (the `AdminPutTenantEntitlements` operationId).
+func (c *ClientWithResponses) AdminPutTenantEntitlementsWithResponse(ctx context.Context, body AdminPutTenantEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutTenantEntitlementsResponse, error) {
+	rsp, err := c.AdminPutTenantEntitlements(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutTenantEntitlementsResponse(rsp)
+}
+
 // AdminListIdentityProvidersWithResponse Configured Google, Apple and Microsoft sign-in, without secrets (FR-A7, ADR-0053)
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -18642,15 +19371,15 @@ func (c *ClientWithResponses) AdminGetImportWithResponse(ctx context.Context, id
 	return ParseAdminGetImportResponse(rsp)
 }
 
-// AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5)
+// AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
-func (c *ClientWithResponses) AdminDeleteUserWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteUserResponse, error) {
-	rsp, err := c.AdminDeleteUser(ctx, id, reqEditors...)
+func (c *ClientWithResponses) AdminDeleteUserWithResponse(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*AdminDeleteUserResponse, error) {
+	rsp, err := c.AdminDeleteUser(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -20795,6 +21524,124 @@ func ParseAdminVerifyOrgDomainResponse(rsp *http.Response) (*AdminVerifyOrgDomai
 	return response, nil
 }
 
+// ParseAdminDeleteOrgEntitlementsResponse parses an HTTP response from a AdminDeleteOrgEntitlementsWithResponse call
+func ParseAdminDeleteOrgEntitlementsResponse(rsp *http.Response) (*AdminDeleteOrgEntitlementsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminDeleteOrgEntitlementsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminPutOrgEntitlementsResponse parses an HTTP response from a AdminPutOrgEntitlementsWithResponse call
+func ParseAdminPutOrgEntitlementsResponse(rsp *http.Response) (*AdminPutOrgEntitlementsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminPutOrgEntitlementsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Entitlements
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListOrgMembersResponse parses an HTTP response from a AdminListOrgMembersWithResponse call
 func ParseAdminListOrgMembersResponse(rsp *http.Response) (*AdminListOrgMembersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -21419,7 +22266,7 @@ func ParseAdminListPermissionsResponse(rsp *http.Response) (*AdminListPermission
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AdminPermissionPage
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -21555,7 +22402,7 @@ func ParseAdminListRolesResponse(rsp *http.Response) (*AdminListRolesResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AdminRoleList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -22684,6 +23531,67 @@ func ParseAdminPutConsentPurposeResponse(rsp *http.Response) (*AdminPutConsentPu
 	return response, nil
 }
 
+// ParseAdminPutTenantEntitlementsResponse parses an HTTP response from a AdminPutTenantEntitlementsWithResponse call
+func ParseAdminPutTenantEntitlementsResponse(rsp *http.Response) (*AdminPutTenantEntitlementsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminPutTenantEntitlementsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Entitlements
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListIdentityProvidersResponse parses an HTTP response from a AdminListIdentityProvidersWithResponse call
 func ParseAdminListIdentityProvidersResponse(rsp *http.Response) (*AdminListIdentityProvidersResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23681,7 +24589,7 @@ func ParseAdminGrantPermissionResponse(rsp *http.Response) (*AdminGrantPermissio
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest map[string]interface{}
+		var dest PermissionGrantResult
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -23999,7 +24907,7 @@ func ParseAdminGrantRoleResponse(rsp *http.Response) (*AdminGrantRoleResponse, e
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest map[string]interface{}
+		var dest RoleGrantResult
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

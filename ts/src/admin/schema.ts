@@ -478,6 +478,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set an organization's own entitlements (FR-Z10)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+         */
+        put: operations["adminPutOrgEntitlements"];
+        post?: never;
+        /**
+         * Clear an organization's own entitlements; its tokens carry the tenant's (FR-Z10)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+         */
+        delete: operations["adminDeleteOrgEntitlements"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/members": {
         parameters: {
             query?: never;
@@ -1002,6 +1026,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/tenant/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the tenant's entitlements (FR-Z10)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited and published as entitlements.updated (ADR-0098).
+         */
+        put: operations["adminPutTenantEntitlements"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/tenant/identity-providers": {
         parameters: {
             query?: never;
@@ -1169,7 +1213,7 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Soft-delete a user; anonymised after the grace period (FR-I5)
+         * Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
          * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
          */
         delete: operations["adminDeleteUser"];
@@ -1540,12 +1584,31 @@ export interface components {
             /** @description Pass as cursor for the next page; null on the last */
             next_cursor?: string | null;
         };
+        AdminPermission: {
+            /** @description The manifest's client */
+            client_id: string;
+            description: string;
+            key: string;
+            sensitive: boolean;
+            /** @description The permission's own step-up window; 0 = the tenant's for sensitive ones (ADR-0097) */
+            step_up_sec: number;
+        };
+        AdminPermissionPage: {
+            items: components["schemas"]["AdminPermission"][];
+            /** @description Pass as ?cursor= for the next page; null on the last */
+            next_cursor: string | null;
+        };
         AdminRole: {
-            description?: string;
-            id?: string;
-            is_system?: boolean;
-            name?: string;
-            permissions?: string[];
+            description: string;
+            id: string;
+            is_system: boolean;
+            name: string;
+            permissions: string[];
+        };
+        AdminRoleList: {
+            items: components["schemas"]["AdminRole"][];
+            /** @description Pass as ?cursor= for the next page; null on the last */
+            next_cursor: string | null;
         };
         AdminSession: {
             amr?: string[];
@@ -1566,6 +1629,7 @@ export interface components {
         };
         AdminTenant: {
             branding?: components["schemas"]["Branding"];
+            entitlements?: components["schemas"]["Entitlements"];
             fga_enabled?: boolean;
             id?: string;
             name?: string;
@@ -1720,6 +1784,11 @@ export interface components {
         DeliveryList: {
             deliveries: components["schemas"]["Delivery"][];
         };
+        /** @description A customer's plan and paid-for features, carried in access tokens as `entitlements` (ADR-0098) */
+        Entitlements: {
+            features: string[];
+            plan: string;
+        };
         IdentityProvider: {
             client_id: string;
             enabled: boolean;
@@ -1864,6 +1933,7 @@ export interface components {
         Org: {
             /** Format: date-time */
             created_at: string;
+            entitlements?: components["schemas"]["Entitlements"];
             /** Format: uuid */
             id: string;
             name: string;
@@ -1920,6 +1990,20 @@ export interface components {
             org_id?: string;
             permission: string;
         };
+        PermissionGrantResult: {
+            /** @enum {string} */
+            effect: "allow" | "deny";
+            /** Format: date-time */
+            expires_at: string | null;
+            /**
+             * Format: uuid
+             * @description null = tenant-wide
+             */
+            org_id: string | null;
+            permission: string;
+            /** Format: uuid */
+            user_id: string;
+        };
         Problem: {
             detail?: string;
             /** @description Request id */
@@ -1968,6 +2052,18 @@ export interface components {
             /** @description Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership. */
             org_id?: string;
             role: string;
+        };
+        RoleGrantResult: {
+            /** Format: date-time */
+            expires_at: string | null;
+            /**
+             * Format: uuid
+             * @description null = tenant-wide
+             */
+            org_id: string | null;
+            role: string;
+            /** Format: uuid */
+            user_id: string;
         };
         RoleNames: {
             roles: string[];
@@ -2174,6 +2270,15 @@ export interface components {
                 enabled?: boolean;
                 /** @description Score at which a second factor is required */
                 step_up?: number;
+                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40); 0 turns a signal off (ADR-0101) */
+                weights?: {
+                    account_failures?: number;
+                    fast_country_change?: number;
+                    ip_failures?: number;
+                    new_country?: number;
+                    new_device?: number;
+                    tor_exit?: number;
+                };
             };
             session: {
                 absolute_sec: number;
@@ -3113,6 +3218,62 @@ export interface operations {
             503: components["responses"]["Problem"];
         };
     };
+    adminPutOrgEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Entitlements"];
+            };
+        };
+        responses: {
+            /** @description The stored entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entitlements"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteOrgEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminListOrgMembers: {
         parameters: {
             query?: never;
@@ -3471,7 +3632,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AdminPermissionPage"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -3530,7 +3691,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["AdminRoleList"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -4058,6 +4219,35 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    adminPutTenantEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Entitlements"];
+            };
+        };
+        responses: {
+            /** @description The stored entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entitlements"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminListIdentityProviders: {
         parameters: {
             query?: never;
@@ -4373,7 +4563,10 @@ export interface operations {
     };
     adminDeleteUser: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Anonymise now, skipping the undo grace period: no undo email, restore answers 409. Needs a second factor within 5 minutes, otherwise 401 with max_age="300" (ADR-0099) */
+                immediately?: boolean;
+            };
             header?: never;
             path: {
                 id: string;
@@ -4536,7 +4729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["PermissionGrantResult"];
                 };
             };
             401: components["responses"]["Problem"];
@@ -4681,7 +4874,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": Record<string, never>;
+                    "application/json": components["schemas"]["RoleGrantResult"];
                 };
             };
             401: components["responses"]["Problem"];
