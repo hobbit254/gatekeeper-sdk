@@ -1423,6 +1423,388 @@
         ],
         "type": "object"
       },
+      "Incident": {
+        "properties": {
+          "closed_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "closed_by": {
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "opened_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "severity",
+          "notes",
+          "status",
+          "opened_by",
+          "opened_at"
+        ],
+        "type": "object"
+      },
+      "IncidentCreate": {
+        "properties": {
+          "notes": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "severity"
+        ],
+        "type": "object"
+      },
+      "IncidentDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Incident"
+          },
+          {
+            "properties": {
+              "responses": {
+                "items": {
+                  "$ref": "#/components/schemas/IncidentResponse"
+                },
+                "type": "array"
+              },
+              "timeline": {
+                "items": {
+                  "properties": {
+                    "action": {
+                      "type": "string"
+                    },
+                    "actor_id": {
+                      "type": "string"
+                    },
+                    "actor_type": {
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "additionalProperties": {
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "occurred_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "responses",
+              "timeline"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "IncidentFilter": {
+        "additionalProperties": false,
+        "description": "all: true, or any of the conditions; every given condition must hold. Deleted users and service accounts never match (ADR-0112)",
+        "properties": {
+          "all": {
+            "type": "boolean"
+          },
+          "last_login_after": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "last_login_before": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "org_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "signed_in_from": {
+            "description": "A sign-in still on record from one of these",
+            "properties": {
+              "cidrs": {
+                "description": "IPs or CIDR ranges",
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "countries": {
+                "items": {
+                  "pattern": "^[A-Z]{2}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "since": {
+                "description": "Default: 30 days ago",
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "users": {
+            "description": "User ids or emails",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50000,
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "IncidentList": {
+        "properties": {
+          "incidents": {
+            "items": {
+              "$ref": "#/components/schemas/Incident"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "incidents"
+        ],
+        "type": "object"
+      },
+      "IncidentPatch": {
+        "properties": {
+          "notes": {
+            "maxLength": 5000,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "closed"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "IncidentPreview": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "sample": {
+            "items": {
+              "properties": {
+                "display_name": {
+                  "type": "string"
+                },
+                "email": {
+                  "type": "string"
+                },
+                "id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "sample"
+        ],
+        "type": "object"
+      },
+      "IncidentResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "clients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "created_by": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/IncidentFilter"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "incident_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "processed": {
+            "type": "integer"
+          },
+          "request_id": {
+            "description": "The access request a second admin decides (over 50 users)",
+            "format": "uuid",
+            "nullable": true,
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pending_approval",
+              "queued",
+              "running",
+              "done",
+              "failed",
+              "rejected"
+            ],
+            "type": "string"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "incident_id",
+          "actions",
+          "status",
+          "total",
+          "processed",
+          "failed",
+          "created_by",
+          "created_at"
+        ],
+        "type": "object"
+      },
+      "IncidentResponseCreate": {
+        "properties": {
+          "actions": {
+            "items": {
+              "enum": [
+                "sign_out",
+                "reset_password",
+                "revoke_api_keys",
+                "reset_mfa",
+                "rotate_clients"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "clients": {
+            "description": "Client ids for rotate_clients: their secrets stop at once; issue new ones with rotate-secret",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "confirm": {
+            "description": "The tenant's slug; required unless dry_run",
+            "type": "string"
+          },
+          "dry_run": {
+            "type": "boolean"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/IncidentFilter"
+          },
+          "message": {
+            "description": "Quoted in the email affected users get; never in events",
+            "maxLength": 1000,
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "actions"
+        ],
+        "type": "object"
+      },
       "Invitation": {
         "properties": {
           "continue_url": {
@@ -3217,7 +3599,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.29.0"
+    "version": "0.30.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -4530,6 +4912,355 @@
           }
         ],
         "summary": "The relationship model as DSL, its relation map and history (FR-D19)"
+      }
+    },
+    "/v1/admin/incidents": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).",
+        "operationId": "adminListIncidents",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "closed"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentList"
+                }
+              }
+            },
+            "description": "Up to 200"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Security incidents, newest first (FR-D23)"
+      },
+      "post": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).",
+        "operationId": "adminOpenIncident",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Incident"
+                }
+              }
+            },
+            "description": "Opened; incident.opened"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Open an incident"
+      }
+    },
+    "/v1/admin/incidents/{id}": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).",
+        "operationId": "adminGetIncident",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentDetail"
+                }
+              }
+            },
+            "description": "Detail"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "An incident with its responses and timeline"
+      },
+      "patch": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.",
+        "operationId": "adminUpdateIncident",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Incident"
+                }
+              }
+            },
+            "description": "Updated"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update notes or close"
+      }
+    },
+    "/v1/admin/incidents/{id}/report": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).",
+        "operationId": "adminIncidentReport",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "ZIP: summary.pdf, responses.csv, targets.csv, timeline.csv, manifest.json and manifest.jws (the compliance pack format, ADR-0073)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The incident's signed report (FR-D26)"
+      }
+    },
+    "/v1/admin/incidents/{id}/responses": {
+      "post": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.",
+        "operationId": "adminRespondToIncident",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncidentResponseCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentPreview"
+                }
+              }
+            },
+            "description": "dry_run: the count and a sample of 20"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentResponse"
+                }
+              }
+            },
+            "description": "Queued, or pending_approval over 50 users (another owner/admin decides it in the access-request queue)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Preview or run a breach response (FR-D24, FR-D25)"
+      }
+    },
+    "/v1/admin/incidents/{id}/responses/{response_id}": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).",
+        "operationId": "adminGetIncidentResponse",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "response_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentResponse"
+                }
+              }
+            },
+            "description": "The response"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A response's status and progress"
       }
     },
     "/v1/admin/invitations": {

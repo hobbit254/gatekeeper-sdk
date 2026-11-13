@@ -432,6 +432,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/incidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Security incidents, newest first (FR-D23)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+         */
+        get: operations["adminListIncidents"];
+        put?: never;
+        /**
+         * Open an incident
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+         */
+        post: operations["adminOpenIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/incidents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An incident with its responses and timeline
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+         */
+        get: operations["adminGetIncident"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update notes or close
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+         */
+        patch: operations["adminUpdateIncident"];
+        trace?: never;
+    };
+    "/v1/admin/incidents/{id}/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The incident's signed report (FR-D26)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+         */
+        get: operations["adminIncidentReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/incidents/{id}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview or run a breach response (FR-D24, FR-D25)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+         */
+        post: operations["adminRespondToIncident"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/incidents/{id}/responses/{response_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A response's status and progress
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+         */
+        get: operations["adminGetIncidentResponse"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/invitations": {
         parameters: {
             query?: never;
@@ -2136,6 +2244,123 @@ export interface components {
             status: string;
             total: number;
         };
+        Incident: {
+            /** Format: date-time */
+            closed_at?: string | null;
+            /** Format: uuid */
+            closed_by?: string | null;
+            /** Format: uuid */
+            id: string;
+            notes: string;
+            /** Format: date-time */
+            opened_at: string;
+            /** Format: uuid */
+            opened_by: string;
+            /** @enum {string} */
+            severity: "low" | "medium" | "high" | "critical";
+            /** @enum {string} */
+            status: "open" | "closed";
+            title: string;
+        };
+        IncidentCreate: {
+            notes?: string;
+            /** @enum {string} */
+            severity: "low" | "medium" | "high" | "critical";
+            title: string;
+        };
+        IncidentDetail: components["schemas"]["Incident"] & {
+            responses: components["schemas"]["IncidentResponse"][];
+            timeline: {
+                action?: string;
+                actor_id?: string;
+                actor_type?: string;
+                metadata?: {
+                    [key: string]: string;
+                };
+                /** Format: date-time */
+                occurred_at?: string;
+            }[];
+        };
+        /** @description all: true, or any of the conditions; every given condition must hold. Deleted users and service accounts never match (ADR-0112) */
+        IncidentFilter: {
+            all?: boolean;
+            /** Format: date-time */
+            last_login_after?: string;
+            /** Format: date-time */
+            last_login_before?: string;
+            /** Format: uuid */
+            org_id?: string;
+            role?: string;
+            /** @description A sign-in still on record from one of these */
+            signed_in_from?: {
+                /** @description IPs or CIDR ranges */
+                cidrs?: string[];
+                countries?: string[];
+                /**
+                 * Format: date-time
+                 * @description Default: 30 days ago
+                 */
+                since?: string;
+            };
+            /** @description User ids or emails */
+            users?: string[];
+        };
+        IncidentList: {
+            incidents: components["schemas"]["Incident"][];
+        };
+        IncidentPatch: {
+            notes?: string;
+            /** @enum {string} */
+            status?: "closed";
+        };
+        IncidentPreview: {
+            count: number;
+            sample: {
+                display_name?: string;
+                email?: string;
+                /** Format: uuid */
+                id?: string;
+            }[];
+        };
+        IncidentResponse: {
+            actions: string[];
+            clients?: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+            error?: string;
+            failed: number;
+            filter?: components["schemas"]["IncidentFilter"];
+            /** Format: date-time */
+            finished_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            incident_id: string;
+            processed: number;
+            /**
+             * Format: uuid
+             * @description The access request a second admin decides (over 50 users)
+             */
+            request_id?: string | null;
+            /** Format: date-time */
+            started_at?: string | null;
+            /** @enum {string} */
+            status: "pending_approval" | "queued" | "running" | "done" | "failed" | "rejected";
+            total: number;
+        };
+        IncidentResponseCreate: {
+            actions: ("sign_out" | "reset_password" | "revoke_api_keys" | "reset_mfa" | "rotate_clients")[];
+            /** @description Client ids for rotate_clients: their secrets stop at once; issue new ones with rotate-secret */
+            clients?: string[];
+            /** @description The tenant's slug; required unless dry_run */
+            confirm?: string;
+            dry_run?: boolean;
+            filter: components["schemas"]["IncidentFilter"];
+            /** @description Quoted in the email affected users get; never in events */
+            message?: string;
+        };
         Invitation: {
             continue_url?: string;
             /** Format: date-time */
@@ -3415,6 +3640,204 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             503: components["responses"]["Problem"];
+        };
+    };
+    adminListIncidents: {
+        parameters: {
+            query?: {
+                status?: "open" | "closed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to 200 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    adminOpenIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncidentCreate"];
+            };
+        };
+        responses: {
+            /** @description Opened; incident.opened */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Incident"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminGetIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Detail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentDetail"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncidentPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Incident"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminIncidentReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ZIP: summary.pdf, responses.csv, targets.csv, timeline.csv, manifest.json and manifest.jws (the compliance pack format, ADR-0073) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminRespondToIncident: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IncidentResponseCreate"];
+            };
+        };
+        responses: {
+            /** @description dry_run: the count and a sample of 20 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentPreview"];
+                };
+            };
+            /** @description Queued, or pending_approval over 50 users (another owner/admin decides it in the access-request queue) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminGetIncidentResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                response_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IncidentResponse"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     adminListInvitations: {

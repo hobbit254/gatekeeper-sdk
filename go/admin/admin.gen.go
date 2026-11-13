@@ -285,6 +285,186 @@ func (e ImportJobStatus) Valid() bool {
 	}
 }
 
+// Defines values for IncidentSeverity.
+const (
+	IncidentSeverityCritical IncidentSeverity = "critical"
+	IncidentSeverityHigh     IncidentSeverity = "high"
+	IncidentSeverityLow      IncidentSeverity = "low"
+	IncidentSeverityMedium   IncidentSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the IncidentSeverity enum.
+func (e IncidentSeverity) Valid() bool {
+	switch e {
+	case IncidentSeverityCritical:
+		return true
+	case IncidentSeverityHigh:
+		return true
+	case IncidentSeverityLow:
+		return true
+	case IncidentSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentStatus.
+const (
+	IncidentStatusClosed IncidentStatus = "closed"
+	IncidentStatusOpen   IncidentStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the IncidentStatus enum.
+func (e IncidentStatus) Valid() bool {
+	switch e {
+	case IncidentStatusClosed:
+		return true
+	case IncidentStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentCreateSeverity.
+const (
+	IncidentCreateSeverityCritical IncidentCreateSeverity = "critical"
+	IncidentCreateSeverityHigh     IncidentCreateSeverity = "high"
+	IncidentCreateSeverityLow      IncidentCreateSeverity = "low"
+	IncidentCreateSeverityMedium   IncidentCreateSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the IncidentCreateSeverity enum.
+func (e IncidentCreateSeverity) Valid() bool {
+	switch e {
+	case IncidentCreateSeverityCritical:
+		return true
+	case IncidentCreateSeverityHigh:
+		return true
+	case IncidentCreateSeverityLow:
+		return true
+	case IncidentCreateSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentDetailSeverity.
+const (
+	IncidentDetailSeverityCritical IncidentDetailSeverity = "critical"
+	IncidentDetailSeverityHigh     IncidentDetailSeverity = "high"
+	IncidentDetailSeverityLow      IncidentDetailSeverity = "low"
+	IncidentDetailSeverityMedium   IncidentDetailSeverity = "medium"
+)
+
+// Valid indicates whether the value is a known member of the IncidentDetailSeverity enum.
+func (e IncidentDetailSeverity) Valid() bool {
+	switch e {
+	case IncidentDetailSeverityCritical:
+		return true
+	case IncidentDetailSeverityHigh:
+		return true
+	case IncidentDetailSeverityLow:
+		return true
+	case IncidentDetailSeverityMedium:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentDetailStatus.
+const (
+	IncidentDetailStatusClosed IncidentDetailStatus = "closed"
+	IncidentDetailStatusOpen   IncidentDetailStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the IncidentDetailStatus enum.
+func (e IncidentDetailStatus) Valid() bool {
+	switch e {
+	case IncidentDetailStatusClosed:
+		return true
+	case IncidentDetailStatusOpen:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentPatchStatus.
+const (
+	IncidentPatchStatusClosed IncidentPatchStatus = "closed"
+)
+
+// Valid indicates whether the value is a known member of the IncidentPatchStatus enum.
+func (e IncidentPatchStatus) Valid() bool {
+	switch e {
+	case IncidentPatchStatusClosed:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentResponseStatus.
+const (
+	IncidentResponseStatusDone            IncidentResponseStatus = "done"
+	IncidentResponseStatusFailed          IncidentResponseStatus = "failed"
+	IncidentResponseStatusPendingApproval IncidentResponseStatus = "pending_approval"
+	IncidentResponseStatusQueued          IncidentResponseStatus = "queued"
+	IncidentResponseStatusRejected        IncidentResponseStatus = "rejected"
+	IncidentResponseStatusRunning         IncidentResponseStatus = "running"
+)
+
+// Valid indicates whether the value is a known member of the IncidentResponseStatus enum.
+func (e IncidentResponseStatus) Valid() bool {
+	switch e {
+	case IncidentResponseStatusDone:
+		return true
+	case IncidentResponseStatusFailed:
+		return true
+	case IncidentResponseStatusPendingApproval:
+		return true
+	case IncidentResponseStatusQueued:
+		return true
+	case IncidentResponseStatusRejected:
+		return true
+	case IncidentResponseStatusRunning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IncidentResponseCreateActions.
+const (
+	ResetMfa      IncidentResponseCreateActions = "reset_mfa"
+	ResetPassword IncidentResponseCreateActions = "reset_password"
+	RevokeApiKeys IncidentResponseCreateActions = "revoke_api_keys"
+	RotateClients IncidentResponseCreateActions = "rotate_clients"
+	SignOut       IncidentResponseCreateActions = "sign_out"
+)
+
+// Valid indicates whether the value is a known member of the IncidentResponseCreateActions enum.
+func (e IncidentResponseCreateActions) Valid() bool {
+	switch e {
+	case ResetMfa:
+		return true
+	case ResetPassword:
+		return true
+	case RevokeApiKeys:
+		return true
+	case RotateClients:
+		return true
+	case SignOut:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LegalDocumentKind.
 const (
 	LegalDocumentKindPrivacy LegalDocumentKind = "privacy"
@@ -513,6 +693,24 @@ func (e AdminLoginAnalyticsParamsDays) Valid() bool {
 	case N30:
 		return true
 	case N90:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AdminListIncidentsParamsStatus.
+const (
+	AdminListIncidentsParamsStatusClosed AdminListIncidentsParamsStatus = "closed"
+	AdminListIncidentsParamsStatusOpen   AdminListIncidentsParamsStatus = "open"
+)
+
+// Valid indicates whether the value is a known member of the AdminListIncidentsParamsStatus enum.
+func (e AdminListIncidentsParamsStatus) Valid() bool {
+	switch e {
+	case AdminListIncidentsParamsStatusClosed:
+		return true
+	case AdminListIncidentsParamsStatusOpen:
 		return true
 	default:
 		return false
@@ -1047,6 +1245,155 @@ type ImportQueued struct {
 	Status string             `json:"status"`
 	Total  int                `json:"total"`
 }
+
+// Incident defines model for Incident.
+type Incident struct {
+	ClosedAt *time.Time          `json:"closed_at,omitempty"`
+	ClosedBy *openapi_types.UUID `json:"closed_by,omitempty"`
+	Id       openapi_types.UUID  `json:"id"`
+	Notes    string              `json:"notes"`
+	OpenedAt time.Time           `json:"opened_at"`
+	OpenedBy openapi_types.UUID  `json:"opened_by"`
+	Severity IncidentSeverity    `json:"severity"`
+	Status   IncidentStatus      `json:"status"`
+	Title    string              `json:"title"`
+}
+
+// IncidentSeverity defines model for Incident.Severity.
+type IncidentSeverity string
+
+// IncidentStatus defines model for Incident.Status.
+type IncidentStatus string
+
+// IncidentCreate defines model for IncidentCreate.
+type IncidentCreate struct {
+	Notes    *string                `json:"notes,omitempty"`
+	Severity IncidentCreateSeverity `json:"severity"`
+	Title    string                 `json:"title"`
+}
+
+// IncidentCreateSeverity defines model for IncidentCreate.Severity.
+type IncidentCreateSeverity string
+
+// IncidentDetail defines model for IncidentDetail.
+type IncidentDetail struct {
+	ClosedAt  *time.Time             `json:"closed_at,omitempty"`
+	ClosedBy  *openapi_types.UUID    `json:"closed_by,omitempty"`
+	Id        openapi_types.UUID     `json:"id"`
+	Notes     string                 `json:"notes"`
+	OpenedAt  time.Time              `json:"opened_at"`
+	OpenedBy  openapi_types.UUID     `json:"opened_by"`
+	Responses []IncidentResponse     `json:"responses"`
+	Severity  IncidentDetailSeverity `json:"severity"`
+	Status    IncidentDetailStatus   `json:"status"`
+	Timeline  []struct {
+		Action     *string            `json:"action,omitempty"`
+		ActorId    *string            `json:"actor_id,omitempty"`
+		ActorType  *string            `json:"actor_type,omitempty"`
+		Metadata   *map[string]string `json:"metadata,omitempty"`
+		OccurredAt *time.Time         `json:"occurred_at,omitempty"`
+	} `json:"timeline"`
+	Title string `json:"title"`
+}
+
+// IncidentDetailSeverity defines model for IncidentDetail.Severity.
+type IncidentDetailSeverity string
+
+// IncidentDetailStatus defines model for IncidentDetail.Status.
+type IncidentDetailStatus string
+
+// IncidentFilter all: true, or any of the conditions; every given condition must hold. Deleted users and service accounts never match (ADR-0112)
+type IncidentFilter struct {
+	All             *bool               `json:"all,omitempty"`
+	LastLoginAfter  *time.Time          `json:"last_login_after,omitempty"`
+	LastLoginBefore *time.Time          `json:"last_login_before,omitempty"`
+	OrgId           *openapi_types.UUID `json:"org_id,omitempty"`
+	Role            *string             `json:"role,omitempty"`
+
+	// SignedInFrom A sign-in still on record from one of these
+	SignedInFrom *struct {
+		// Cidrs IPs or CIDR ranges
+		Cidrs     *[]string `json:"cidrs,omitempty"`
+		Countries *[]string `json:"countries,omitempty"`
+
+		// Since Default: 30 days ago
+		Since *time.Time `json:"since,omitempty"`
+	} `json:"signed_in_from,omitempty"`
+
+	// Users User ids or emails
+	Users *[]string `json:"users,omitempty"`
+}
+
+// IncidentList defines model for IncidentList.
+type IncidentList struct {
+	Incidents []Incident `json:"incidents"`
+}
+
+// IncidentPatch defines model for IncidentPatch.
+type IncidentPatch struct {
+	Notes  *string              `json:"notes,omitempty"`
+	Status *IncidentPatchStatus `json:"status,omitempty"`
+}
+
+// IncidentPatchStatus defines model for IncidentPatch.Status.
+type IncidentPatchStatus string
+
+// IncidentPreview defines model for IncidentPreview.
+type IncidentPreview struct {
+	Count  int `json:"count"`
+	Sample []struct {
+		DisplayName *string             `json:"display_name,omitempty"`
+		Email       *string             `json:"email,omitempty"`
+		Id          *openapi_types.UUID `json:"id,omitempty"`
+	} `json:"sample"`
+}
+
+// IncidentResponse defines model for IncidentResponse.
+type IncidentResponse struct {
+	Actions   []string           `json:"actions"`
+	Clients   *[]string          `json:"clients,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy openapi_types.UUID `json:"created_by"`
+	Error     *string            `json:"error,omitempty"`
+	Failed    int                `json:"failed"`
+
+	// Filter all: true, or any of the conditions; every given condition must hold. Deleted users and service accounts never match (ADR-0112)
+	Filter     *IncidentFilter    `json:"filter,omitempty"`
+	FinishedAt *time.Time         `json:"finished_at,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+	IncidentId openapi_types.UUID `json:"incident_id"`
+	Processed  int                `json:"processed"`
+
+	// RequestId The access request a second admin decides (over 50 users)
+	RequestId *openapi_types.UUID    `json:"request_id,omitempty"`
+	StartedAt *time.Time             `json:"started_at,omitempty"`
+	Status    IncidentResponseStatus `json:"status"`
+	Total     int                    `json:"total"`
+}
+
+// IncidentResponseStatus defines model for IncidentResponse.Status.
+type IncidentResponseStatus string
+
+// IncidentResponseCreate defines model for IncidentResponseCreate.
+type IncidentResponseCreate struct {
+	Actions []IncidentResponseCreateActions `json:"actions"`
+
+	// Clients Client ids for rotate_clients: their secrets stop at once; issue new ones with rotate-secret
+	Clients *[]string `json:"clients,omitempty"`
+
+	// Confirm The tenant's slug; required unless dry_run
+	Confirm *string `json:"confirm,omitempty"`
+	DryRun  *bool   `json:"dry_run,omitempty"`
+
+	// Filter all: true, or any of the conditions; every given condition must hold. Deleted users and service accounts never match (ADR-0112)
+	Filter IncidentFilter `json:"filter"`
+
+	// Message Quoted in the email affected users get; never in events
+	Message *string `json:"message,omitempty"`
+}
+
+// IncidentResponseCreateActions defines model for IncidentResponseCreate.Actions.
+type IncidentResponseCreateActions string
 
 // Invitation defines model for Invitation.
 type Invitation struct {
@@ -1795,6 +2142,14 @@ type AdminListDataExportsParams struct {
 	UserId *string `form:"user_id,omitempty" json:"user_id,omitempty"`
 }
 
+// AdminListIncidentsParams defines parameters for AdminListIncidents.
+type AdminListIncidentsParams struct {
+	Status *AdminListIncidentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+}
+
+// AdminListIncidentsParamsStatus defines parameters for AdminListIncidents.
+type AdminListIncidentsParamsStatus string
+
 // AdminListInvitationsParams defines parameters for AdminListInvitations.
 type AdminListInvitationsParams struct {
 	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
@@ -1901,6 +2256,15 @@ type AdminPatchClientJSONRequestBody = ClientPatch
 
 // AdminFGACheckJSONRequestBody defines body for AdminFGACheck for application/json ContentType.
 type AdminFGACheckJSONRequestBody = FGATestCheck
+
+// AdminOpenIncidentJSONRequestBody defines body for AdminOpenIncident for application/json ContentType.
+type AdminOpenIncidentJSONRequestBody = IncidentCreate
+
+// AdminUpdateIncidentJSONRequestBody defines body for AdminUpdateIncident for application/json ContentType.
+type AdminUpdateIncidentJSONRequestBody = IncidentPatch
+
+// AdminRespondToIncidentJSONRequestBody defines body for AdminRespondToIncident for application/json ContentType.
+type AdminRespondToIncidentJSONRequestBody = IncidentResponseCreate
 
 // AdminCreateInvitationJSONRequestBody defines body for AdminCreateInvitation for application/json ContentType.
 type AdminCreateInvitationJSONRequestBody = InvitationCreate
@@ -2307,6 +2671,88 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
 	AdminFGAModel(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListIncidents Security incidents, newest first (FR-D23)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Corresponds with GET /v1/admin/incidents (the `AdminListIncidents` operationId).
+	AdminListIncidents(ctx context.Context, params *AdminListIncidentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminOpenIncidentWithBody Open an incident
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+	AdminOpenIncidentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminOpenIncident Open an incident
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+	AdminOpenIncident(ctx context.Context, body AdminOpenIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminGetIncident An incident with its responses and timeline
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id} (the `AdminGetIncident` operationId).
+	AdminGetIncident(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUpdateIncidentWithBody Update notes or close
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+	AdminUpdateIncidentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUpdateIncident Update notes or close
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+	AdminUpdateIncident(ctx context.Context, id string, body AdminUpdateIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminIncidentReport The incident's signed report (FR-D26)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id}/report (the `AdminIncidentReport` operationId).
+	AdminIncidentReport(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRespondToIncidentWithBody Preview or run a breach response (FR-D24, FR-D25)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+	AdminRespondToIncidentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRespondToIncident Preview or run a breach response (FR-D24, FR-D25)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+	AdminRespondToIncident(ctx context.Context, id string, body AdminRespondToIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminGetIncidentResponse A response's status and progress
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id}/responses/{response_id} (the `AdminGetIncidentResponse` operationId).
+	AdminGetIncidentResponse(ctx context.Context, id string, responseId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListInvitations Live invitations (FR-D2, ADR-0062)
 	//
@@ -3788,6 +4234,188 @@ func (c *Client) AdminFGACheck(ctx context.Context, body AdminFGACheckJSONReques
 // Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
 func (c *Client) AdminFGAModel(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminFGAModelRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListIncidents Security incidents, newest first (FR-D23)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Corresponds with GET /v1/admin/incidents (the `AdminListIncidents` operationId).
+func (c *Client) AdminListIncidents(ctx context.Context, params *AdminListIncidentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListIncidentsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminOpenIncidentWithBody Open an incident
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+func (c *Client) AdminOpenIncidentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminOpenIncidentRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminOpenIncident Open an incident
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+func (c *Client) AdminOpenIncident(ctx context.Context, body AdminOpenIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminOpenIncidentRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminGetIncident An incident with its responses and timeline
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Corresponds with GET /v1/admin/incidents/{id} (the `AdminGetIncident` operationId).
+func (c *Client) AdminGetIncident(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminGetIncidentRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUpdateIncidentWithBody Update notes or close
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+func (c *Client) AdminUpdateIncidentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUpdateIncidentRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUpdateIncident Update notes or close
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+func (c *Client) AdminUpdateIncident(ctx context.Context, id string, body AdminUpdateIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUpdateIncidentRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminIncidentReport The incident's signed report (FR-D26)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Corresponds with GET /v1/admin/incidents/{id}/report (the `AdminIncidentReport` operationId).
+func (c *Client) AdminIncidentReport(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminIncidentReportRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRespondToIncidentWithBody Preview or run a breach response (FR-D24, FR-D25)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+func (c *Client) AdminRespondToIncidentWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRespondToIncidentRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRespondToIncident Preview or run a breach response (FR-D24, FR-D25)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+func (c *Client) AdminRespondToIncident(ctx context.Context, id string, body AdminRespondToIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRespondToIncidentRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminGetIncidentResponse A response's status and progress
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Corresponds with GET /v1/admin/incidents/{id}/responses/{response_id} (the `AdminGetIncidentResponse` operationId).
+func (c *Client) AdminGetIncidentResponse(ctx context.Context, id string, responseId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminGetIncidentResponseRequest(c.Server, id, responseId)
 	if err != nil {
 		return nil, err
 	}
@@ -7097,6 +7725,303 @@ func NewAdminFGAModelRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/v1/admin/fga/model")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminListIncidentsRequest constructs an http.Request for the AdminListIncidents method
+func NewAdminListIncidentsRequest(server string, params *AdminListIncidentsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Status != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "status", *params.Status, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminOpenIncidentRequest calls the generic AdminOpenIncident builder with application/json body
+func NewAdminOpenIncidentRequest(server string, body AdminOpenIncidentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminOpenIncidentRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAdminOpenIncidentRequestWithBody constructs an http.Request for the AdminOpenIncident method, with any body, and a specified content type
+func NewAdminOpenIncidentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminGetIncidentRequest constructs an http.Request for the AdminGetIncident method
+func NewAdminGetIncidentRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminUpdateIncidentRequest calls the generic AdminUpdateIncident builder with application/json body
+func NewAdminUpdateIncidentRequest(server string, id string, body AdminUpdateIncidentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminUpdateIncidentRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminUpdateIncidentRequestWithBody constructs an http.Request for the AdminUpdateIncident method, with any body, and a specified content type
+func NewAdminUpdateIncidentRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminIncidentReportRequest constructs an http.Request for the AdminIncidentReport method
+func NewAdminIncidentReportRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents/%s/report", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminRespondToIncidentRequest calls the generic AdminRespondToIncident builder with application/json body
+func NewAdminRespondToIncidentRequest(server string, id string, body AdminRespondToIncidentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminRespondToIncidentRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminRespondToIncidentRequestWithBody constructs an http.Request for the AdminRespondToIncident method, with any body, and a specified content type
+func NewAdminRespondToIncidentRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents/%s/responses", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminGetIncidentResponseRequest constructs an http.Request for the AdminGetIncidentResponse method
+func NewAdminGetIncidentResponseRequest(server string, id string, responseId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "response_id", responseId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/incidents/%s/responses/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -10936,6 +11861,96 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/fga/model (the `AdminFGAModel` operationId).
 	AdminFGAModelWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminFGAModelResponse, error)
 
+	// AdminListIncidentsWithResponse Security incidents, newest first (FR-D23)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/incidents (the `AdminListIncidents` operationId).
+	AdminListIncidentsWithResponse(ctx context.Context, params *AdminListIncidentsParams, reqEditors ...RequestEditorFn) (*AdminListIncidentsResponse, error)
+
+	// AdminOpenIncidentWithBodyWithResponse Open an incident
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+	AdminOpenIncidentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminOpenIncidentResponse, error)
+
+	// AdminOpenIncidentWithResponse Open an incident
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+	AdminOpenIncidentWithResponse(ctx context.Context, body AdminOpenIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminOpenIncidentResponse, error)
+
+	// AdminGetIncidentWithResponse An incident with its responses and timeline
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id} (the `AdminGetIncident` operationId).
+	AdminGetIncidentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminGetIncidentResponse, error)
+
+	// AdminUpdateIncidentWithBodyWithResponse Update notes or close
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+	AdminUpdateIncidentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminUpdateIncidentResponse, error)
+
+	// AdminUpdateIncidentWithResponse Update notes or close
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+	AdminUpdateIncidentWithResponse(ctx context.Context, id string, body AdminUpdateIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminUpdateIncidentResponse, error)
+
+	// AdminIncidentReportWithResponse The incident's signed report (FR-D26)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id}/report (the `AdminIncidentReport` operationId).
+	AdminIncidentReportWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminIncidentReportResponse, error)
+
+	// AdminRespondToIncidentWithBodyWithResponse Preview or run a breach response (FR-D24, FR-D25)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+	AdminRespondToIncidentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRespondToIncidentResponse, error)
+
+	// AdminRespondToIncidentWithResponse Preview or run a breach response (FR-D24, FR-D25)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+	AdminRespondToIncidentWithResponse(ctx context.Context, id string, body AdminRespondToIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRespondToIncidentResponse, error)
+
+	// AdminGetIncidentResponseWithResponse A response's status and progress
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/incidents/{id}/responses/{response_id} (the `AdminGetIncidentResponse` operationId).
+	AdminGetIncidentResponseWithResponse(ctx context.Context, id string, responseId string, reqEditors ...RequestEditorFn) (*AdminGetIncidentResponseResponse, error)
+
 	// AdminListInvitationsWithResponse Live invitations (FR-D2, ADR-0062)
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -13755,6 +14770,461 @@ func (r AdminFGAModelResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminFGAModelResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListIncidentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IncidentList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListIncidentsResponse) GetJSON200() *IncidentList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListIncidentsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListIncidentsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListIncidentsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListIncidentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListIncidentsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListIncidentsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminOpenIncidentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Incident
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AdminOpenIncidentResponse) GetJSON201() *Incident {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminOpenIncidentResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminOpenIncidentResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminOpenIncidentResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminOpenIncidentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminOpenIncidentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminOpenIncidentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminOpenIncidentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminGetIncidentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IncidentDetail
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminGetIncidentResponse) GetJSON200() *IncidentDetail {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminGetIncidentResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminGetIncidentResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminGetIncidentResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminGetIncidentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminGetIncidentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminGetIncidentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminGetIncidentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminUpdateIncidentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Incident
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminUpdateIncidentResponse) GetJSON200() *Incident {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminUpdateIncidentResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminUpdateIncidentResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminUpdateIncidentResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminUpdateIncidentResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminUpdateIncidentResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminUpdateIncidentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminUpdateIncidentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminUpdateIncidentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminUpdateIncidentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminIncidentReportResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminIncidentReportResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminIncidentReportResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminIncidentReportResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminIncidentReportResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminIncidentReportResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminIncidentReportResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminIncidentReportResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRespondToIncidentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IncidentPreview
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *IncidentResponse
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminRespondToIncidentResponse) GetJSON200() *IncidentPreview {
+	return r.JSON200
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r AdminRespondToIncidentResponse) GetJSON202() *IncidentResponse {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRespondToIncidentResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRespondToIncidentResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRespondToIncidentResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminRespondToIncidentResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminRespondToIncidentResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRespondToIncidentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRespondToIncidentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRespondToIncidentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRespondToIncidentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminGetIncidentResponseResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IncidentResponse
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminGetIncidentResponseResponse) GetJSON200() *IncidentResponse {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminGetIncidentResponseResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminGetIncidentResponseResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminGetIncidentResponseResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminGetIncidentResponseResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminGetIncidentResponseResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminGetIncidentResponseResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminGetIncidentResponseResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20092,6 +21562,156 @@ func (c *ClientWithResponses) AdminFGAModelWithResponse(ctx context.Context, req
 	return ParseAdminFGAModelResponse(rsp)
 }
 
+// AdminListIncidentsWithResponse Security incidents, newest first (FR-D23)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/incidents (the `AdminListIncidents` operationId).
+func (c *ClientWithResponses) AdminListIncidentsWithResponse(ctx context.Context, params *AdminListIncidentsParams, reqEditors ...RequestEditorFn) (*AdminListIncidentsResponse, error) {
+	rsp, err := c.AdminListIncidents(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListIncidentsResponse(rsp)
+}
+
+// AdminOpenIncidentWithBodyWithResponse Open an incident
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+func (c *ClientWithResponses) AdminOpenIncidentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminOpenIncidentResponse, error) {
+	rsp, err := c.AdminOpenIncidentWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminOpenIncidentResponse(rsp)
+}
+
+// AdminOpenIncidentWithResponse Open an incident
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/incidents (the `AdminOpenIncident` operationId).
+func (c *ClientWithResponses) AdminOpenIncidentWithResponse(ctx context.Context, body AdminOpenIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminOpenIncidentResponse, error) {
+	rsp, err := c.AdminOpenIncident(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminOpenIncidentResponse(rsp)
+}
+
+// AdminGetIncidentWithResponse An incident with its responses and timeline
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/incidents/{id} (the `AdminGetIncident` operationId).
+func (c *ClientWithResponses) AdminGetIncidentWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminGetIncidentResponse, error) {
+	rsp, err := c.AdminGetIncident(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminGetIncidentResponse(rsp)
+}
+
+// AdminUpdateIncidentWithBodyWithResponse Update notes or close
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+func (c *ClientWithResponses) AdminUpdateIncidentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminUpdateIncidentResponse, error) {
+	rsp, err := c.AdminUpdateIncidentWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUpdateIncidentResponse(rsp)
+}
+
+// AdminUpdateIncidentWithResponse Update notes or close
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). Closing is 409 while a response is pending, queued or running, or when already closed.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/admin/incidents/{id} (the `AdminUpdateIncident` operationId).
+func (c *ClientWithResponses) AdminUpdateIncidentWithResponse(ctx context.Context, id string, body AdminUpdateIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminUpdateIncidentResponse, error) {
+	rsp, err := c.AdminUpdateIncident(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUpdateIncidentResponse(rsp)
+}
+
+// AdminIncidentReportWithResponse The incident's signed report (FR-D26)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/incidents/{id}/report (the `AdminIncidentReport` operationId).
+func (c *ClientWithResponses) AdminIncidentReportWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminIncidentReportResponse, error) {
+	rsp, err := c.AdminIncidentReport(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminIncidentReportResponse(rsp)
+}
+
+// AdminRespondToIncidentWithBodyWithResponse Preview or run a breach response (FR-D24, FR-D25)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+func (c *ClientWithResponses) AdminRespondToIncidentWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRespondToIncidentResponse, error) {
+	rsp, err := c.AdminRespondToIncidentWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRespondToIncidentResponse(rsp)
+}
+
+// AdminRespondToIncidentWithResponse Preview or run a breach response (FR-D24, FR-D25)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112). A real run needs a second factor within 5 minutes (else 401 with max_age) and confirm = the tenant's slug; a closed incident is 409.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/incidents/{id}/responses (the `AdminRespondToIncident` operationId).
+func (c *ClientWithResponses) AdminRespondToIncidentWithResponse(ctx context.Context, id string, body AdminRespondToIncidentJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRespondToIncidentResponse, error) {
+	rsp, err := c.AdminRespondToIncident(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRespondToIncidentResponse(rsp)
+}
+
+// AdminGetIncidentResponseWithResponse A response's status and progress
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0112).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/incidents/{id}/responses/{response_id} (the `AdminGetIncidentResponse` operationId).
+func (c *ClientWithResponses) AdminGetIncidentResponseWithResponse(ctx context.Context, id string, responseId string, reqEditors ...RequestEditorFn) (*AdminGetIncidentResponseResponse, error) {
+	rsp, err := c.AdminGetIncidentResponse(ctx, id, responseId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminGetIncidentResponseResponse(rsp)
+}
+
 // AdminListInvitationsWithResponse Live invitations (FR-D2, ADR-0062)
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -23219,6 +24839,356 @@ func ParseAdminFGAModelResponse(rsp *http.Response) (*AdminFGAModelResponse, err
 			return nil, err
 		}
 		response.ApplicationproblemJSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListIncidentsResponse parses an HTTP response from a AdminListIncidentsWithResponse call
+func ParseAdminListIncidentsResponse(rsp *http.Response) (*AdminListIncidentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListIncidentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IncidentList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminOpenIncidentResponse parses an HTTP response from a AdminOpenIncidentWithResponse call
+func ParseAdminOpenIncidentResponse(rsp *http.Response) (*AdminOpenIncidentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminOpenIncidentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Incident
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminGetIncidentResponse parses an HTTP response from a AdminGetIncidentWithResponse call
+func ParseAdminGetIncidentResponse(rsp *http.Response) (*AdminGetIncidentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminGetIncidentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IncidentDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminUpdateIncidentResponse parses an HTTP response from a AdminUpdateIncidentWithResponse call
+func ParseAdminUpdateIncidentResponse(rsp *http.Response) (*AdminUpdateIncidentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminUpdateIncidentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Incident
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminIncidentReportResponse parses an HTTP response from a AdminIncidentReportWithResponse call
+func ParseAdminIncidentReportResponse(rsp *http.Response) (*AdminIncidentReportResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminIncidentReportResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRespondToIncidentResponse parses an HTTP response from a AdminRespondToIncidentWithResponse call
+func ParseAdminRespondToIncidentResponse(rsp *http.Response) (*AdminRespondToIncidentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRespondToIncidentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IncidentPreview
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest IncidentResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminGetIncidentResponseResponse parses an HTTP response from a AdminGetIncidentResponseWithResponse call
+func ParseAdminGetIncidentResponseResponse(rsp *http.Response) (*AdminGetIncidentResponseResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminGetIncidentResponseResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IncidentResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 

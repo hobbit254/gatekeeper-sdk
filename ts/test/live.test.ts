@@ -46,5 +46,5 @@ live("live: push approver (FR-A27)", () => {
     expect(out.recovery_codes).toHaveLength(10);
     expect(await p.pending()).toEqual([]);
     await expect(p.approve("00000000-0000-0000-0000-000000000000", 10)).rejects.toMatchObject({ status: 404 });
-  });
+  }, 20_000); // a real sign-in, an enrolment email and two signed calls, alongside the rest of the suite
 });
