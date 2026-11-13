@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/analytics/risk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Risky and blocked sign-ins and sign-ups, top signals and sources (FR-D28)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+         */
+        get: operations["adminRiskAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/api-keys": {
         parameters: {
             query?: never;
@@ -223,6 +243,50 @@ export interface paths {
          */
         post: operations["adminVerifyAnchors"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tenant's block list (FR-D27)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+         */
+        get: operations["adminListBlocks"];
+        put?: never;
+        /**
+         * Block an IP or range, a country or an email domain for sign-up and sign-in
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+         */
+        post: operations["adminCreateBlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/blocks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a block
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+         */
+        delete: operations["adminDeleteBlock"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2590,6 +2654,70 @@ export interface components {
         PushApproverList: {
             approvers: components["schemas"]["PushApprover"][];
         };
+        RiskAnalytics: {
+            daily: {
+                /** Format: date */
+                day: string;
+                /** Format: int64 */
+                sign_ins_blocked: number;
+                /** Format: int64 */
+                sign_ins_step_up: number;
+                /** Format: int64 */
+                sign_ups_blocked: number;
+                /** Format: int64 */
+                sign_ups_risky: number;
+            }[];
+            days: number;
+            devices: {
+                /** Format: int64 */
+                n: number;
+                value: string;
+            }[];
+            ips: {
+                /** Format: int64 */
+                n: number;
+                value: string;
+            }[];
+            networks: {
+                /** Format: int64 */
+                n: number;
+                value: string;
+            }[];
+            signals: {
+                /** Format: int64 */
+                n: number;
+                value: string;
+            }[];
+        };
+        RiskBlock: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            created_by: string;
+            /** Format: date-time */
+            expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "ip" | "country" | "email_domain";
+            reason: string;
+            value: string;
+        };
+        RiskBlockCreate: {
+            /**
+             * Format: date-time
+             * @description In the future; omitted never expires
+             */
+            expires_at?: string;
+            /** @enum {string} */
+            kind: "ip" | "country" | "email_domain";
+            reason?: string;
+            /** @description An IP or CIDR range, an ISO alpha-2 country code, or a domain (its subdomains match too) */
+            value: string;
+        };
+        RiskBlockList: {
+            blocks: components["schemas"]["RiskBlock"][];
+        };
         RoleCreate: {
             description?: string;
             name: string;
@@ -2839,20 +2967,28 @@ export interface components {
             };
             /** @description Sign-in risk bands (ADR-0069); omitted = enabled, step_up 40, block 80 */
             risk?: {
+                /** @description Domains (and their subdomains) the disposable-email list doesn't count (ADR-0113) */
+                allow_email_domains?: string[];
                 /** @description Score at which sign-in is refused; above step_up; 101 never blocks */
                 block?: number;
                 enabled?: boolean;
                 /** @description Score at which a second factor is required */
                 step_up?: number;
-                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40); 0 turns a signal off (ADR-0101) */
+                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30); 0 turns a signal off (ADR-0101) */
                 weights?: {
                     account_failures?: number;
+                    disposable_email?: number;
                     fast_country_change?: number;
                     ip_failures?: number;
                     new_country?: number;
                     new_device?: number;
                     push_reported?: number;
+                    shared_device?: number;
+                    signup_burst_country?: number;
+                    signup_burst_network?: number;
                     tor_exit?: number;
+                    velocity_account?: number;
+                    velocity_network?: number;
                 };
             };
             session: {
@@ -3025,6 +3161,32 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminRiskAnalytics: {
+        parameters: {
+            query: {
+                /** @description 30 or 90, else 422 */
+                days: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The risk view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskAnalytics"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
@@ -3258,6 +3420,79 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+        };
+    };
+    adminListBlocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rules, newest first, expired included */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskBlockList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    adminCreateBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RiskBlockCreate"];
+            };
+        };
+        responses: {
+            /** @description Added; applies at once */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RiskBlock"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteBlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     adminListClients: {

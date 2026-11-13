@@ -555,6 +555,48 @@ func (e ProfileStatus) Valid() bool {
 	}
 }
 
+// Defines values for RiskBlockKind.
+const (
+	RiskBlockKindCountry     RiskBlockKind = "country"
+	RiskBlockKindEmailDomain RiskBlockKind = "email_domain"
+	RiskBlockKindIp          RiskBlockKind = "ip"
+)
+
+// Valid indicates whether the value is a known member of the RiskBlockKind enum.
+func (e RiskBlockKind) Valid() bool {
+	switch e {
+	case RiskBlockKindCountry:
+		return true
+	case RiskBlockKindEmailDomain:
+		return true
+	case RiskBlockKindIp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RiskBlockCreateKind.
+const (
+	RiskBlockCreateKindCountry     RiskBlockCreateKind = "country"
+	RiskBlockCreateKindEmailDomain RiskBlockCreateKind = "email_domain"
+	RiskBlockCreateKindIp          RiskBlockCreateKind = "ip"
+)
+
+// Valid indicates whether the value is a known member of the RiskBlockCreateKind enum.
+func (e RiskBlockCreateKind) Valid() bool {
+	switch e {
+	case RiskBlockCreateKindCountry:
+		return true
+	case RiskBlockCreateKindEmailDomain:
+		return true
+	case RiskBlockCreateKindIp:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SSOConnectionProtocol.
 const (
 	SSOConnectionProtocolOidc SSOConnectionProtocol = "oidc"
@@ -1666,6 +1708,67 @@ type PushApproverList struct {
 	Approvers []PushApprover `json:"approvers"`
 }
 
+// RiskAnalytics defines model for RiskAnalytics.
+type RiskAnalytics struct {
+	Daily []struct {
+		Day            openapi_types.Date `json:"day"`
+		SignInsBlocked int64              `json:"sign_ins_blocked"`
+		SignInsStepUp  int64              `json:"sign_ins_step_up"`
+		SignUpsBlocked int64              `json:"sign_ups_blocked"`
+		SignUpsRisky   int64              `json:"sign_ups_risky"`
+	} `json:"daily"`
+	Days    int `json:"days"`
+	Devices []struct {
+		N     int64  `json:"n"`
+		Value string `json:"value"`
+	} `json:"devices"`
+	Ips []struct {
+		N     int64  `json:"n"`
+		Value string `json:"value"`
+	} `json:"ips"`
+	Networks []struct {
+		N     int64  `json:"n"`
+		Value string `json:"value"`
+	} `json:"networks"`
+	Signals []struct {
+		N     int64  `json:"n"`
+		Value string `json:"value"`
+	} `json:"signals"`
+}
+
+// RiskBlock defines model for RiskBlock.
+type RiskBlock struct {
+	CreatedAt time.Time          `json:"created_at"`
+	CreatedBy openapi_types.UUID `json:"created_by"`
+	ExpiresAt *time.Time         `json:"expires_at,omitempty"`
+	Id        openapi_types.UUID `json:"id"`
+	Kind      RiskBlockKind      `json:"kind"`
+	Reason    string             `json:"reason"`
+	Value     string             `json:"value"`
+}
+
+// RiskBlockKind defines model for RiskBlock.Kind.
+type RiskBlockKind string
+
+// RiskBlockCreate defines model for RiskBlockCreate.
+type RiskBlockCreate struct {
+	// ExpiresAt In the future; omitted never expires
+	ExpiresAt *time.Time          `json:"expires_at,omitempty"`
+	Kind      RiskBlockCreateKind `json:"kind"`
+	Reason    *string             `json:"reason,omitempty"`
+
+	// Value An IP or CIDR range, an ISO alpha-2 country code, or a domain (its subdomains match too)
+	Value string `json:"value"`
+}
+
+// RiskBlockCreateKind defines model for RiskBlockCreate.Kind.
+type RiskBlockCreateKind string
+
+// RiskBlockList defines model for RiskBlockList.
+type RiskBlockList struct {
+	Blocks []RiskBlock `json:"blocks"`
+}
+
 // RoleCreate defines model for RoleCreate.
 type RoleCreate struct {
 	Description *string `json:"description,omitempty"`
@@ -1968,6 +2071,9 @@ type TenantPolicy struct {
 
 	// Risk Sign-in risk bands (ADR-0069); omitted = enabled, step_up 40, block 80
 	Risk *struct {
+		// AllowEmailDomains Domains (and their subdomains) the disposable-email list doesn't count (ADR-0113)
+		AllowEmailDomains *[]string `json:"allow_email_domains,omitempty"`
+
 		// Block Score at which sign-in is refused; above step_up; 101 never blocks
 		Block   *int  `json:"block,omitempty"`
 		Enabled *bool `json:"enabled,omitempty"`
@@ -1975,15 +2081,21 @@ type TenantPolicy struct {
 		// StepUp Score at which a second factor is required
 		StepUp *int `json:"step_up,omitempty"`
 
-		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40); 0 turns a signal off (ADR-0101)
+		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30); 0 turns a signal off (ADR-0101)
 		Weights *struct {
-			AccountFailures   *int `json:"account_failures,omitempty"`
-			FastCountryChange *int `json:"fast_country_change,omitempty"`
-			IpFailures        *int `json:"ip_failures,omitempty"`
-			NewCountry        *int `json:"new_country,omitempty"`
-			NewDevice         *int `json:"new_device,omitempty"`
-			PushReported      *int `json:"push_reported,omitempty"`
-			TorExit           *int `json:"tor_exit,omitempty"`
+			AccountFailures    *int `json:"account_failures,omitempty"`
+			DisposableEmail    *int `json:"disposable_email,omitempty"`
+			FastCountryChange  *int `json:"fast_country_change,omitempty"`
+			IpFailures         *int `json:"ip_failures,omitempty"`
+			NewCountry         *int `json:"new_country,omitempty"`
+			NewDevice          *int `json:"new_device,omitempty"`
+			PushReported       *int `json:"push_reported,omitempty"`
+			SharedDevice       *int `json:"shared_device,omitempty"`
+			SignupBurstCountry *int `json:"signup_burst_country,omitempty"`
+			SignupBurstNetwork *int `json:"signup_burst_network,omitempty"`
+			TorExit            *int `json:"tor_exit,omitempty"`
+			VelocityAccount    *int `json:"velocity_account,omitempty"`
+			VelocityNetwork    *int `json:"velocity_network,omitempty"`
 		} `json:"weights,omitempty"`
 	} `json:"risk,omitempty"`
 	Session struct {
@@ -2064,6 +2176,12 @@ type AdminLoginAnalyticsParams struct {
 
 // AdminLoginAnalyticsParamsDays defines parameters for AdminLoginAnalytics.
 type AdminLoginAnalyticsParamsDays int
+
+// AdminRiskAnalyticsParams defines parameters for AdminRiskAnalytics.
+type AdminRiskAnalyticsParams struct {
+	// Days 30 or 90, else 422
+	Days int `form:"days" json:"days"`
+}
 
 // AdminListAuditEventsParams defines parameters for AdminListAuditEvents.
 type AdminListAuditEventsParams struct {
@@ -2247,6 +2365,9 @@ type AdminRejectAccessRequestJSONRequestBody = AccessDecision
 
 // AdminCreateAPIKeyJSONRequestBody defines body for AdminCreateAPIKey for application/json ContentType.
 type AdminCreateAPIKeyJSONRequestBody = APIKeyCreate
+
+// AdminCreateBlockJSONRequestBody defines body for AdminCreateBlock for application/json ContentType.
+type AdminCreateBlockJSONRequestBody = RiskBlockCreate
 
 // AdminCreateClientJSONRequestBody defines body for AdminCreateClient for application/json ContentType.
 type AdminCreateClientJSONRequestBody = ClientCreate
@@ -2480,6 +2601,13 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
 	AdminLoginAnalytics(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminRiskAnalytics Risky and blocked sign-ins and sign-ups, top signals and sources (FR-D28)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Corresponds with GET /v1/admin/analytics/risk (the `AdminRiskAnalytics` operationId).
+	AdminRiskAnalytics(ctx context.Context, params *AdminRiskAnalyticsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListAPIKeys Live API keys (FR-M2, ADR-0057); never the key
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -2546,6 +2674,38 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/admin/audit/anchors/verify (the `AdminVerifyAnchors` operationId).
 	AdminVerifyAnchors(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListBlocks The tenant's block list (FR-D27)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Corresponds with GET /v1/admin/blocks (the `AdminListBlocks` operationId).
+	AdminListBlocks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCreateBlockWithBody Block an IP or range, a country or an email domain for sign-up and sign-in
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+	AdminCreateBlockWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCreateBlock Block an IP or range, a country or an email domain for sign-up and sign-in
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+	AdminCreateBlock(ctx context.Context, body AdminCreateBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminDeleteBlock Remove a block
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Corresponds with DELETE /v1/admin/blocks/{id} (the `AdminDeleteBlock` operationId).
+	AdminDeleteBlock(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListClients List clients
 	//
@@ -3792,6 +3952,23 @@ func (c *Client) AdminLoginAnalytics(ctx context.Context, params *AdminLoginAnal
 	return c.Client.Do(req)
 }
 
+// AdminRiskAnalytics Risky and blocked sign-ins and sign-ups, top signals and sources (FR-D28)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Corresponds with GET /v1/admin/analytics/risk (the `AdminRiskAnalytics` operationId).
+func (c *Client) AdminRiskAnalytics(ctx context.Context, params *AdminRiskAnalyticsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRiskAnalyticsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListAPIKeys Live API keys (FR-M2, ADR-0057); never the key
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -3939,6 +4116,78 @@ func (c *Client) AdminAuditAnchors(ctx context.Context, reqEditors ...RequestEdi
 // Corresponds with POST /v1/admin/audit/anchors/verify (the `AdminVerifyAnchors` operationId).
 func (c *Client) AdminVerifyAnchors(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminVerifyAnchorsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListBlocks The tenant's block list (FR-D27)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Corresponds with GET /v1/admin/blocks (the `AdminListBlocks` operationId).
+func (c *Client) AdminListBlocks(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListBlocksRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCreateBlockWithBody Block an IP or range, a country or an email domain for sign-up and sign-in
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+func (c *Client) AdminCreateBlockWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCreateBlockRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCreateBlock Block an IP or range, a country or an email domain for sign-up and sign-in
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+func (c *Client) AdminCreateBlock(ctx context.Context, body AdminCreateBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCreateBlockRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminDeleteBlock Remove a block
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Corresponds with DELETE /v1/admin/blocks/{id} (the `AdminDeleteBlock` operationId).
+func (c *Client) AdminDeleteBlock(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeleteBlockRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -6713,6 +6962,56 @@ func NewAdminLoginAnalyticsRequest(server string, params *AdminLoginAnalyticsPar
 	return req, nil
 }
 
+// NewAdminRiskAnalyticsRequest constructs an http.Request for the AdminRiskAnalytics method
+func NewAdminRiskAnalyticsRequest(server string, params *AdminRiskAnalyticsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/analytics/risk")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "days", params.Days, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListAPIKeysRequest constructs an http.Request for the AdminListAPIKeys method
 func NewAdminListAPIKeysRequest(server string) (*http.Request, error) {
 	var err error
@@ -7140,6 +7439,107 @@ func NewAdminVerifyAnchorsRequest(server string) (*http.Request, error) {
 	}
 
 	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminListBlocksRequest constructs an http.Request for the AdminListBlocks method
+func NewAdminListBlocksRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/blocks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminCreateBlockRequest calls the generic AdminCreateBlock builder with application/json body
+func NewAdminCreateBlockRequest(server string, body AdminCreateBlockJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminCreateBlockRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAdminCreateBlockRequestWithBody constructs an http.Request for the AdminCreateBlock method, with any body, and a specified content type
+func NewAdminCreateBlockRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/blocks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminDeleteBlockRequest constructs an http.Request for the AdminDeleteBlock method
+func NewAdminDeleteBlockRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/blocks/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11635,6 +12035,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/analytics/logins (the `AdminLoginAnalytics` operationId).
 	AdminLoginAnalyticsWithResponse(ctx context.Context, params *AdminLoginAnalyticsParams, reqEditors ...RequestEditorFn) (*AdminLoginAnalyticsResponse, error)
 
+	// AdminRiskAnalyticsWithResponse Risky and blocked sign-ins and sign-ups, top signals and sources (FR-D28)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/analytics/risk (the `AdminRiskAnalytics` operationId).
+	AdminRiskAnalyticsWithResponse(ctx context.Context, params *AdminRiskAnalyticsParams, reqEditors ...RequestEditorFn) (*AdminRiskAnalyticsResponse, error)
+
 	// AdminListAPIKeysWithResponse Live API keys (FR-M2, ADR-0057); never the key
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -11715,6 +12124,42 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/audit/anchors/verify (the `AdminVerifyAnchors` operationId).
 	AdminVerifyAnchorsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminVerifyAnchorsResponse, error)
+
+	// AdminListBlocksWithResponse The tenant's block list (FR-D27)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/blocks (the `AdminListBlocks` operationId).
+	AdminListBlocksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListBlocksResponse, error)
+
+	// AdminCreateBlockWithBodyWithResponse Block an IP or range, a country or an email domain for sign-up and sign-in
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+	AdminCreateBlockWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCreateBlockResponse, error)
+
+	// AdminCreateBlockWithResponse Block an IP or range, a country or an email domain for sign-up and sign-in
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+	AdminCreateBlockWithResponse(ctx context.Context, body AdminCreateBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCreateBlockResponse, error)
+
+	// AdminDeleteBlockWithResponse Remove a block
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/blocks/{id} (the `AdminDeleteBlock` operationId).
+	AdminDeleteBlockWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteBlockResponse, error)
 
 	// AdminListClientsWithResponse List clients
 	//
@@ -13245,6 +13690,68 @@ func (r AdminLoginAnalyticsResponse) ContentType() string {
 	return ""
 }
 
+type AdminRiskAnalyticsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RiskAnalytics
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminRiskAnalyticsResponse) GetJSON200() *RiskAnalytics {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRiskAnalyticsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRiskAnalyticsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminRiskAnalyticsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRiskAnalyticsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRiskAnalyticsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRiskAnalyticsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRiskAnalyticsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListAPIKeysResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13797,6 +14304,185 @@ func (r AdminVerifyAnchorsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminVerifyAnchorsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListBlocksResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RiskBlockList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListBlocksResponse) GetJSON200() *RiskBlockList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListBlocksResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListBlocksResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListBlocksResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListBlocksResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListBlocksResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListBlocksResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminCreateBlockResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *RiskBlock
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AdminCreateBlockResponse) GetJSON201() *RiskBlock {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminCreateBlockResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminCreateBlockResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminCreateBlockResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminCreateBlockResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminCreateBlockResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminCreateBlockResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminCreateBlockResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminCreateBlockResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminDeleteBlockResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminDeleteBlockResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminDeleteBlockResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminDeleteBlockResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminDeleteBlockResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminDeleteBlockResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminDeleteBlockResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminDeleteBlockResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21180,6 +21866,21 @@ func (c *ClientWithResponses) AdminLoginAnalyticsWithResponse(ctx context.Contex
 	return ParseAdminLoginAnalyticsResponse(rsp)
 }
 
+// AdminRiskAnalyticsWithResponse Risky and blocked sign-ins and sign-ups, top signals and sources (FR-D28)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/analytics/risk (the `AdminRiskAnalytics` operationId).
+func (c *ClientWithResponses) AdminRiskAnalyticsWithResponse(ctx context.Context, params *AdminRiskAnalyticsParams, reqEditors ...RequestEditorFn) (*AdminRiskAnalyticsResponse, error) {
+	rsp, err := c.AdminRiskAnalytics(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRiskAnalyticsResponse(rsp)
+}
+
 // AdminListAPIKeysWithResponse Live API keys (FR-M2, ADR-0057); never the key
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -21313,6 +22014,66 @@ func (c *ClientWithResponses) AdminVerifyAnchorsWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseAdminVerifyAnchorsResponse(rsp)
+}
+
+// AdminListBlocksWithResponse The tenant's block list (FR-D27)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/blocks (the `AdminListBlocks` operationId).
+func (c *ClientWithResponses) AdminListBlocksWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListBlocksResponse, error) {
+	rsp, err := c.AdminListBlocks(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListBlocksResponse(rsp)
+}
+
+// AdminCreateBlockWithBodyWithResponse Block an IP or range, a country or an email domain for sign-up and sign-in
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+func (c *ClientWithResponses) AdminCreateBlockWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCreateBlockResponse, error) {
+	rsp, err := c.AdminCreateBlockWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCreateBlockResponse(rsp)
+}
+
+// AdminCreateBlockWithResponse Block an IP or range, a country or an email domain for sign-up and sign-in
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113). At most 1,000 rules; a duplicate is 409. Matches are refused with the generic error and audited login.blocked / signup.blocked with the rule id.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/blocks (the `AdminCreateBlock` operationId).
+func (c *ClientWithResponses) AdminCreateBlockWithResponse(ctx context.Context, body AdminCreateBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCreateBlockResponse, error) {
+	rsp, err := c.AdminCreateBlock(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCreateBlockResponse(rsp)
+}
+
+// AdminDeleteBlockWithResponse Remove a block
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; org admins get 403; audited (ADR-0113).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/blocks/{id} (the `AdminDeleteBlock` operationId).
+func (c *ClientWithResponses) AdminDeleteBlockWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteBlockResponse, error) {
+	rsp, err := c.AdminDeleteBlock(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminDeleteBlockResponse(rsp)
 }
 
 // AdminListClientsWithResponse List clients
@@ -23635,6 +24396,53 @@ func ParseAdminLoginAnalyticsResponse(rsp *http.Response) (*AdminLoginAnalyticsR
 	return response, nil
 }
 
+// ParseAdminRiskAnalyticsResponse parses an HTTP response from a AdminRiskAnalyticsWithResponse call
+func ParseAdminRiskAnalyticsResponse(rsp *http.Response) (*AdminRiskAnalyticsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRiskAnalyticsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RiskAnalytics
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListAPIKeysResponse parses an HTTP response from a AdminListAPIKeysWithResponse call
 func ParseAdminListAPIKeysResponse(rsp *http.Response) (*AdminListAPIKeysResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -24067,6 +24875,143 @@ func ParseAdminVerifyAnchorsResponse(rsp *http.Response) (*AdminVerifyAnchorsRes
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListBlocksResponse parses an HTTP response from a AdminListBlocksWithResponse call
+func ParseAdminListBlocksResponse(rsp *http.Response) (*AdminListBlocksResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListBlocksResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RiskBlockList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminCreateBlockResponse parses an HTTP response from a AdminCreateBlockWithResponse call
+func ParseAdminCreateBlockResponse(rsp *http.Response) (*AdminCreateBlockResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminCreateBlockResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest RiskBlock
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminDeleteBlockResponse parses an HTTP response from a AdminDeleteBlockWithResponse call
+func ParseAdminDeleteBlockResponse(rsp *http.Response) (*AdminDeleteBlockResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminDeleteBlockResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 
