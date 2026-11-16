@@ -210,6 +210,24 @@ func (e ClientEncryptionUserinfoEncryptedResponseEnc) Valid() bool {
 	}
 }
 
+// Defines values for DataExportFormat.
+const (
+	DataExportFormatJson DataExportFormat = "json"
+	DataExportFormatZip  DataExportFormat = "zip"
+)
+
+// Valid indicates whether the value is a known member of the DataExportFormat enum.
+func (e DataExportFormat) Valid() bool {
+	switch e {
+	case DataExportFormatJson:
+		return true
+	case DataExportFormatZip:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DataExportStatus.
 const (
 	DataExportStatusBuilding   DataExportStatus = "building"
@@ -234,6 +252,24 @@ func (e DataExportStatus) Valid() bool {
 	case DataExportStatusQueued:
 		return true
 	case DataExportStatusReady:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DataExportRequestFormat.
+const (
+	DataExportRequestFormatJson DataExportRequestFormat = "json"
+	DataExportRequestFormatZip  DataExportRequestFormat = "zip"
+)
+
+// Valid indicates whether the value is a known member of the DataExportRequestFormat enum.
+func (e DataExportRequestFormat) Valid() bool {
+	switch e {
+	case DataExportRequestFormatJson:
+		return true
+	case DataExportRequestFormatZip:
 		return true
 	default:
 		return false
@@ -1287,17 +1323,21 @@ type ConsentPurposeList struct {
 
 // DataExport A personal-data export; the file goes to the user only (ADR-0071)
 type DataExport struct {
-	CreatedAt    time.Time  `json:"created_at"`
-	DownloadedAt *time.Time `json:"downloaded_at,omitempty"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	Id           string     `json:"id"`
-	ReadyAt      *time.Time `json:"ready_at,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	DownloadedAt *time.Time        `json:"downloaded_at,omitempty"`
+	ExpiresAt    *time.Time        `json:"expires_at,omitempty"`
+	Format       *DataExportFormat `json:"format,omitempty"`
+	Id           string            `json:"id"`
+	ReadyAt      *time.Time        `json:"ready_at,omitempty"`
 
 	// RequestedBy The admin who asked; null when the user did
 	RequestedBy *string          `json:"requested_by,omitempty"`
 	Status      DataExportStatus `json:"status"`
 	UserId      string           `json:"user_id"`
 }
+
+// DataExportFormat defines model for DataExport.Format.
+type DataExportFormat string
 
 // DataExportStatus defines model for DataExport.Status.
 type DataExportStatus string
@@ -1306,6 +1346,15 @@ type DataExportStatus string
 type DataExportList struct {
 	Items []DataExport `json:"items"`
 }
+
+// DataExportRequest defines model for DataExportRequest.
+type DataExportRequest struct {
+	// Format json: the document (default). zip: data.json, one CSV per section and summary.html in the user's language (ADR-0122)
+	Format *DataExportRequestFormat `json:"format,omitempty"`
+}
+
+// DataExportRequestFormat json: the document (default). zip: data.json, one CSV per section and summary.html in the user's language (ADR-0122)
+type DataExportRequestFormat string
 
 // Delivery defines model for Delivery.
 type Delivery struct {
@@ -2656,6 +2705,9 @@ type AdminCreateUserJSONRequestBody = UserCreate
 // AdminPatchUserJSONRequestBody defines body for AdminPatchUser for application/json ContentType.
 type AdminPatchUserJSONRequestBody = ProfilePatch
 
+// AdminRequestDataExportJSONRequestBody defines body for AdminRequestDataExport for application/json ContentType.
+type AdminRequestDataExportJSONRequestBody = DataExportRequest
+
 // AdminImpersonateUserJSONRequestBody defines body for AdminImpersonateUser for application/json ContentType.
 type AdminImpersonateUserJSONRequestBody = ImpersonateRequest
 
@@ -3853,10 +3905,19 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/admin/users/{id} (the `AdminPatchUser` operationId).
 	AdminPatchUser(ctx context.Context, id string, body AdminPatchUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminRequestDataExport Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+	// AdminRequestDataExportWithBody Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+	//
+	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
-	AdminRequestDataExport(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AdminRequestDataExportWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRequestDataExport Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
+	AdminRequestDataExport(ctx context.Context, id string, body AdminRequestDataExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminForceResetUser Remove the password, end every session, email a reset link
 	//
@@ -6563,11 +6624,30 @@ func (c *Client) AdminPatchUser(ctx context.Context, id string, body AdminPatchU
 	return c.Client.Do(req)
 }
 
-// AdminRequestDataExport Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+// AdminRequestDataExportWithBody Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+//
+// Takes any type of body and a specified content type.
 //
 // Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
-func (c *Client) AdminRequestDataExport(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAdminRequestDataExportRequest(c.Server, id)
+func (c *Client) AdminRequestDataExportWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRequestDataExportRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRequestDataExport Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
+func (c *Client) AdminRequestDataExport(ctx context.Context, id string, body AdminRequestDataExportJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRequestDataExportRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11538,8 +11618,19 @@ func NewAdminPatchUserRequestWithBody(server string, id string, contentType stri
 	return req, nil
 }
 
-// NewAdminRequestDataExportRequest constructs an http.Request for the AdminRequestDataExport method
-func NewAdminRequestDataExportRequest(server string, id string) (*http.Request, error) {
+// NewAdminRequestDataExportRequest calls the generic AdminRequestDataExport builder with application/json body
+func NewAdminRequestDataExportRequest(server string, id string, body AdminRequestDataExportJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminRequestDataExportRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminRequestDataExportRequestWithBody constructs an http.Request for the AdminRequestDataExport method, with any body, and a specified content type
+func NewAdminRequestDataExportRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11564,10 +11655,12 @@ func NewAdminRequestDataExportRequest(server string, id string) (*http.Request, 
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -13685,12 +13778,19 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/admin/users/{id} (the `AdminPatchUser` operationId).
 	AdminPatchUserWithResponse(ctx context.Context, id string, body AdminPatchUserJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPatchUserResponse, error)
 
-	// AdminRequestDataExportWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+	// AdminRequestDataExportWithBodyWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
-	AdminRequestDataExportWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error)
+	AdminRequestDataExportWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error)
+
+	// AdminRequestDataExportWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
+	AdminRequestDataExportWithResponse(ctx context.Context, id string, body AdminRequestDataExportJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error)
 
 	// AdminForceResetUserWithResponse Remove the password, end every session, email a reset link
 	//
@@ -24601,13 +24701,26 @@ func (c *ClientWithResponses) AdminPatchUserWithResponse(ctx context.Context, id
 	return ParseAdminPatchUserResponse(rsp)
 }
 
-// AdminRequestDataExportWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+// AdminRequestDataExportWithBodyWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
-func (c *ClientWithResponses) AdminRequestDataExportWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error) {
-	rsp, err := c.AdminRequestDataExport(ctx, id, reqEditors...)
+func (c *ClientWithResponses) AdminRequestDataExportWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error) {
+	rsp, err := c.AdminRequestDataExportWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRequestDataExportResponse(rsp)
+}
+
+// AdminRequestDataExportWithResponse Export a user's data; the link goes to the user, never to the admin (FR-I7, ADR-0071)
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/users/{id}/data-export (the `AdminRequestDataExport` operationId).
+func (c *ClientWithResponses) AdminRequestDataExportWithResponse(ctx context.Context, id string, body AdminRequestDataExportJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRequestDataExportResponse, error) {
+	rsp, err := c.AdminRequestDataExport(ctx, id, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

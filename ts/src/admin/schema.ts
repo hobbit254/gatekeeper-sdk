@@ -2318,6 +2318,8 @@ export interface components {
             downloaded_at?: string | null;
             /** Format: date-time */
             expires_at?: string | null;
+            /** @enum {string} */
+            format?: "json" | "zip";
             id: string;
             /** Format: date-time */
             ready_at?: string | null;
@@ -2329,6 +2331,14 @@ export interface components {
         };
         DataExportList: {
             items: components["schemas"]["DataExport"][];
+        };
+        DataExportRequest: {
+            /**
+             * @description json: the document (default). zip: data.json, one CSV per section and summary.html in the user's language (ADR-0122)
+             * @default json
+             * @enum {string}
+             */
+            format: "json" | "zip";
         };
         Delivery: {
             attempt: number;
@@ -6068,7 +6078,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DataExportRequest"];
+            };
+        };
         responses: {
             /** @description Queued */
             202: {
