@@ -358,6 +358,74 @@
         ],
         "type": "object"
       },
+      "AdminPasskey": {
+        "properties": {
+          "aaguid": {
+            "description": "All zeros when the authenticator didn't say",
+            "format": "uuid",
+            "type": "string"
+          },
+          "allowed": {
+            "description": "Whether the tenant's current passkey policy lets it sign in",
+            "type": "boolean"
+          },
+          "attested": {
+            "description": "The model was proven by attestation against FIDO metadata (ADR-0117)",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "last_used_at": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "model": {
+            "description": "FIDO metadata's name for the AAGUID; empty when unknown. Only proven when attested",
+            "type": "string"
+          },
+          "synced": {
+            "description": "May sync to other devices; null when unknown (ADR-0104)",
+            "nullable": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "aaguid",
+          "model",
+          "synced",
+          "attested",
+          "allowed",
+          "created_at",
+          "last_used_at"
+        ],
+        "type": "object"
+      },
+      "AdminPasskeyList": {
+        "properties": {
+          "passkeys": {
+            "items": {
+              "$ref": "#/components/schemas/AdminPasskey"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "passkeys"
+        ],
+        "type": "object"
+      },
       "AdminPermission": {
         "properties": {
           "client_id": {
@@ -2330,6 +2398,42 @@
         ],
         "type": "object"
       },
+      "PasskeyModelList": {
+        "properties": {
+          "available": {
+            "description": "False when Gatekeeper has no verified FIDO metadata",
+            "type": "boolean"
+          },
+          "models": {
+            "items": {
+              "properties": {
+                "aaguid": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "revoked": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "aaguid",
+                "description",
+                "revoked"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "available"
+        ],
+        "type": "object"
+      },
       "PermissionGrant": {
         "properties": {
           "effect": {
@@ -3549,8 +3653,30 @@
             "type": "object"
           },
           "passkey": {
-            "description": "Passkey rules; omitted keeps the stored ones (ADR-0104)",
+            "description": "Passkey rules; omitted keeps the stored ones (ADR-0104, ADR-0117)",
             "properties": {
+              "authenticators": {
+                "description": "Authenticator models by AAGUID (ADR-0117): allow accepts only attested passkeys of listed models; deny refuses attested passkeys of listed models; with either, models FIDO metadata reports revoked or compromised are refused. Checked at registration and sign-in.",
+                "properties": {
+                  "aaguids": {
+                    "items": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "type": "array"
+                  },
+                  "mode": {
+                    "enum": [
+                      "off",
+                      "allow",
+                      "deny"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
               "require_device_bound": {
                 "description": "Refuse passkeys that may sync to other devices, at registration and sign-in",
                 "type": "boolean"
@@ -3867,7 +3993,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.34.0"
+    "version": "0.35.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -6994,6 +7120,36 @@
         "summary": "Dashboard health: logins, lockouts, MFA adoption, security events, webhook failures, outbox lag"
       }
     },
+    "/v1/admin/passkey-models": {
+      "get": {
+        "description": "For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).",
+        "operationId": "adminListPasskeyModels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyModelList"
+                }
+              }
+            },
+            "description": "Models"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Authenticator models in FIDO metadata (FR-D29)"
+      }
+    },
     "/v1/admin/permissions": {
       "get": {
         "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
@@ -8916,6 +9072,96 @@
           }
         ],
         "summary": "Impersonate a user for a client that allows it (FR-M3, ADR-0058)"
+      }
+    },
+    "/v1/admin/users/{id}/passkeys": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).",
+        "operationId": "adminListUserPasskeys",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPasskeyList"
+                }
+              }
+            },
+            "description": "Passkeys"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A user's passkeys (FR-D29)"
+      }
+    },
+    "/v1/admin/users/{id}/passkeys/{passkey_id}": {
+      "delete": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).",
+        "operationId": "adminDeleteUserPasskey",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "passkey_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove a user's passkey (FR-D29)"
       }
     },
     "/v1/admin/users/{id}/permissions": {

@@ -1024,6 +1024,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/passkey-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Authenticator models in FIDO metadata (FR-D29)
+         * @description For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).
+         */
+        get: operations["adminListPasskeyModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/permissions": {
         parameters: {
             query?: never;
@@ -1609,6 +1629,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{id}/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A user's passkeys (FR-D29)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).
+         */
+        get: operations["adminListUserPasskeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/passkeys/{passkey_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a user's passkey (FR-D29)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).
+         */
+        delete: operations["adminDeleteUserPasskey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{id}/permissions": {
         parameters: {
             query?: never;
@@ -1999,6 +2059,31 @@ export interface components {
             items: components["schemas"]["AdminClient"][];
             /** @description Pass as cursor for the next page; null on the last */
             next_cursor?: string | null;
+        };
+        AdminPasskey: {
+            /**
+             * Format: uuid
+             * @description All zeros when the authenticator didn't say
+             */
+            aaguid: string;
+            /** @description Whether the tenant's current passkey policy lets it sign in */
+            allowed: boolean;
+            /** @description The model was proven by attestation against FIDO metadata (ADR-0117) */
+            attested: boolean;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: uuid */
+            id: string;
+            label: string;
+            /** Format: date-time */
+            last_used_at: string | null;
+            /** @description FIDO metadata's name for the AAGUID; empty when unknown. Only proven when attested */
+            model: string;
+            /** @description May sync to other devices; null when unknown (ADR-0104) */
+            synced: boolean | null;
+        };
+        AdminPasskeyList: {
+            passkeys: components["schemas"]["AdminPasskey"][];
         };
         AdminPermission: {
             /** @description The manifest's client */
@@ -2581,6 +2666,16 @@ export interface components {
             security_events_24h: number;
             webhook_failures_24h: number;
         };
+        PasskeyModelList: {
+            /** @description False when Gatekeeper has no verified FIDO metadata */
+            available: boolean;
+            models: {
+                /** Format: uuid */
+                aaguid: string;
+                description: string;
+                revoked: boolean;
+            }[];
+        };
         PermissionGrant: {
             /** @enum {string} */
             effect: "allow" | "deny";
@@ -2955,8 +3050,14 @@ export interface components {
                 sender_id: string;
                 sms_enabled: boolean;
             };
-            /** @description Passkey rules; omitted keeps the stored ones (ADR-0104) */
+            /** @description Passkey rules; omitted keeps the stored ones (ADR-0104, ADR-0117) */
             passkey?: {
+                /** @description Authenticator models by AAGUID (ADR-0117): allow accepts only attested passkeys of listed models; deny refuses attested passkeys of listed models; with either, models FIDO metadata reports revoked or compromised are refused. Checked at registration and sign-in. */
+                authenticators?: {
+                    aaguids?: string[];
+                    /** @enum {string} */
+                    mode?: "off" | "allow" | "deny";
+                };
                 /** @description Refuse passkeys that may sync to other devices, at registration and sign-in */
                 require_device_bound?: boolean;
             };
@@ -4835,6 +4936,28 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    adminListPasskeyModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Models */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyModelList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     adminListPermissions: {
         parameters: {
             query?: {
@@ -5925,6 +6048,56 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    adminListUserPasskeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Passkeys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminPasskeyList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteUserPasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     adminGrantPermission: {

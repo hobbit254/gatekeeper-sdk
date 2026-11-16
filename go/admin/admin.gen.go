@@ -671,22 +671,43 @@ func (e TenantPolicyAllowedMethods) Valid() bool {
 
 // Defines values for TenantPolicyMfa.
 const (
-	Off               TenantPolicyMfa = "off"
-	Optional          TenantPolicyMfa = "optional"
-	Required          TenantPolicyMfa = "required"
-	RequiredForAdmins TenantPolicyMfa = "required_for_admins"
+	TenantPolicyMfaOff               TenantPolicyMfa = "off"
+	TenantPolicyMfaOptional          TenantPolicyMfa = "optional"
+	TenantPolicyMfaRequired          TenantPolicyMfa = "required"
+	TenantPolicyMfaRequiredForAdmins TenantPolicyMfa = "required_for_admins"
 )
 
 // Valid indicates whether the value is a known member of the TenantPolicyMfa enum.
 func (e TenantPolicyMfa) Valid() bool {
 	switch e {
-	case Off:
+	case TenantPolicyMfaOff:
 		return true
-	case Optional:
+	case TenantPolicyMfaOptional:
 		return true
-	case Required:
+	case TenantPolicyMfaRequired:
 		return true
-	case RequiredForAdmins:
+	case TenantPolicyMfaRequiredForAdmins:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TenantPolicyPasskeyAuthenticatorsMode.
+const (
+	TenantPolicyPasskeyAuthenticatorsModeAllow TenantPolicyPasskeyAuthenticatorsMode = "allow"
+	TenantPolicyPasskeyAuthenticatorsModeDeny  TenantPolicyPasskeyAuthenticatorsMode = "deny"
+	TenantPolicyPasskeyAuthenticatorsModeOff   TenantPolicyPasskeyAuthenticatorsMode = "off"
+)
+
+// Valid indicates whether the value is a known member of the TenantPolicyPasskeyAuthenticatorsMode enum.
+func (e TenantPolicyPasskeyAuthenticatorsMode) Valid() bool {
+	switch e {
+	case TenantPolicyPasskeyAuthenticatorsModeAllow:
+		return true
+	case TenantPolicyPasskeyAuthenticatorsModeDeny:
+		return true
+	case TenantPolicyPasskeyAuthenticatorsModeOff:
 		return true
 	default:
 		return false
@@ -898,6 +919,33 @@ type AdminClientPage struct {
 
 	// NextCursor Pass as cursor for the next page; null on the last
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// AdminPasskey defines model for AdminPasskey.
+type AdminPasskey struct {
+	// Aaguid All zeros when the authenticator didn't say
+	Aaguid openapi_types.UUID `json:"aaguid"`
+
+	// Allowed Whether the tenant's current passkey policy lets it sign in
+	Allowed bool `json:"allowed"`
+
+	// Attested The model was proven by attestation against FIDO metadata (ADR-0117)
+	Attested   bool               `json:"attested"`
+	CreatedAt  time.Time          `json:"created_at"`
+	Id         openapi_types.UUID `json:"id"`
+	Label      string             `json:"label"`
+	LastUsedAt *time.Time         `json:"last_used_at"`
+
+	// Model FIDO metadata's name for the AAGUID; empty when unknown. Only proven when attested
+	Model string `json:"model"`
+
+	// Synced May sync to other devices; null when unknown (ADR-0104)
+	Synced *bool `json:"synced"`
+}
+
+// AdminPasskeyList defines model for AdminPasskeyList.
+type AdminPasskeyList struct {
+	Passkeys []AdminPasskey `json:"passkeys"`
 }
 
 // AdminPermission defines model for AdminPermission.
@@ -1621,6 +1669,17 @@ type Overview struct {
 	WebhookFailures24h int `json:"webhook_failures_24h"`
 }
 
+// PasskeyModelList defines model for PasskeyModelList.
+type PasskeyModelList struct {
+	// Available False when Gatekeeper has no verified FIDO metadata
+	Available bool `json:"available"`
+	Models    []struct {
+		Aaguid      openapi_types.UUID `json:"aaguid"`
+		Description string             `json:"description"`
+		Revoked     bool               `json:"revoked"`
+	} `json:"models"`
+}
+
 // PermissionGrant defines model for PermissionGrant.
 type PermissionGrant struct {
 	Effect    PermissionGrantEffect `json:"effect"`
@@ -2058,8 +2117,14 @@ type TenantPolicy struct {
 		SmsEnabled             bool     `json:"sms_enabled"`
 	} `json:"otp"`
 
-	// Passkey Passkey rules; omitted keeps the stored ones (ADR-0104)
+	// Passkey Passkey rules; omitted keeps the stored ones (ADR-0104, ADR-0117)
 	Passkey *struct {
+		// Authenticators Authenticator models by AAGUID (ADR-0117): allow accepts only attested passkeys of listed models; deny refuses attested passkeys of listed models; with either, models FIDO metadata reports revoked or compromised are refused. Checked at registration and sign-in.
+		Authenticators *struct {
+			Aaguids *[]openapi_types.UUID                  `json:"aaguids,omitempty"`
+			Mode    *TenantPolicyPasskeyAuthenticatorsMode `json:"mode,omitempty"`
+		} `json:"authenticators,omitempty"`
+
 		// RequireDeviceBound Refuse passkeys that may sync to other devices, at registration and sign-in
 		RequireDeviceBound *bool `json:"require_device_bound,omitempty"`
 	} `json:"passkey,omitempty"`
@@ -2117,6 +2182,9 @@ type TenantPolicyAllowedMethods string
 
 // TenantPolicyMfa defines model for TenantPolicy.Mfa.
 type TenantPolicyMfa string
+
+// TenantPolicyPasskeyAuthenticatorsMode defines model for TenantPolicy.Passkey.Authenticators.Mode.
+type TenantPolicyPasskeyAuthenticatorsMode string
 
 // UserCreate defines model for UserCreate.
 type UserCreate struct {
@@ -3219,6 +3287,13 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/overview (the `AdminOverview` operationId).
 	AdminOverview(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminListPasskeyModels Authenticator models in FIDO metadata (FR-D29)
+	//
+	// For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).
+	//
+	// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
+	AdminListPasskeyModels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListPermissions List permissions
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -3660,6 +3735,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/impersonate (the `AdminImpersonateUser` operationId).
 	AdminImpersonateUser(ctx context.Context, id string, body AdminImpersonateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListUserPasskeys A user's passkeys (FR-D29)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).
+	//
+	// Corresponds with GET /v1/admin/users/{id}/passkeys (the `AdminListUserPasskeys` operationId).
+	AdminListUserPasskeys(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminDeleteUserPasskey Remove a user's passkey (FR-D29)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/passkeys/{passkey_id} (the `AdminDeleteUserPasskey` operationId).
+	AdminDeleteUserPasskey(ctx context.Context, id string, passkeyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminRevokePermissionWithBody Remove a direct grant
 	//
@@ -5360,6 +5449,23 @@ func (c *Client) AdminOverview(ctx context.Context, reqEditors ...RequestEditorF
 	return c.Client.Do(req)
 }
 
+// AdminListPasskeyModels Authenticator models in FIDO metadata (FR-D29)
+//
+// For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).
+//
+// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
+func (c *Client) AdminListPasskeyModels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListPasskeyModelsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListPermissions List permissions
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -6332,6 +6438,40 @@ func (c *Client) AdminImpersonateUserWithBody(ctx context.Context, id string, co
 // Corresponds with POST /v1/admin/users/{id}/impersonate (the `AdminImpersonateUser` operationId).
 func (c *Client) AdminImpersonateUser(ctx context.Context, id string, body AdminImpersonateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminImpersonateUserRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListUserPasskeys A user's passkeys (FR-D29)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).
+//
+// Corresponds with GET /v1/admin/users/{id}/passkeys (the `AdminListUserPasskeys` operationId).
+func (c *Client) AdminListUserPasskeys(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListUserPasskeysRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminDeleteUserPasskey Remove a user's passkey (FR-D29)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/passkeys/{passkey_id} (the `AdminDeleteUserPasskey` operationId).
+func (c *Client) AdminDeleteUserPasskey(ctx context.Context, id string, passkeyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeleteUserPasskeyRequest(c.Server, id, passkeyId)
 	if err != nil {
 		return nil, err
 	}
@@ -9565,6 +9705,33 @@ func NewAdminOverviewRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewAdminListPasskeyModelsRequest constructs an http.Request for the AdminListPasskeyModels method
+func NewAdminListPasskeyModelsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/passkey-models")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListPermissionsRequest constructs an http.Request for the AdminListPermissions method
 func NewAdminListPermissionsRequest(server string, params *AdminListPermissionsParams) (*http.Request, error) {
 	var err error
@@ -11261,6 +11428,81 @@ func NewAdminImpersonateUserRequestWithBody(server string, id string, contentTyp
 	return req, nil
 }
 
+// NewAdminListUserPasskeysRequest constructs an http.Request for the AdminListUserPasskeys method
+func NewAdminListUserPasskeysRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/passkeys", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminDeleteUserPasskeyRequest constructs an http.Request for the AdminDeleteUserPasskey method
+func NewAdminDeleteUserPasskeyRequest(server string, id string, passkeyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "passkey_id", passkeyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/passkeys/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminRevokePermissionRequest calls the generic AdminRevokePermission builder with application/json body
 func NewAdminRevokePermissionRequest(server string, id string, body AdminRevokePermissionJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -12741,6 +12983,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/overview (the `AdminOverview` operationId).
 	AdminOverviewWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminOverviewResponse, error)
 
+	// AdminListPasskeyModelsWithResponse Authenticator models in FIDO metadata (FR-D29)
+	//
+	// For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
+	AdminListPasskeyModelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListPasskeyModelsResponse, error)
+
 	// AdminListPermissionsWithResponse List permissions
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -13224,6 +13475,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/impersonate (the `AdminImpersonateUser` operationId).
 	AdminImpersonateUserWithResponse(ctx context.Context, id string, body AdminImpersonateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminImpersonateUserResponse, error)
+
+	// AdminListUserPasskeysWithResponse A user's passkeys (FR-D29)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/users/{id}/passkeys (the `AdminListUserPasskeys` operationId).
+	AdminListUserPasskeysWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListUserPasskeysResponse, error)
+
+	// AdminDeleteUserPasskeyWithResponse Remove a user's passkey (FR-D29)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/passkeys/{passkey_id} (the `AdminDeleteUserPasskey` operationId).
+	AdminDeleteUserPasskeyWithResponse(ctx context.Context, id string, passkeyId string, reqEditors ...RequestEditorFn) (*AdminDeleteUserPasskeyResponse, error)
 
 	// AdminRevokePermissionWithBodyWithResponse Remove a direct grant
 	//
@@ -17757,6 +18026,61 @@ func (r AdminOverviewResponse) ContentType() string {
 	return ""
 }
 
+type AdminListPasskeyModelsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PasskeyModelList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListPasskeyModelsResponse) GetJSON200() *PasskeyModelList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListPasskeyModelsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListPasskeyModelsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListPasskeyModelsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListPasskeyModelsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListPasskeyModelsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListPasskeyModelsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListPermissionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20581,6 +20905,130 @@ func (r AdminImpersonateUserResponse) ContentType() string {
 	return ""
 }
 
+type AdminListUserPasskeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminPasskeyList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListUserPasskeysResponse) GetJSON200() *AdminPasskeyList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListUserPasskeysResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListUserPasskeysResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListUserPasskeysResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListUserPasskeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListUserPasskeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListUserPasskeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListUserPasskeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminDeleteUserPasskeyResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminDeleteUserPasskeyResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminDeleteUserPasskeyResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminDeleteUserPasskeyResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminDeleteUserPasskeyResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminDeleteUserPasskeyResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminDeleteUserPasskeyResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminDeleteUserPasskeyResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminDeleteUserPasskeyResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminRevokePermissionResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -23046,6 +23494,21 @@ func (c *ClientWithResponses) AdminOverviewWithResponse(ctx context.Context, req
 	return ParseAdminOverviewResponse(rsp)
 }
 
+// AdminListPasskeyModelsWithResponse Authenticator models in FIDO metadata (FR-D29)
+//
+// For picking models by name in passkey.authenticators. Requires a tenant:admin token (ADR-0117).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
+func (c *ClientWithResponses) AdminListPasskeyModelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListPasskeyModelsResponse, error) {
+	rsp, err := c.AdminListPasskeyModels(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListPasskeyModelsResponse(rsp)
+}
+
 // AdminListPermissionsWithResponse List permissions
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -23852,6 +24315,36 @@ func (c *ClientWithResponses) AdminImpersonateUserWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseAdminImpersonateUserResponse(rsp)
+}
+
+// AdminListUserPasskeysWithResponse A user's passkeys (FR-D29)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin (ADR-0117).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/users/{id}/passkeys (the `AdminListUserPasskeys` operationId).
+func (c *ClientWithResponses) AdminListUserPasskeysWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListUserPasskeysResponse, error) {
+	rsp, err := c.AdminListUserPasskeys(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListUserPasskeysResponse(rsp)
+}
+
+// AdminDeleteUserPasskeyWithResponse Remove a user's passkey (FR-D29)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited as passkey.removed. Refused (409) when it is the user's last way to sign in (ADR-0054, ADR-0117).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/passkeys/{passkey_id} (the `AdminDeleteUserPasskey` operationId).
+func (c *ClientWithResponses) AdminDeleteUserPasskeyWithResponse(ctx context.Context, id string, passkeyId string, reqEditors ...RequestEditorFn) (*AdminDeleteUserPasskeyResponse, error) {
+	rsp, err := c.AdminDeleteUserPasskey(ctx, id, passkeyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminDeleteUserPasskeyResponse(rsp)
 }
 
 // AdminRevokePermissionWithBodyWithResponse Remove a direct grant
@@ -27570,6 +28063,46 @@ func ParseAdminOverviewResponse(rsp *http.Response) (*AdminOverviewResponse, err
 	return response, nil
 }
 
+// ParseAdminListPasskeyModelsResponse parses an HTTP response from a AdminListPasskeyModelsWithResponse call
+func ParseAdminListPasskeyModelsResponse(rsp *http.Response) (*AdminListPasskeyModelsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListPasskeyModelsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PasskeyModelList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListPermissionsResponse parses an HTTP response from a AdminListPermissionsWithResponse call
 func ParseAdminListPermissionsResponse(rsp *http.Response) (*AdminListPermissionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29823,6 +30356,103 @@ func ParseAdminImpersonateUserResponse(rsp *http.Response) (*AdminImpersonateUse
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListUserPasskeysResponse parses an HTTP response from a AdminListUserPasskeysWithResponse call
+func ParseAdminListUserPasskeysResponse(rsp *http.Response) (*AdminListUserPasskeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListUserPasskeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminPasskeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminDeleteUserPasskeyResponse parses an HTTP response from a AdminDeleteUserPasskeyWithResponse call
+func ParseAdminDeleteUserPasskeyResponse(rsp *http.Response) (*AdminDeleteUserPasskeyResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminDeleteUserPasskeyResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
