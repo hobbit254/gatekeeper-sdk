@@ -2165,6 +2165,12 @@ type TenantPolicy struct {
 		Block   *int  `json:"block,omitempty"`
 		Enabled *bool `json:"enabled,omitempty"`
 
+		// ExemptAsns Networks never counted as hosting or new, such as the company's VPN; not also in hosting_asns (ADR-0120)
+		ExemptAsns *[]int `json:"exempt_asns,omitempty"`
+
+		// HostingAsns Networks (AS numbers) this tenant adds to the hosting list (ADR-0120)
+		HostingAsns *[]int `json:"hosting_asns,omitempty"`
+
 		// StepUp Score at which a second factor is required
 		StepUp *int `json:"step_up,omitempty"`
 

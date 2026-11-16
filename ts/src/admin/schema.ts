@@ -3111,6 +3111,10 @@ export interface components {
                 /** @description Score at which sign-in is refused; above step_up; 101 never blocks */
                 block?: number;
                 enabled?: boolean;
+                /** @description Networks never counted as hosting or new, such as the company's VPN; not also in hosting_asns (ADR-0120) */
+                exempt_asns?: number[];
+                /** @description Networks (AS numbers) this tenant adds to the hosting list (ADR-0120) */
+                hosting_asns?: number[];
                 /** @description Score at which a second factor is required */
                 step_up?: number;
                 /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30, new_network 15, hosting_network 25, impossible_travel 45); 0 turns a signal off (ADR-0101, ADR-0116) */

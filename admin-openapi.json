@@ -3794,6 +3794,26 @@
               "enabled": {
                 "type": "boolean"
               },
+              "exempt_asns": {
+                "description": "Networks never counted as hosting or new, such as the company's VPN; not also in hosting_asns (ADR-0120)",
+                "items": {
+                  "maximum": 4294967295,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              "hosting_asns": {
+                "description": "Networks (AS numbers) this tenant adds to the hosting list (ADR-0120)",
+                "items": {
+                  "maximum": 4294967295,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
               "step_up": {
                 "description": "Score at which a second factor is required",
                 "maximum": 100,
@@ -4061,7 +4081,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.37.0"
+    "version": "0.38.0"
   },
   "openapi": "3.0.3",
   "paths": {
