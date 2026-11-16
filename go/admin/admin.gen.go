@@ -2081,14 +2081,17 @@ type TenantPolicy struct {
 		// StepUp Score at which a second factor is required
 		StepUp *int `json:"step_up,omitempty"`
 
-		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30); 0 turns a signal off (ADR-0101)
+		// Weights Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30, new_network 15, hosting_network 25, impossible_travel 45); 0 turns a signal off (ADR-0101, ADR-0116)
 		Weights *struct {
 			AccountFailures    *int `json:"account_failures,omitempty"`
 			DisposableEmail    *int `json:"disposable_email,omitempty"`
 			FastCountryChange  *int `json:"fast_country_change,omitempty"`
+			HostingNetwork     *int `json:"hosting_network,omitempty"`
+			ImpossibleTravel   *int `json:"impossible_travel,omitempty"`
 			IpFailures         *int `json:"ip_failures,omitempty"`
 			NewCountry         *int `json:"new_country,omitempty"`
 			NewDevice          *int `json:"new_device,omitempty"`
+			NewNetwork         *int `json:"new_network,omitempty"`
 			PushReported       *int `json:"push_reported,omitempty"`
 			SharedDevice       *int `json:"shared_device,omitempty"`
 			SignupBurstCountry *int `json:"signup_burst_country,omitempty"`

@@ -3608,7 +3608,7 @@
               },
               "weights": {
                 "additionalProperties": false,
-                "description": "Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30); 0 turns a signal off (ADR-0101)",
+                "description": "Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30, new_network 15, hosting_network 25, impossible_travel 45); 0 turns a signal off (ADR-0101, ADR-0116)",
                 "properties": {
                   "account_failures": {
                     "maximum": 100,
@@ -3625,6 +3625,16 @@
                     "minimum": 0,
                     "type": "integer"
                   },
+                  "hosting_network": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "impossible_travel": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
                   "ip_failures": {
                     "maximum": 100,
                     "minimum": 0,
@@ -3636,6 +3646,11 @@
                     "type": "integer"
                   },
                   "new_device": {
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "new_network": {
                     "maximum": 100,
                     "minimum": 0,
                     "type": "integer"
@@ -3852,7 +3867,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.33.0"
+    "version": "0.34.0"
   },
   "openapi": "3.0.3",
   "paths": {

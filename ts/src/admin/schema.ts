@@ -2974,14 +2974,17 @@ export interface components {
                 enabled?: boolean;
                 /** @description Score at which a second factor is required */
                 step_up?: number;
-                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30); 0 turns a signal off (ADR-0101) */
+                /** @description Points per signal, 0-100; omitted signals keep the defaults (new_device 30, new_country 25, fast_country_change 35, account_failures 15, ip_failures 20, tor_exit 40, push_reported 40, velocity_account 25, velocity_network 35, shared_device 30, disposable_email 60, signup_burst_network 40, signup_burst_country 30, new_network 15, hosting_network 25, impossible_travel 45); 0 turns a signal off (ADR-0101, ADR-0116) */
                 weights?: {
                     account_failures?: number;
                     disposable_email?: number;
                     fast_country_change?: number;
+                    hosting_network?: number;
+                    impossible_travel?: number;
                     ip_failures?: number;
                     new_country?: number;
                     new_device?: number;
+                    new_network?: number;
                     push_reported?: number;
                     shared_device?: number;
                     signup_burst_country?: number;
