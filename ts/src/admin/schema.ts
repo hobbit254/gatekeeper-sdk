@@ -2062,6 +2062,7 @@ export interface components {
             created_at?: string;
             /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095) */
             dpop_bound_access_tokens?: boolean;
+            encryption?: components["schemas"]["ClientEncryption"];
             first_party?: boolean;
             has_logo?: boolean;
             /** @description JSON sign-in for this first-party app (ADR-0082); never for m2m clients */
@@ -2248,6 +2249,26 @@ export interface components {
             /** @enum {string} */
             type: "public" | "confidential" | "m2m";
         };
+        /** @description Encrypt ID tokens and userinfo to this client's key (ADR-0121). Replaced whole on PATCH; {} turns encryption off. */
+        ClientEncryption: {
+            /** @enum {string} */
+            id_token_encrypted_response_alg?: "ECDH-ES+A256KW" | "RSA-OAEP-256";
+            /** @enum {string} */
+            id_token_encrypted_response_enc?: "A256GCM";
+            /** @description A JSON Web Key Set of public keys (use enc or none) */
+            jwks?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: uri
+             * @description An https URL serving the client's public JWKS; cached for an hour
+             */
+            jwks_uri?: string;
+            /** @enum {string} */
+            userinfo_encrypted_response_alg?: "ECDH-ES+A256KW" | "RSA-OAEP-256";
+            /** @enum {string} */
+            userinfo_encrypted_response_enc?: "A256GCM";
+        };
         ClientPatch: {
             access_ttl_sec?: number;
             /** @description Receive impersonation tokens by token exchange (ADR-0058); default false */
@@ -2257,6 +2278,7 @@ export interface components {
             backchannel_logout_uri?: string;
             /** @description Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095) */
             dpop_bound_access_tokens?: boolean;
+            encryption?: components["schemas"]["ClientEncryption"];
             /** @description First-party clients skip the consent screen; a client with headless_login must stay first-party (ADR-0087) */
             first_party?: boolean;
             /** @description JSON sign-in for this first-party app (ADR-0082); never for m2m clients */

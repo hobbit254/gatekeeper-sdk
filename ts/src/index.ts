@@ -3,6 +3,7 @@
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
 import { dpopSigner } from "./dpop.js";
+import { innerToken, type DecryptionKey } from "./jwe.js";
 import {
   calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
   type JSONWebKeySet, type JWK, type JWTPayload,
@@ -28,6 +29,8 @@ export interface GatekeeperConfig {
   /** This API's external origin (https://api.example.com) for checking DPoP
    * proofs behind a proxy; defaults to the request's own (ADR-0070). */
   publicUrl?: string;
+  /** Opens ID tokens encrypted to this client in verifyIdToken (ADR-0121). */
+  decryptionKey?: DecryptionKey;
   /** Injected clock in milliseconds (tests). */
   now?: () => number;
 }
@@ -130,6 +133,11 @@ export interface Gatekeeper {
   /** canOnFor for many resources, in order, 200 to a request. */
   canOnEachFor(userId: string, permission: string, resources: string[]): Promise<ResourceDecision[]>;
   /**
+   * Checks an ID token issued to clientId: signature, iss, aud, exp and, when given, nonce.
+   * An encrypted one is opened with opts.decryptionKey or the config's (ADR-0121).
+   */
+  verifyIdToken(raw: string, opts?: { nonce?: string; decryptionKey?: DecryptionKey }): Promise<JWTPayload>;
+  /**
    * Guards a route with a resource check, after express(): 403 when denied, 401 with the
    * step-up challenge when a fresher second factor would allow it, 503 when Gatekeeper can't answer.
    * A DPoP-bound token can't be forwarded without its holder's proof, so for one it checks with the
@@ -219,6 +227,20 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       }
       throw e;
     }
+  }
+
+  // verifyIdToken checks an ID token for this client, decrypting it first when encrypted (ADR-0121).
+  async function verifyIdToken(raw: string, opts: { nonce?: string; decryptionKey?: DecryptionKey } = {}): Promise<JWTPayload> {
+    const inner = await innerToken(raw, opts.decryptionKey ?? config.decryptionKey);
+    if (!keys) await refreshKeys();
+    if (!keys) throw new Error("no signing keys");
+    const v = { issuer, audience: config.clientId, algorithms: ["ES256"], clockTolerance: leeway };
+    const payload = await jwtVerify(inner, keys, v).catch(async (e: unknown) => {
+      if (e instanceof errors.JWKSNoMatchingKey && (await refreshKeys())) return jwtVerify(inner, keys!, v);
+      throw e;
+    }).then((r) => r.payload);
+    if (opts.nonce !== undefined && payload.nonce !== opts.nonce) throw new Error("gatekeeper: ID token nonce doesn't match");
+    return payload;
   }
 
   async function permissions(roles: string[], rv: number): Promise<{ perms: string[]; stepUp?: Record<string, number> }> {
@@ -412,6 +434,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     canOnEach: (token: string, permission: string, resources: string[]) => canOnEach(token, permission, resources),
     canOnFor,
     canOnEachFor,
+    verifyIdToken,
     requirePermissionOn(permission, resource): Middleware {
       return (req, res, next) => {
         const header = req.headers.authorization;
@@ -588,4 +611,5 @@ export function createClientCredentials(config: ClientCredentialsConfig): Client
 }
 
 export { generateDPoPKey } from "./dpop.js";
+export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";

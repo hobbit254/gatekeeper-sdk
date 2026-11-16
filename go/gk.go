@@ -5,6 +5,7 @@ package gk
 
 import (
 	"context"
+	"crypto"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +32,9 @@ type Config struct {
 	// PublicURL is this API's external origin (https://api.example.com) for
 	// checking DPoP proofs behind a proxy; empty uses the request's own.
 	PublicURL string
+	// DecryptionKey opens ID tokens and userinfo encrypted to this client
+	// (*ecdsa.PrivateKey or *rsa.PrivateKey, ADR-0121); nil reads only plain ones.
+	DecryptionKey crypto.PrivateKey
 }
 
 // Principal is the authenticated subject of a request.

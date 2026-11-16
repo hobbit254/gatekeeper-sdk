@@ -1,4 +1,4 @@
-import { SignJWT, exportJWK, generateKeyPair } from "jose";
+import { CompactEncrypt, SignJWT, exportJWK, generateKeyPair } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { AuthorizeError, LoginRequiredError, createBrowserClient } from "../src/browser.js";
 
@@ -26,7 +26,7 @@ function idToken(nonce: string, extra: Record<string, unknown> = {}) {
 }
 
 /** A fake Gatekeeper: JWKS, the token endpoint (code and refresh grants). */
-function server(opts: { nonce?: (n: string) => string; accessTTL?: number } = {}) {
+function server(opts: { nonce?: (n: string) => string; accessTTL?: number; encryptTo?: CryptoKey } = {}) {
   const seen: { grant: string; body: URLSearchParams }[] = [];
   let nonce = "";
   let n = 0;
@@ -37,18 +37,23 @@ function server(opts: { nonce?: (n: string) => string; accessTTL?: number } = {}
       const body = new URLSearchParams(String(init?.body));
       seen.push({ grant: body.get("grant_type") ?? "", body });
       n++;
+      let id = await idToken(opts.nonce ? opts.nonce(nonce) : nonce);
+      if (opts.encryptTo) {
+        id = await new CompactEncrypt(new TextEncoder().encode(id))
+          .setProtectedHeader({ alg: "ECDH-ES+A256KW", enc: "A256GCM", cty: "JWT", kid: "enc-1" }).encrypt(opts.encryptTo);
+      }
       return Response.json({ access_token: `at-${n}`, refresh_token: `rt-${n}`, token_type: "Bearer", expires_in: opts.accessTTL ?? 600,
-        id_token: await idToken(opts.nonce ? opts.nonce(nonce) : nonce) });
+        id_token: id });
     }
     return new Response("{}", { status: 404 });
   }) as typeof fetch;
   return { f, seen, setNonce: (x: string) => { nonce = x; } };
 }
 
-function client(f: typeof fetch, storage = new MemoryStorage(), now = () => Date.now()) {
+function client(f: typeof fetch, storage = new MemoryStorage(), now = () => Date.now(), decryptionKey?: CryptoKey) {
   const went: string[] = [];
   const c = createBrowserClient({ issuer, clientId: "spa", redirectUri, scope: "openid profile offline_access", fetch: f,
-    storage, navigate: (u) => { went.push(u); }, now });
+    storage, navigate: (u) => { went.push(u); }, now, decryptionKey });
   return { c, went, storage };
 }
 
@@ -129,5 +134,33 @@ describe("browser sign-in (FR-A21, ADR-0089)", () => {
     expect(out.searchParams.get("id_token_hint")).toBeTruthy();
     expect(out.searchParams.get("post_logout_redirect_uri")).toBe("https://app.test/");
     await expect(c.getAccessToken()).rejects.toBeInstanceOf(LoginRequiredError);
+  });
+});
+
+describe("encrypted ID tokens (FR-S15, ADR-0121)", () => {
+  it("opens them with the client's key and keeps the signed token for the logout hint", async () => {
+    const enc = await generateKeyPair("ECDH-ES+A256KW", { crv: "P-256", extractable: false });
+    const s = server({ encryptTo: enc.publicKey as CryptoKey });
+    const { c, went } = client(s.f, new MemoryStorage(), () => Date.now(), enc.privateKey as CryptoKey);
+    await c.loginWithRedirect();
+    const auth = new URL(went[0]);
+    s.setNonce(auth.searchParams.get("nonce") ?? "");
+    const user = await c.handleRedirectCallback(`${redirectUri}?code=c1&state=${auth.searchParams.get("state")}`);
+    expect(user.sub).toBe("u1");
+    await c.logout({ returnTo: "https://app.test/" });
+    expect(new URL(went[1]).searchParams.get("id_token_hint")?.split(".")).toHaveLength(3);
+  });
+
+  it("refuses them without a key, or with another", async () => {
+    const enc = await generateKeyPair("ECDH-ES+A256KW", { crv: "P-256" });
+    const other = await generateKeyPair("ECDH-ES+A256KW", { crv: "P-256" });
+    for (const k of [undefined, other.privateKey as CryptoKey]) {
+      const s = server({ encryptTo: enc.publicKey as CryptoKey });
+      const { c, went } = client(s.f, new MemoryStorage(), () => Date.now(), k);
+      await c.loginWithRedirect();
+      const auth = new URL(went[0]);
+      s.setNonce(auth.searchParams.get("nonce") ?? "");
+      await expect(c.handleRedirectCallback(`${redirectUri}?code=c1&state=${auth.searchParams.get("state")}`)).rejects.toThrow();
+    }
   });
 });

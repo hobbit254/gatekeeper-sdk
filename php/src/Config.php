@@ -22,6 +22,8 @@ final readonly class Config
         public int $leewaySec = 60,
         /** This API's external origin (https://api.example.com) for checking DPoP proofs behind a proxy (ADR-0070). */
         public string $publicUrl = '',
+        /** A PEM private key that opens ID tokens and userinfo encrypted to this client (ADR-0121). */
+        public string $decryptionKey = '',
     ) {
         $this->issuer = rtrim($issuer, '/');
     }

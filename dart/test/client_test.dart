@@ -130,4 +130,22 @@ void main() {
     expect(plain.actor, isNull);
     expect(plain.impersonationEndsAt, isNull);
   });
+
+  test('an encrypted ID token is opened by the app\'s decrypter and kept signed (ADR-0121)', () async {
+    const jwe = 'h.k.iv.ct.tag';
+    Gatekeeper make(IdTokenDecrypter? d) => Gatekeeper(config, idTokenDecrypter: d, httpClient: MockClient((r) async =>
+        http.Response(jsonEncode({'access_token': jwt({'sub': 'u1'}), 'id_token': jwe, 'expires_in': 600}), 200)));
+    var gk = make(_Decrypter());
+    var req = gk.authorizationRequest();
+    final t = await gk.handleRedirect(Uri.parse('com.acme.app:/cb?code=c1&state=${req.state}'), req);
+    expect(t.idToken, 'inner.signed.jwt', reason: 'the signed token, for id_token_hint');
+    gk = make(null);
+    req = gk.authorizationRequest();
+    await expectLater(gk.handleRedirect(Uri.parse('com.acme.app:/cb?code=c1&state=${req.state}'), req), throwsA(isA<GatekeeperException>()));
+  });
+}
+
+class _Decrypter implements IdTokenDecrypter {
+  @override
+  Future<String> decrypt(String jwe) async => jwe == 'h.k.iv.ct.tag' ? 'inner.signed.jwt' : throw StateError('wrong token');
 }

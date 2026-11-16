@@ -2,6 +2,7 @@
 // nonce live in sessionStorage for the round trip only; tokens stay in memory.
 import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } from "jose";
 import { dpopSigner, generateDPoPKey, indexedDBKeyStore, type DPoPKeyStore, type DPoPSigner } from "./dpop.js";
+import { innerToken, type DecryptionKey } from "./jwe.js";
 import { challenge, random, same, tokenRequest, type TokenResponse } from "./pkce.js";
 
 export type { DPoPKeyStore } from "./dpop.js";
@@ -27,6 +28,8 @@ export interface BrowserClientConfig {
   dpop?: boolean;
   /** Where the key is kept; defaults to IndexedDB. */
   dpopKeyStore?: DPoPKeyStore;
+  /** Opens ID tokens encrypted to this client (ADR-0121); ideally a non-extractable CryptoKey. */
+  decryptionKey?: DecryptionKey;
 }
 
 export interface LoginOptions {
@@ -95,7 +98,7 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
 
   async function verifyIDToken(raw: string, nonce: string): Promise<JWTPayload> {
     const resp = await f(`${issuer}/.well-known/jwks.json`);
-    const { payload } = await jwtVerify(raw, createLocalJWKSet((await resp.json()) as JSONWebKeySet),
+    const { payload } = await jwtVerify(await innerToken(raw, config.decryptionKey), createLocalJWKSet((await resp.json()) as JSONWebKeySet),
       { issuer, audience: config.clientId, currentDate: new Date(now()) });
     if (typeof payload.nonce !== "string" || !same(payload.nonce, nonce)) throw new Error("ID token nonce doesn't match this sign-in");
     return payload;
@@ -133,7 +136,7 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
         code: params.get("code") ?? "", redirect_uri: config.redirectUri, code_verifier: tx.verifier }, await dpop());
       if (!t.id_token) throw new Error("no ID token: request the openid scope");
       const claims = await verifyIDToken(t.id_token, tx.nonce);
-      keep(t);
+      keep({ ...t, id_token: await innerToken(t.id_token, config.decryptionKey) }); // the signed token, for id_token_hint
       return claims;
     },
 
@@ -147,7 +150,10 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
       const rt = session.refresh;
       refreshing ??= (async () => tokenRequest(f, issuer, { grant_type: "refresh_token", client_id: config.clientId, refresh_token: rt },
         await dpop()))()
-        .then((t) => { keep(t); return t.access_token; })
+        .then(async (t) => {
+          keep(t.id_token ? { ...t, id_token: await innerToken(t.id_token, config.decryptionKey) } : t);
+          return t.access_token;
+        })
         .catch((e) => { session = null; throw e instanceof Error ? new LoginRequiredError() : e; })
         .finally(() => { refreshing = null; });
       return refreshing;

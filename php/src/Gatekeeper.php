@@ -203,15 +203,16 @@ final class Gatekeeper
         );
     }
 
-    private function claims(string $token): \stdClass
+    /** Verifies a signed JWT from the issuer for $audience (default: this API); $typ null skips the typ check. */
+    private function claims(string $token, ?string $typ = 'at+jwt', ?string $audience = null): \stdClass
     {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             throw new InvalidTokenException('malformed');
         }
         $header = json_decode(JWT::urlsafeB64Decode($parts[0]));
-        if (!$header instanceof \stdClass || ($header->alg ?? '') !== 'ES256' || strcasecmp((string) ($header->typ ?? ''), 'at+jwt') !== 0) {
-            throw new InvalidTokenException('header: want alg ES256, typ at+jwt');
+        if (!$header instanceof \stdClass || ($header->alg ?? '') !== 'ES256' || ($typ !== null && strcasecmp((string) ($header->typ ?? ''), $typ) !== 0)) {
+            throw new InvalidTokenException('header: want alg ES256' . ($typ !== null ? ", typ {$typ}" : ''));
         }
         $kid = (string) ($header->kid ?? '');
         $keys = $this->keys(false);
@@ -238,10 +239,74 @@ final class Gatekeeper
             throw new InvalidTokenException('iss');
         }
         $aud = is_array($claims->aud ?? null) ? $claims->aud : [$claims->aud ?? null];
-        if (!in_array($this->config->audience, $aud, true)) {
+        if (!in_array($audience ?? $this->config->audience, $aud, true)) {
             throw new InvalidTokenException('aud');
         }
         return $claims;
+    }
+
+    /**
+     * Checks an ID token issued to this client (clientId), decrypting it first
+     * when it is encrypted to the client's key (FR-S15, ADR-0121).
+     *
+     * @return array<string, mixed>
+     * @throws InvalidTokenException
+     */
+    public function verifyIdToken(string $raw, ?string $nonce = null): array
+    {
+        $claims = (array) $this->claims($this->innerToken($raw), null, $this->config->clientId);
+        if ($nonce !== null && ($claims['nonce'] ?? null) !== $nonce) {
+            throw new InvalidTokenException('nonce');
+        }
+        return $claims;
+    }
+
+    /**
+     * Fetches the user's claims with $accessToken; an encrypted answer
+     * (application/jwt) is decrypted and checked like an ID token.
+     *
+     * @return array<string, mixed>
+     */
+    public function userInfo(string $accessToken): array
+    {
+        [$status, $body, $headers] = ($this->fetch)($this->config->issuer . '/oauth2/userinfo',
+            ['Accept' => 'application/json, application/jwt', 'Authorization' => 'Bearer ' . $accessToken]) + [2 => []];
+        if ($status !== 200) {
+            throw new InvalidTokenException("userinfo: status {$status}");
+        }
+        if (str_starts_with((string) ($headers['content-type'] ?? ''), 'application/jwt')) {
+            return (array) $this->claims($this->innerToken(trim($body)), null, $this->config->clientId);
+        }
+        $data = json_decode($body, true);
+        return is_array($data) ? $data : throw new InvalidTokenException('userinfo: not JSON');
+    }
+
+    /** The signed JWT inside $raw: $raw itself, or $raw decrypted with Config::$decryptionKey. */
+    private function innerToken(string $raw): string
+    {
+        if (count(explode('.', $raw)) !== 5) {
+            return $raw;
+        }
+        if ($this->config->decryptionKey === '') {
+            throw new InvalidTokenException('encrypted, and no decryptionKey is configured');
+        }
+        try {
+            $jwe = (new \Jose\Component\Encryption\Serializer\CompactSerializer())->unserialize($raw);
+            $algorithms = new \Jose\Component\Core\AlgorithmManager([
+                new \Jose\Component\Encryption\Algorithm\KeyEncryption\ECDHESA256KW(),
+                new \Jose\Component\Encryption\Algorithm\KeyEncryption\RSAOAEP256(),
+                new \Jose\Component\Encryption\Algorithm\ContentEncryption\A256GCM(),
+            ]);
+            $key = \Jose\Component\KeyManagement\JWKFactory::createFromKey($this->config->decryptionKey);
+            if (!(new \Jose\Component\Encryption\JWEDecrypter($algorithms))->decryptUsingKey($jwe, $key, 0)) {
+                throw new InvalidTokenException('decrypt');
+            }
+        } catch (InvalidTokenException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            throw new InvalidTokenException('decrypt', 0, $e);
+        }
+        return (string) $jwe->getPayload();
     }
 
     /** @return array<string, \Firebase\JWT\Key> */

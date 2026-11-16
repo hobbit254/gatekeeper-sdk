@@ -144,6 +144,72 @@ func (e ClientCreateType) Valid() bool {
 	}
 }
 
+// Defines values for ClientEncryptionIdTokenEncryptedResponseAlg.
+const (
+	ClientEncryptionIdTokenEncryptedResponseAlgECDHESA256KW ClientEncryptionIdTokenEncryptedResponseAlg = "ECDH-ES+A256KW"
+	ClientEncryptionIdTokenEncryptedResponseAlgRSAOAEP256   ClientEncryptionIdTokenEncryptedResponseAlg = "RSA-OAEP-256"
+)
+
+// Valid indicates whether the value is a known member of the ClientEncryptionIdTokenEncryptedResponseAlg enum.
+func (e ClientEncryptionIdTokenEncryptedResponseAlg) Valid() bool {
+	switch e {
+	case ClientEncryptionIdTokenEncryptedResponseAlgECDHESA256KW:
+		return true
+	case ClientEncryptionIdTokenEncryptedResponseAlgRSAOAEP256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientEncryptionIdTokenEncryptedResponseEnc.
+const (
+	ClientEncryptionIdTokenEncryptedResponseEncA256GCM ClientEncryptionIdTokenEncryptedResponseEnc = "A256GCM"
+)
+
+// Valid indicates whether the value is a known member of the ClientEncryptionIdTokenEncryptedResponseEnc enum.
+func (e ClientEncryptionIdTokenEncryptedResponseEnc) Valid() bool {
+	switch e {
+	case ClientEncryptionIdTokenEncryptedResponseEncA256GCM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientEncryptionUserinfoEncryptedResponseAlg.
+const (
+	ClientEncryptionUserinfoEncryptedResponseAlgECDHESA256KW ClientEncryptionUserinfoEncryptedResponseAlg = "ECDH-ES+A256KW"
+	ClientEncryptionUserinfoEncryptedResponseAlgRSAOAEP256   ClientEncryptionUserinfoEncryptedResponseAlg = "RSA-OAEP-256"
+)
+
+// Valid indicates whether the value is a known member of the ClientEncryptionUserinfoEncryptedResponseAlg enum.
+func (e ClientEncryptionUserinfoEncryptedResponseAlg) Valid() bool {
+	switch e {
+	case ClientEncryptionUserinfoEncryptedResponseAlgECDHESA256KW:
+		return true
+	case ClientEncryptionUserinfoEncryptedResponseAlgRSAOAEP256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientEncryptionUserinfoEncryptedResponseEnc.
+const (
+	ClientEncryptionUserinfoEncryptedResponseEncA256GCM ClientEncryptionUserinfoEncryptedResponseEnc = "A256GCM"
+)
+
+// Valid indicates whether the value is a known member of the ClientEncryptionUserinfoEncryptedResponseEnc enum.
+func (e ClientEncryptionUserinfoEncryptedResponseEnc) Valid() bool {
+	switch e {
+	case ClientEncryptionUserinfoEncryptedResponseEncA256GCM:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DataExportStatus.
 const (
 	DataExportStatusBuilding   DataExportStatus = "building"
@@ -896,8 +962,11 @@ type AdminClient struct {
 
 	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)
 	DpopBoundAccessTokens *bool `json:"dpop_bound_access_tokens,omitempty"`
-	FirstParty            *bool `json:"first_party,omitempty"`
-	HasLogo               *bool `json:"has_logo,omitempty"`
+
+	// Encryption Encrypt ID tokens and userinfo to this client's key (ADR-0121). Replaced whole on PATCH; {} turns encryption off.
+	Encryption *ClientEncryption `json:"encryption,omitempty"`
+	FirstParty *bool             `json:"first_party,omitempty"`
+	HasLogo    *bool             `json:"has_logo,omitempty"`
 
 	// HeadlessLogin JSON sign-in for this first-party app (ADR-0082); never for m2m clients
 	HeadlessLogin  *bool            `json:"headless_login,omitempty"`
@@ -1132,6 +1201,32 @@ type ClientCreate struct {
 // ClientCreateType defines model for ClientCreate.Type.
 type ClientCreateType string
 
+// ClientEncryption Encrypt ID tokens and userinfo to this client's key (ADR-0121). Replaced whole on PATCH; {} turns encryption off.
+type ClientEncryption struct {
+	IdTokenEncryptedResponseAlg *ClientEncryptionIdTokenEncryptedResponseAlg `json:"id_token_encrypted_response_alg,omitempty"`
+	IdTokenEncryptedResponseEnc *ClientEncryptionIdTokenEncryptedResponseEnc `json:"id_token_encrypted_response_enc,omitempty"`
+
+	// Jwks A JSON Web Key Set of public keys (use enc or none)
+	Jwks *map[string]interface{} `json:"jwks,omitempty"`
+
+	// JwksUri An https URL serving the client's public JWKS; cached for an hour
+	JwksUri                      *string                                       `json:"jwks_uri,omitempty"`
+	UserinfoEncryptedResponseAlg *ClientEncryptionUserinfoEncryptedResponseAlg `json:"userinfo_encrypted_response_alg,omitempty"`
+	UserinfoEncryptedResponseEnc *ClientEncryptionUserinfoEncryptedResponseEnc `json:"userinfo_encrypted_response_enc,omitempty"`
+}
+
+// ClientEncryptionIdTokenEncryptedResponseAlg defines model for ClientEncryption.IdTokenEncryptedResponseAlg.
+type ClientEncryptionIdTokenEncryptedResponseAlg string
+
+// ClientEncryptionIdTokenEncryptedResponseEnc defines model for ClientEncryption.IdTokenEncryptedResponseEnc.
+type ClientEncryptionIdTokenEncryptedResponseEnc string
+
+// ClientEncryptionUserinfoEncryptedResponseAlg defines model for ClientEncryption.UserinfoEncryptedResponseAlg.
+type ClientEncryptionUserinfoEncryptedResponseAlg string
+
+// ClientEncryptionUserinfoEncryptedResponseEnc defines model for ClientEncryption.UserinfoEncryptedResponseEnc.
+type ClientEncryptionUserinfoEncryptedResponseEnc string
+
 // ClientPatch defines model for ClientPatch.
 type ClientPatch struct {
 	AccessTtlSec *int `json:"access_ttl_sec,omitempty"`
@@ -1144,6 +1239,9 @@ type ClientPatch struct {
 
 	// DpopBoundAccessTokens Require DPoP proofs at the token endpoint and bind tokens to the key (RFC 9449, ADR-0070); default false. Public clients must also send dpop_jkt at /authorize; m2m clients may be flagged (ADR-0095)
 	DpopBoundAccessTokens *bool `json:"dpop_bound_access_tokens,omitempty"`
+
+	// Encryption Encrypt ID tokens and userinfo to this client's key (ADR-0121). Replaced whole on PATCH; {} turns encryption off.
+	Encryption *ClientEncryption `json:"encryption,omitempty"`
 
 	// FirstParty First-party clients skip the consent screen; a client with headless_login must stay first-party (ADR-0087)
 	FirstParty *bool `json:"first_party,omitempty"`

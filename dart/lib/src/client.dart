@@ -131,9 +131,17 @@ abstract class DpopSigner {
   Future<List<int>> sign(List<int> input);
 }
 
+/// Opens ID tokens encrypted to this app (ADR-0121) with a key the app holds,
+/// such as one in the platform keystore; the SDK never sees the private key.
+abstract class IdTokenDecrypter {
+  /// Decrypts [jwe], a compact JWE (ECDH-ES+A256KW or RSA-OAEP-256 with
+  /// A256GCM), and returns the signed JWT inside it.
+  Future<String> decrypt(String jwe);
+}
+
 /// The SDK. One per app; safe to share.
 class Gatekeeper {
-  Gatekeeper(this.config, {TokenStore? store, http.Client? httpClient, DateTime Function()? clock, this.dpop})
+  Gatekeeper(this.config, {TokenStore? store, http.Client? httpClient, DateTime Function()? clock, this.dpop, this.idTokenDecrypter})
       : store = store ?? MemoryTokenStore(),
         _http = httpClient ?? http.Client(),
         _now = clock ?? (() => DateTime.now().toUtc());
@@ -142,6 +150,9 @@ class Gatekeeper {
 
   /// Binds this app's tokens to a device key with DPoP when set (ADR-0070).
   final DpopSigner? dpop;
+
+  /// Opens encrypted ID tokens (ADR-0121); the signed token inside is kept, for id_token_hint.
+  final IdTokenDecrypter? idTokenDecrypter;
   final TokenStore store;
   final http.Client _http;
   final DateTime Function() _now;
@@ -305,10 +316,17 @@ class Gatekeeper {
       throw GatekeeperException((body['error_description'] ?? body['error'] ?? 'token request failed').toString());
     }
     final previous = await store.read();
+    var idToken = body['id_token'] as String?;
+    if (idToken != null && idToken.split('.').length == 5) {
+      final d = idTokenDecrypter;
+      if (d == null) throw GatekeeperException('the ID token is encrypted and no IdTokenDecrypter is set');
+      idToken = await d.decrypt(idToken);
+      if (idToken.split('.').length != 3) throw GatekeeperException('the decrypted ID token is not a signed JWT');
+    }
     final t = Tokens(
       accessToken: body['access_token'] as String,
       refreshToken: (body['refresh_token'] as String?) ?? previous?.refreshToken,
-      idToken: (body['id_token'] as String?) ?? previous?.idToken,
+      idToken: idToken ?? previous?.idToken,
       expiresAt: _now().add(Duration(seconds: (body['expires_in'] as num?)?.toInt() ?? 600)),
     );
     await store.write(t);
