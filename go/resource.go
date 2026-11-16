@@ -37,6 +37,10 @@ func (s *SDK) CanOn(ctx context.Context, accessToken, permission, resource strin
 
 // CanOnEach decides permission on each resource, in order, 200 to a request.
 func (s *SDK) CanOnEach(ctx context.Context, accessToken, permission string, resources []string) ([]ResourceDecision, error) {
+	return s.canOnEach(ctx, accessToken, "", permission, resources)
+}
+
+func (s *SDK) canOnEach(ctx context.Context, accessToken, userID, permission string, resources []string) ([]ResourceDecision, error) {
 	out := make([]ResourceDecision, 0, len(resources))
 	for start := 0; start < len(resources); start += maxBatch {
 		chunk := resources[start:min(start+maxBatch, len(resources))]
@@ -47,7 +51,11 @@ func (s *SDK) CanOnEach(ctx context.Context, accessToken, permission string, res
 		var res struct {
 			Results []ResourceDecision `json:"results"`
 		}
-		if err := s.authz(ctx, accessToken, "/v1/authz/check-batch", map[string]any{"checks": checks}, &res); err != nil {
+		body := map[string]any{"checks": checks}
+		if userID != "" {
+			body["user_id"] = userID
+		}
+		if err := s.authz(ctx, accessToken, "/v1/authz/check-batch", body, &res); err != nil {
 			return nil, err
 		}
 		if len(res.Results) != len(chunk) {
@@ -71,6 +79,14 @@ func (s *SDK) authz(ctx context.Context, token, path string, body, out any) erro
 		return fmt.Errorf("%w: %v", ErrCheckUnavailable, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusForbidden {
+		var p struct {
+			Type string `json:"type"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&p) == nil && strings.HasSuffix(p.Type, "user-not-served") {
+			return ErrNotServed
+		}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%w: status %d", ErrCheckUnavailable, resp.StatusCode)
 	}
@@ -84,16 +100,30 @@ func (s *SDK) authz(ctx context.Context, token, path string, body, out any) erro
 // the object id ("campaign:42") from the request. Use it after Middleware.
 // It answers 403 when denied, 401 with the RFC 9470 challenge when a fresher
 // second factor would allow it, and 503 when Gatekeeper can't answer. A
-// DPoP-bound token can't be forwarded without its holder's proof, so it is 403.
+// DPoP-bound token can't be forwarded without its holder's proof, so for one
+// the check uses the client's credentials (CanOnFor, ADR-0119); without them it is 403.
 func (s *SDK) RequirePermissionOn(permission string, resource func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if _, verified := FromContext(r.Context()); !ok || !verified {
+			p, verified := FromContext(r.Context())
+			if !verified {
 				http.Error(w, "forbidden", http.StatusForbidden)
 				return
 			}
-			d, err := s.CanOn(r.Context(), token, permission, resource(r))
+			var d ResourceDecision
+			var err error
+			if token, bearer := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); bearer && p.JKT == "" {
+				d, err = s.CanOn(r.Context(), token, permission, resource(r))
+			} else if s.cfg.ClientSecret != "" {
+				d, err = s.CanOnFor(r.Context(), p.Sub, permission, resource(r))
+			} else {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
+			if errors.Is(err, ErrNotServed) {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			switch {
 			case err != nil:
 				http.Error(w, "authorization unavailable", http.StatusServiceUnavailable)

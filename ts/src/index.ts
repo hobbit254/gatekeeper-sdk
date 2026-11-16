@@ -102,6 +102,14 @@ export interface Res {
 export type Next = (err?: unknown) => void;
 export type Middleware = (req: Req, res: Res, next: Next) => void;
 
+/** The user has no live sign-in through this client, so Gatekeeper won't check for them (ADR-0119). */
+export class NotServedError extends Error {
+  constructor() {
+    super("gatekeeper: the user has no live sign-in through this client");
+    this.name = "NotServedError";
+  }
+}
+
 export interface Gatekeeper {
   /** Runs the TOKENS.md checklist and returns the Principal. */
   verify(token: string): Promise<Principal>;
@@ -114,9 +122,18 @@ export interface Gatekeeper {
   /** canOn for many resources, in order, 200 to a request. */
   canOnEach(token: string, permission: string, resources: string[]): Promise<ResourceDecision[]>;
   /**
+   * canOn for userId with this client's own credentials (scope authz:check), for users whose
+   * tokens are DPoP-bound (ADR-0119). Rejects with NotServedError when the user has no live
+   * sign-in through this client.
+   */
+  canOnFor(userId: string, permission: string, resource: string): Promise<ResourceDecision>;
+  /** canOnFor for many resources, in order, 200 to a request. */
+  canOnEachFor(userId: string, permission: string, resources: string[]): Promise<ResourceDecision[]>;
+  /**
    * Guards a route with a resource check, after express(): 403 when denied, 401 with the
    * step-up challenge when a fresher second factor would allow it, 503 when Gatekeeper can't answer.
-   * A DPoP-bound token can't be forwarded without its holder's proof, so it is 403.
+   * A DPoP-bound token can't be forwarded without its holder's proof, so for one it checks with the
+   * client's credentials (canOnFor); without a clientSecret it is 403.
    */
   requirePermissionOn(permission: string, resource: (req: Req) => string): Middleware;
 }
@@ -344,37 +361,70 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     } catch (e) {
       throw new Error(`gatekeeper: resource check unavailable: ${String(e)}`);
     }
+    if (res.status === 403) {
+      const p = (await res.json().catch(() => ({}))) as { type?: string };
+      if (typeof p.type === "string" && p.type.endsWith("user-not-served")) throw new NotServedError();
+    }
     if (res.status !== 200) throw new Error(`gatekeeper: resource check unavailable: status ${res.status}`);
     return (await res.json()) as T;
   }
+  let cc: { token: string; until: number } | undefined;
+  let ccInflight: Promise<string> | undefined;
+  async function clientToken(): Promise<string> {
+    if (!config.clientSecret) throw new Error("gatekeeper: on-behalf checks need clientId and clientSecret");
+    if (cc && now() < cc.until) return cc.token;
+    ccInflight ??= (async () => {
+      const form = new URLSearchParams({ grant_type: "client_credentials", scope: "authz:check" });
+      if (config.audience) form.set("audience", config.audience);
+      const res = await doFetch(`${issuer}/oauth2/token`, { method: "POST", body: form.toString(), headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: "Basic " + Buffer.from(`${encodeURIComponent(config.clientId)}:${encodeURIComponent(config.clientSecret ?? "")}`).toString("base64") } });
+      if (res.status !== 200) throw new Error(`gatekeeper: resource check unavailable: client credentials refused (${res.status})`);
+      const t = (await res.json()) as { access_token: string; expires_in: number };
+      cc = { token: t.access_token, until: now() + (t.expires_in - 60) * 1000 };
+      return t.access_token;
+    })().finally(() => { ccInflight = undefined; });
+    return ccInflight;
+  }
   const canOn = (token: string, permission: string, resource: string) =>
     authz<ResourceDecision>(token, "/v1/authz/check", { permission, resource });
-  async function canOnEach(token: string, permission: string, resources: string[]): Promise<ResourceDecision[]> {
+  async function canOnEach(token: string, permission: string, resources: string[], userId?: string): Promise<ResourceDecision[]> {
     const out: ResourceDecision[] = [];
     for (let i = 0; i < resources.length; i += 200) {
       const chunk = resources.slice(i, i + 200);
       const r = await authz<{ results: ResourceDecision[] }>(token, "/v1/authz/check-batch",
-        { checks: chunk.map((resource) => ({ permission, resource })) });
+        { checks: chunk.map((resource) => ({ permission, resource })), ...(userId ? { user_id: userId } : {}) });
       if (r.results.length !== chunk.length) throw new Error("gatekeeper: resource check unavailable: wrong number of answers");
       out.push(...r.results);
     }
     return out;
   }
 
+  const canOnFor = async (userId: string, permission: string, resource: string) =>
+    authz<ResourceDecision>(await clientToken(), "/v1/authz/check", { user_id: userId, permission, resource });
+  const canOnEachFor = async (userId: string, permission: string, resources: string[]) =>
+    canOnEach(await clientToken(), permission, resources, userId);
+
   return {
     verify,
     verifyDPoP,
     canOn,
-    canOnEach,
+    canOnEach: (token: string, permission: string, resources: string[]) => canOnEach(token, permission, resources),
+    canOnFor,
+    canOnEachFor,
     requirePermissionOn(permission, resource): Middleware {
       return (req, res, next) => {
         const header = req.headers.authorization;
         const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : "";
-        if (!token || !req.gatekeeper) {
+        const p = req.gatekeeper;
+        let decide: Promise<ResourceDecision>;
+        if (p && token && !p.jkt) decide = canOn(token, permission, resource(req));
+        else if (p && config.clientSecret) decide = canOnFor(p.sub, permission, resource(req)); // DPoP-bound (ADR-0119)
+        else {
           res.status(403).end("forbidden");
           return;
         }
-        canOn(token, permission, resource(req)).then((d) => {
+        decide.then((d) => {
           if (d.allow) return next();
           if (d.max_age) {
             res.setHeader("WWW-Authenticate", `Bearer error="insufficient_user_authentication", max_age="${d.max_age}", acr_values="mfa"`);
@@ -382,7 +432,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
             return;
           }
           res.status(403).end("forbidden");
-        }, () => { res.status(503).end("authorization unavailable"); });
+        }, (e) => { if (e instanceof NotServedError) res.status(403).end("forbidden"); else res.status(503).end("authorization unavailable"); });
       };
     },
     express(): Middleware {

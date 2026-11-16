@@ -15,7 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
  * on "campaign:<the {campaign} route parameter>". After 'gatekeeper'. Answers
  * 403 when denied, 401 with the step-up challenge when a fresher second factor
  * would allow it, 503 when Gatekeeper can't answer. A DPoP-bound token can't
- * be forwarded without its holder's proof, so it is 403.
+ * be forwarded without its holder's proof, so for one it checks with the
+ * client's credentials (canOnFor, ADR-0119); without a client secret it is 403.
  */
 final class RequirePermissionOn
 {
@@ -29,11 +30,19 @@ final class RequirePermissionOn
         $permission = implode(':', $args); // Laravel may split the permission on ':' too
         $token = str_starts_with((string) $request->header('Authorization', ''), 'Bearer ') ? (string) $request->bearerToken() : '';
         $id = $request->route($param);
-        if ($token === '' || GatekeeperAuthenticate::principal($request) === null || !is_scalar($id) || (string) $id === '') {
+        $p = GatekeeperAuthenticate::principal($request);
+        if ($p === null || !is_scalar($id) || (string) $id === '') {
+            return new Response('forbidden', 403);
+        }
+        $onBehalf = $token === '' || $p->jkt !== ''; // DPoP-bound: the client checks for the user (ADR-0119)
+        if ($onBehalf && !$this->gatekeeper->checksOnBehalf()) {
             return new Response('forbidden', 403);
         }
         try {
-            $d = $this->gatekeeper->canOn($token, $permission, $param . ':' . $id);
+            $d = $onBehalf ? $this->gatekeeper->canOnFor($p->sub, $permission, $param . ':' . $id)
+                : $this->gatekeeper->canOn($token, $permission, $param . ':' . $id);
+        } catch (\Gatekeeper\NotServedException) {
+            return new Response('forbidden', 403);
         } catch (\RuntimeException) {
             return new Response('authorization unavailable', 503);
         }

@@ -318,12 +318,67 @@ final class Gatekeeper
         return $out;
     }
 
+    /**
+     * canOn for $userId with this client's own credentials (scope authz:check),
+     * for users whose tokens are DPoP-bound (FR-Z16, ADR-0119).
+     *
+     * @return array{allow: bool, matched_by: string, max_age?: int}
+     * @throws NotServedException when the user has no live sign-in through this client
+     * @throws \RuntimeException when Gatekeeper can't answer
+     */
+    public function canOnFor(string $userId, string $permission, string $resource): array
+    {
+        return $this->authz($this->clientToken(), '/v1/authz/check', ['user_id' => $userId, 'permission' => $permission, 'resource' => $resource]);
+    }
+
+    /**
+     * canOnFor for many resources, in order, 200 to a request.
+     *
+     * @param list<string> $resources
+     * @return list<array{allow: bool, matched_by: string, max_age?: int}>
+     */
+    public function canOnEachFor(string $userId, string $permission, array $resources): array
+    {
+        $token = $this->clientToken();
+        $out = [];
+        foreach (array_chunk($resources, 200) as $chunk) {
+            $r = $this->authz($token, '/v1/authz/check-batch', ['user_id' => $userId, 'checks' => array_map(
+                fn (string $res) => ['permission' => $permission, 'resource' => $res], $chunk)]);
+            if (!is_array($r['results'] ?? null) || count($r['results']) !== count($chunk)) {
+                throw new \RuntimeException('gatekeeper: resource check unavailable: wrong number of answers');
+            }
+            array_push($out, ...$r['results']);
+        }
+        return $out;
+    }
+
+    /** Whether on-behalf checks can be made: a client secret is configured. */
+    public function checksOnBehalf(): bool
+    {
+        return $this->config->clientSecret !== '';
+    }
+
+    private ?ClientCredentials $authzClient = null;
+
+    private function clientToken(): string
+    {
+        if (!$this->checksOnBehalf()) {
+            throw new \LogicException('gatekeeper: on-behalf checks need clientId and clientSecret');
+        }
+        $this->authzClient ??= new ClientCredentials($this->config->issuer . '/oauth2/token', $this->config->clientId,
+            $this->config->clientSecret, 'authz:check', $this->config->audience, null, $this->fetch);
+        return $this->authzClient->token();
+    }
+
     /** @return array<string, mixed> */
     private function authz(string $token, string $path, array $body): array
     {
         [$status, $raw] = ($this->fetch)($this->config->issuer . $path,
             ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Authorization' => 'Bearer ' . $token], json_encode($body));
         $data = json_decode($raw, true);
+        if ($status === 403 && is_array($data) && str_ends_with((string) ($data['type'] ?? ''), 'user-not-served')) {
+            throw new NotServedException('gatekeeper: the user has no live sign-in through this client');
+        }
         if ($status !== 200 || !is_array($data)) {
             throw new \RuntimeException("gatekeeper: resource check unavailable: status {$status}");
         }

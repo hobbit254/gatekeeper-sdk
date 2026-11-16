@@ -96,6 +96,8 @@ type SDK struct {
 	keyMu    sync.Mutex
 	keyCache map[[32]byte]keyEntry
 
+	cc ccToken // the client's authz:check token (ADR-0119)
+
 	mu         sync.Mutex
 	keys       jose.JSONWebKeySet
 	lastFetch  time.Time

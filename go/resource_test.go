@@ -104,3 +104,55 @@ func TestRequirePermissionOn(t *testing.T) {
 		t.Errorf("challenge %q", got)
 	}
 }
+
+// FR-Z16 (ADR-0119): a DPoP-bound principal is checked with the client's own credentials.
+func TestRequirePermissionOnChecksDPoPUsersOnBehalf(t *testing.T) {
+	tokens := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/oauth2/token" {
+			tokens++
+			id, secret, _ := r.BasicAuth()
+			if id != "shop" || secret != "s3cret" || r.FormValue("scope") != "authz:check" {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "cc", "expires_in": 300})
+			return
+		}
+		var b map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		if r.Header.Get("Authorization") != "Bearer cc" || b["user_id"] != "u-1" {
+			w.WriteHeader(http.StatusForbidden)
+			_, _ = w.Write([]byte(`{"type":"https://gatekeeper.dev/problems/user-not-served"}`))
+			return
+		}
+		_ = json.NewEncoder(w).Encode(ResourceDecision{Allow: b["resource"] == "campaign:1"})
+	}))
+	defer srv.Close()
+	run := func(s *SDK, sub string) int {
+		h := s.RequirePermissionOn("campaign:update", func(*http.Request) string { return "campaign:1" })(
+			http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+		req := httptest.NewRequest(http.MethodPost, "/", nil)
+		req.Header.Set("Authorization", "DPoP tok")
+		req = req.WithContext(context.WithValue(req.Context(), ctxKey{}, &Principal{Sub: sub, JKT: "thumb"}))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code
+	}
+	with := New(Config{Issuer: srv.URL, HTTPClient: srv.Client(), ClientID: "shop", ClientSecret: "s3cret"})
+	if got := run(with, "u-1"); got != 200 {
+		t.Fatalf("served user: %d", got)
+	}
+	if got := run(with, "u-2"); got != 403 {
+		t.Fatalf("not served: %d", got)
+	}
+	if tokens != 1 {
+		t.Fatalf("the client token is cached: %d fetches", tokens)
+	}
+	if got := run(New(Config{Issuer: srv.URL, HTTPClient: srv.Client(), ClientID: "shop"}), "u-1"); got != 403 {
+		t.Fatalf("no secret: refused as before, got %d", got)
+	}
+	if _, err := New(Config{Issuer: srv.URL, HTTPClient: srv.Client()}).CanOnFor(context.Background(), "u-1", "campaign:update", "campaign:1"); err != ErrNoClientCredentials {
+		t.Fatalf("CanOnFor without credentials: %v", err)
+	}
+}

@@ -612,6 +612,52 @@
         },
         "type": "object"
       },
+      "AdminUserList": {
+        "properties": {
+          "everyone": {
+            "type": "boolean"
+          },
+          "relations": {
+            "type": "boolean"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "users": {
+            "items": {
+              "properties": {
+                "display_name": {
+                  "type": "string"
+                },
+                "user_id": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "user_id",
+                "display_name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users",
+          "roles",
+          "everyone",
+          "relations",
+          "truncated"
+        ],
+        "type": "object"
+      },
       "AnchorCheck": {
         "properties": {
           "anchors": {
@@ -723,6 +769,28 @@
             "type": "string"
           }
         },
+        "type": "object"
+      },
+      "AuthzListUsers": {
+        "properties": {
+          "org_id": {
+            "description": "An org id or slug that scopes grants",
+            "type": "string"
+          },
+          "permission": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "resource": {
+            "description": "type:id, e.g. campaign:42",
+            "maxLength": 320,
+            "type": "string"
+          }
+        },
+        "required": [
+          "permission",
+          "resource"
+        ],
         "type": "object"
       },
       "Branding": {
@@ -3993,7 +4061,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.36.0"
+    "version": "0.37.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -5424,6 +5492,52 @@
           }
         ],
         "summary": "Test a decision for a user: RBAC and relations, without step-up (FR-D19)"
+      }
+    },
+    "/v1/admin/fga/list-users": {
+      "post": {
+        "description": "Tenant admins only; audited as fga.list_users (ADR-0119).",
+        "operationId": "adminFGAListUsers",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuthzListUsers"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserList"
+                }
+              }
+            },
+            "description": "Users and roles"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Who can access an object, by name (FR-D30)"
       }
     },
     "/v1/admin/fga/model": {

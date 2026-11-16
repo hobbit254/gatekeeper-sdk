@@ -476,6 +476,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/fga/list-users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Who can access an object, by name (FR-D30)
+         * @description Tenant admins only; audited as fga.list_users (ADR-0119).
+         */
+        post: operations["adminFGAListUsers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/fga/model": {
         parameters: {
             query?: never;
@@ -2140,6 +2160,17 @@ export interface components {
             slug?: string;
             status?: string;
         };
+        AdminUserList: {
+            everyone: boolean;
+            relations: boolean;
+            roles: string[];
+            truncated: boolean;
+            users: {
+                display_name: string;
+                /** Format: uuid */
+                user_id: string;
+            }[];
+        };
         AnchorCheck: {
             anchors: number;
             broken_at_seq: number;
@@ -2174,6 +2205,13 @@ export interface components {
             target_id?: string;
             target_type?: string;
             user_agent?: string;
+        };
+        AuthzListUsers: {
+            /** @description An org id or slug that scopes grants */
+            org_id?: string;
+            permission: string;
+            /** @description type:id, e.g. campaign:42 */
+            resource: string;
         };
         /** @description ADR-0049. accent must give white text 4.5:1 contrast. */
         Branding: {
@@ -3955,6 +3993,34 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    adminFGAListUsers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthzListUsers"];
+            };
+        };
+        responses: {
+            /** @description Users and roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     adminFGAModel: {
