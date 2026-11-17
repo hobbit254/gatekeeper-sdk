@@ -2,6 +2,8 @@ module github.com/kevinm/gatekeeper/sdk/go
 
 go 1.26.0
 
+toolchain go1.26.11
+
 require (
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/oapi-codegen/runtime v1.8.0
