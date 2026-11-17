@@ -234,7 +234,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     const inner = await innerToken(raw, opts.decryptionKey ?? config.decryptionKey);
     if (!keys) await refreshKeys();
     if (!keys) throw new Error("no signing keys");
-    const v = { issuer, audience: config.clientId, algorithms: ["ES256"], clockTolerance: leeway };
+    const v = { issuer, audience: config.clientId, algorithms: ["ES256", "EdDSA"], clockTolerance: leeway }; // EdDSA per client (ADR-0124); access tokens stay ES256
     const payload = await jwtVerify(inner, keys, v).catch(async (e: unknown) => {
       if (e instanceof errors.JWKSNoMatchingKey && (await refreshKeys())) return jwtVerify(inner, keys!, v);
       throw e;

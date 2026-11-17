@@ -84,6 +84,24 @@ func (e AccessRequestStatus) Valid() bool {
 	}
 }
 
+// Defines values for AdminClientIdTokenSignedResponseAlg.
+const (
+	AdminClientIdTokenSignedResponseAlgES256 AdminClientIdTokenSignedResponseAlg = "ES256"
+	AdminClientIdTokenSignedResponseAlgEdDSA AdminClientIdTokenSignedResponseAlg = "EdDSA"
+)
+
+// Valid indicates whether the value is a known member of the AdminClientIdTokenSignedResponseAlg enum.
+func (e AdminClientIdTokenSignedResponseAlg) Valid() bool {
+	switch e {
+	case AdminClientIdTokenSignedResponseAlgES256:
+		return true
+	case AdminClientIdTokenSignedResponseAlgEdDSA:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AdminClientType.
 const (
 	AdminClientTypeConfidential AdminClientType = "confidential"
@@ -117,6 +135,24 @@ func (e BrandingDefaultLocale) Valid() bool {
 	case En:
 		return true
 	case Sw:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientCreateIdTokenSignedResponseAlg.
+const (
+	ClientCreateIdTokenSignedResponseAlgES256 ClientCreateIdTokenSignedResponseAlg = "ES256"
+	ClientCreateIdTokenSignedResponseAlgEdDSA ClientCreateIdTokenSignedResponseAlg = "EdDSA"
+)
+
+// Valid indicates whether the value is a known member of the ClientCreateIdTokenSignedResponseAlg enum.
+func (e ClientCreateIdTokenSignedResponseAlg) Valid() bool {
+	switch e {
+	case ClientCreateIdTokenSignedResponseAlgES256:
+		return true
+	case ClientCreateIdTokenSignedResponseAlgEdDSA:
 		return true
 	default:
 		return false
@@ -204,6 +240,24 @@ const (
 func (e ClientEncryptionUserinfoEncryptedResponseEnc) Valid() bool {
 	switch e {
 	case ClientEncryptionUserinfoEncryptedResponseEncA256GCM:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientPatchIdTokenSignedResponseAlg.
+const (
+	ClientPatchIdTokenSignedResponseAlgES256 ClientPatchIdTokenSignedResponseAlg = "ES256"
+	ClientPatchIdTokenSignedResponseAlgEdDSA ClientPatchIdTokenSignedResponseAlg = "EdDSA"
+)
+
+// Valid indicates whether the value is a known member of the ClientPatchIdTokenSignedResponseAlg enum.
+func (e ClientPatchIdTokenSignedResponseAlg) Valid() bool {
+	switch e {
+	case ClientPatchIdTokenSignedResponseAlgES256:
+		return true
+	case ClientPatchIdTokenSignedResponseAlgEdDSA:
 		return true
 	default:
 		return false
@@ -1005,15 +1059,21 @@ type AdminClient struct {
 	HasLogo    *bool             `json:"has_logo,omitempty"`
 
 	// HeadlessLogin JSON sign-in for this first-party app (ADR-0082); never for m2m clients
-	HeadlessLogin  *bool            `json:"headless_login,omitempty"`
-	HomepageUrl    *string          `json:"homepage_url,omitempty"`
-	Id             *string          `json:"id,omitempty"`
-	Name           *string          `json:"name,omitempty"`
-	PostLogoutUris *[]string        `json:"post_logout_uris,omitempty"`
-	RedirectUris   *[]string        `json:"redirect_uris,omitempty"`
-	RefreshTtlSec  *int             `json:"refresh_ttl_sec,omitempty"`
-	Type           *AdminClientType `json:"type,omitempty"`
+	HeadlessLogin *bool   `json:"headless_login,omitempty"`
+	HomepageUrl   *string `json:"homepage_url,omitempty"`
+	Id            *string `json:"id,omitempty"`
+
+	// IdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+	IdTokenSignedResponseAlg *AdminClientIdTokenSignedResponseAlg `json:"id_token_signed_response_alg,omitempty"`
+	Name                     *string                              `json:"name,omitempty"`
+	PostLogoutUris           *[]string                            `json:"post_logout_uris,omitempty"`
+	RedirectUris             *[]string                            `json:"redirect_uris,omitempty"`
+	RefreshTtlSec            *int                                 `json:"refresh_ttl_sec,omitempty"`
+	Type                     *AdminClientType                     `json:"type,omitempty"`
 }
+
+// AdminClientIdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+type AdminClientIdTokenSignedResponseAlg string
 
 // AdminClientType defines model for AdminClient.Type.
 type AdminClientType string
@@ -1226,6 +1286,9 @@ type ClientCreate struct {
 	// HomepageUrl https; linked from the consent screen
 	HomepageUrl *string `json:"homepage_url,omitempty"`
 
+	// IdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+	IdTokenSignedResponseAlg *ClientCreateIdTokenSignedResponseAlg `json:"id_token_signed_response_alg,omitempty"`
+
 	// Name Shown on the consent screen beside the client id (ADR-0090)
 	Name           *string          `json:"name,omitempty"`
 	PostLogoutUris *[]string        `json:"post_logout_uris,omitempty"`
@@ -1233,6 +1296,9 @@ type ClientCreate struct {
 	RefreshTtlSec  *int             `json:"refresh_ttl_sec,omitempty"`
 	Type           ClientCreateType `json:"type"`
 }
+
+// ClientCreateIdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+type ClientCreateIdTokenSignedResponseAlg string
 
 // ClientCreateType defines model for ClientCreate.Type.
 type ClientCreateType string
@@ -1288,12 +1354,18 @@ type ClientPatch struct {
 	// HomepageUrl https; linked from the consent screen
 	HomepageUrl *string `json:"homepage_url,omitempty"`
 
+	// IdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+	IdTokenSignedResponseAlg *ClientPatchIdTokenSignedResponseAlg `json:"id_token_signed_response_alg,omitempty"`
+
 	// Name Shown on the consent screen beside the client id (ADR-0090)
 	Name           *string   `json:"name,omitempty"`
 	PostLogoutUris *[]string `json:"post_logout_uris,omitempty"`
 	RedirectUris   *[]string `json:"redirect_uris,omitempty"`
 	RefreshTtlSec  *int      `json:"refresh_ttl_sec,omitempty"`
 }
+
+// ClientPatchIdTokenSignedResponseAlg Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+type ClientPatchIdTokenSignedResponseAlg string
 
 // CompliancePackList defines model for CompliancePackList.
 type CompliancePackList struct {

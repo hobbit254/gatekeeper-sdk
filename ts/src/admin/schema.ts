@@ -2069,6 +2069,11 @@ export interface components {
             headless_login?: boolean;
             homepage_url?: string;
             id?: string;
+            /**
+             * @description Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+             * @enum {string}
+             */
+            id_token_signed_response_alg?: "ES256" | "EdDSA";
             name?: string;
             post_logout_uris?: string[];
             redirect_uris?: string[];
@@ -2241,6 +2246,11 @@ export interface components {
             first_party?: boolean;
             /** @description https; linked from the consent screen */
             homepage_url?: string;
+            /**
+             * @description Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+             * @enum {string}
+             */
+            id_token_signed_response_alg?: "ES256" | "EdDSA";
             /** @description Shown on the consent screen beside the client id (ADR-0090) */
             name?: string;
             post_logout_uris?: string[];
@@ -2285,6 +2295,11 @@ export interface components {
             headless_login?: boolean;
             /** @description https; linked from the consent screen */
             homepage_url?: string;
+            /**
+             * @description Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).
+             * @enum {string}
+             */
+            id_token_signed_response_alg?: "ES256" | "EdDSA";
             /** @description Shown on the consent screen beside the client id (ADR-0090) */
             name?: string;
             post_logout_uris?: string[];

@@ -1,0 +1,22 @@
+name: gatekeeper_flutter
+description: Flutter companion to gatekeeper_sdk - secure token storage, system-browser sign-in and auth state for widgets (ADR-0125).
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_secure_storage: 11.2.0
+  flutter_web_auth_2: 5.1.0
+  gatekeeper_sdk:
+    path: ../dart
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  http: ^1.2.2 # MockClient for the token endpoint in tests
+  lints: ^5.0.0

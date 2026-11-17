@@ -2,6 +2,8 @@ package gk
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,15 +37,21 @@ func (s *SDK) unwrap(raw string) (string, error) {
 	return string(inner), nil
 }
 
-// signedClaims verifies a signed JWT from the issuer and returns its claims.
+// signedClaims verifies a signed ID token or userinfo JWT from the issuer and
+// returns its claims. ES256 or EdDSA (a client can opt in, ADR-0124); the key
+// named by kid must be of the alg's type. Access tokens never come here.
 func (s *SDK) signedClaims(ctx context.Context, raw string) (map[string]any, error) {
-	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256})
+	jws, err := jose.ParseSigned(raw, []jose.SignatureAlgorithm{jose.ES256, jose.EdDSA})
 	if err != nil || len(jws.Signatures) != 1 {
 		return nil, fmt.Errorf("%w: parse", ErrInvalidToken)
 	}
-	key, err := s.key(ctx, jws.Signatures[0].Protected.KeyID)
+	h := jws.Signatures[0].Protected
+	key, err := s.key(ctx, h.KeyID)
 	if err != nil {
 		return nil, err
+	}
+	if !keyFits(h.Algorithm, key) {
+		return nil, fmt.Errorf("%w: alg %s does not match key %s", ErrInvalidToken, h.Algorithm, h.KeyID)
 	}
 	payload, err := jws.Verify(key)
 	if err != nil {
@@ -128,4 +136,15 @@ func (s *SDK) UserInfo(ctx context.Context, accessToken string) (map[string]any,
 		return nil, fmt.Errorf("%w: aud", ErrInvalidToken)
 	}
 	return c, nil
+}
+
+// keyFits reports whether key is the kind alg signs with.
+func keyFits(alg string, key any) bool {
+	switch key.(type) {
+	case *ecdsa.PublicKey:
+		return alg == string(jose.ES256)
+	case ed25519.PublicKey:
+		return alg == string(jose.EdDSA)
+	}
+	return false
 }

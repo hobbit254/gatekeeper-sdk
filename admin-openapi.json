@@ -313,6 +313,14 @@
           "id": {
             "type": "string"
           },
+          "id_token_signed_response_alg": {
+            "description": "Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).",
+            "enum": [
+              "ES256",
+              "EdDSA"
+            ],
+            "type": "string"
+          },
           "name": {
             "type": "string"
           },
@@ -881,6 +889,14 @@
             "description": "https; linked from the consent screen",
             "type": "string"
           },
+          "id_token_signed_response_alg": {
+            "description": "Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).",
+            "enum": [
+              "ES256",
+              "EdDSA"
+            ],
+            "type": "string"
+          },
           "name": {
             "description": "Shown on the consent screen beside the client id (ADR-0090)",
             "maxLength": 60,
@@ -999,6 +1015,14 @@
           },
           "homepage_url": {
             "description": "https; linked from the consent screen",
+            "type": "string"
+          },
+          "id_token_signed_response_alg": {
+            "description": "Signs the client's ID tokens (and its signed userinfo JWT when encrypted). Default ES256 (ADR-0124).",
+            "enum": [
+              "ES256",
+              "EdDSA"
+            ],
             "type": "string"
           },
           "name": {
@@ -4150,7 +4174,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.41.0"
+    "version": "0.42.0"
   },
   "openapi": "3.0.3",
   "paths": {

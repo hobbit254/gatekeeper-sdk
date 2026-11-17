@@ -87,6 +87,9 @@ final class Gatekeeper
     private const DPOP_SKEW = 60;
     private const DPOP_ALGS = ['ES256', 'RS256', 'EdDSA'];
 
+    /** ID tokens and userinfo JWTs: EdDSA for clients that opt in (ADR-0124). */
+    private const ID_TOKEN_ALGS = ['ES256', 'EdDSA'];
+
     /**
      * Checks a request's DPoP proof for a DPoP-bound principal (RFC 9449,
      * ADR-0070): signed by the bound key, for this method and URL (query
@@ -203,16 +206,22 @@ final class Gatekeeper
         );
     }
 
-    /** Verifies a signed JWT from the issuer for $audience (default: this API); $typ null skips the typ check. */
-    private function claims(string $token, ?string $typ = 'at+jwt', ?string $audience = null): \stdClass
+    /**
+     * Verifies a signed JWT from the issuer for $audience (default: this API); $typ null skips the typ check.
+     * Access tokens allow only ES256; ID tokens and userinfo also EdDSA (ADR-0124). php-jwt refuses a key
+     * whose alg differs from the header's, so a header can't borrow the other ring's key.
+     *
+     * @param list<string> $algs
+     */
+    private function claims(string $token, ?string $typ = 'at+jwt', ?string $audience = null, array $algs = ['ES256']): \stdClass
     {
         $parts = explode('.', $token);
         if (count($parts) !== 3) {
             throw new InvalidTokenException('malformed');
         }
         $header = json_decode(JWT::urlsafeB64Decode($parts[0]));
-        if (!$header instanceof \stdClass || ($header->alg ?? '') !== 'ES256' || ($typ !== null && strcasecmp((string) ($header->typ ?? ''), $typ) !== 0)) {
-            throw new InvalidTokenException('header: want alg ES256' . ($typ !== null ? ", typ {$typ}" : ''));
+        if (!$header instanceof \stdClass || !in_array($header->alg ?? '', $algs, true) || ($typ !== null && strcasecmp((string) ($header->typ ?? ''), $typ) !== 0)) {
+            throw new InvalidTokenException('header: want alg ' . implode(' or ', $algs) . ($typ !== null ? ", typ {$typ}" : ''));
         }
         $kid = (string) ($header->kid ?? '');
         $keys = $this->keys(false);
@@ -254,7 +263,7 @@ final class Gatekeeper
      */
     public function verifyIdToken(string $raw, ?string $nonce = null): array
     {
-        $claims = (array) $this->claims($this->innerToken($raw), null, $this->config->clientId);
+        $claims = (array) $this->claims($this->innerToken($raw), null, $this->config->clientId, self::ID_TOKEN_ALGS);
         if ($nonce !== null && ($claims['nonce'] ?? null) !== $nonce) {
             throw new InvalidTokenException('nonce');
         }
@@ -275,7 +284,7 @@ final class Gatekeeper
             throw new InvalidTokenException("userinfo: status {$status}");
         }
         if (str_starts_with((string) ($headers['content-type'] ?? ''), 'application/jwt')) {
-            return (array) $this->claims($this->innerToken(trim($body)), null, $this->config->clientId);
+            return (array) $this->claims($this->innerToken(trim($body)), null, $this->config->clientId, self::ID_TOKEN_ALGS);
         }
         $data = json_decode($body, true);
         return is_array($data) ? $data : throw new InvalidTokenException('userinfo: not JSON');
