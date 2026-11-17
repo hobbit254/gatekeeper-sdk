@@ -657,6 +657,42 @@ func (e LegalDocumentInputKind) Valid() bool {
 	}
 }
 
+// Defines values for OnboardingStepId.
+const (
+	OnboardingStepIdAppClient     OnboardingStepId = "app_client"
+	OnboardingStepIdBranding      OnboardingStepId = "branding"
+	OnboardingStepIdDomain        OnboardingStepId = "domain"
+	OnboardingStepIdFirstSignIn   OnboardingStepId = "first_sign_in"
+	OnboardingStepIdRoles         OnboardingStepId = "roles"
+	OnboardingStepIdSecondAdmin   OnboardingStepId = "second_admin"
+	OnboardingStepIdSignInMethods OnboardingStepId = "sign_in_methods"
+	OnboardingStepIdWebhook       OnboardingStepId = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the OnboardingStepId enum.
+func (e OnboardingStepId) Valid() bool {
+	switch e {
+	case OnboardingStepIdAppClient:
+		return true
+	case OnboardingStepIdBranding:
+		return true
+	case OnboardingStepIdDomain:
+		return true
+	case OnboardingStepIdFirstSignIn:
+		return true
+	case OnboardingStepIdRoles:
+		return true
+	case OnboardingStepIdSecondAdmin:
+		return true
+	case OnboardingStepIdSignInMethods:
+		return true
+	case OnboardingStepIdWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PermissionGrantEffect.
 const (
 	PermissionGrantEffectAllow PermissionGrantEffect = "allow"
@@ -1841,6 +1877,30 @@ type MemberList struct {
 	Members []Member `json:"members"`
 }
 
+// Onboarding defines model for Onboarding.
+type Onboarding struct {
+	// Complete Every required step done; every optional one done or not needed
+	Complete bool             `json:"complete"`
+	Steps    []OnboardingStep `json:"steps"`
+}
+
+// OnboardingMark defines model for OnboardingMark.
+type OnboardingMark struct {
+	NotNeeded bool `json:"not_needed"`
+}
+
+// OnboardingStep defines model for OnboardingStep.
+type OnboardingStep struct {
+	// Done Worked out from the tenant's state
+	Done      bool             `json:"done"`
+	Id        OnboardingStepId `json:"id"`
+	NotNeeded bool             `json:"not_needed"`
+	Required  bool             `json:"required"`
+}
+
+// OnboardingStepId defines model for OnboardingStep.Id.
+type OnboardingStepId string
+
 // Org defines model for Org.
 type Org struct {
 	CreatedAt time.Time `json:"created_at"`
@@ -2711,6 +2771,9 @@ type AdminRespondToIncidentJSONRequestBody = IncidentResponseCreate
 // AdminCreateInvitationJSONRequestBody defines body for AdminCreateInvitation for application/json ContentType.
 type AdminCreateInvitationJSONRequestBody = InvitationCreate
 
+// AdminSetOnboardingStepJSONRequestBody defines body for AdminSetOnboardingStep for application/json ContentType.
+type AdminSetOnboardingStepJSONRequestBody = OnboardingMark
+
 // AdminCreateOrgJSONRequestBody defines body for AdminCreateOrg for application/json ContentType.
 type AdminCreateOrgJSONRequestBody = OrgCreate
 
@@ -3301,6 +3364,25 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/admin/keys (the `AdminListKeys` operationId).
 	AdminListKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminOnboarding The setup checklist (FR-D32, ADR-0129)
+	//
+	// Corresponds with GET /v1/admin/onboarding (the `AdminOnboarding` operationId).
+	AdminOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminSetOnboardingStepWithBody Mark an optional setup step not needed, or needed again (ADR-0129)
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+	AdminSetOnboardingStepWithBody(ctx context.Context, step string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminSetOnboardingStep Mark an optional setup step not needed, or needed again (ADR-0129)
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+	AdminSetOnboardingStep(ctx context.Context, step string, body AdminSetOnboardingStepJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgs Organizations (FR-Z6, ADR-0060)
 	//
@@ -5181,6 +5263,55 @@ func (c *Client) AdminResendInvitation(ctx context.Context, id string, reqEditor
 // Corresponds with GET /v1/admin/keys (the `AdminListKeys` operationId).
 func (c *Client) AdminListKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminListKeysRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminOnboarding The setup checklist (FR-D32, ADR-0129)
+//
+// Corresponds with GET /v1/admin/onboarding (the `AdminOnboarding` operationId).
+func (c *Client) AdminOnboarding(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminOnboardingRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminSetOnboardingStepWithBody Mark an optional setup step not needed, or needed again (ADR-0129)
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+func (c *Client) AdminSetOnboardingStepWithBody(ctx context.Context, step string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminSetOnboardingStepRequestWithBody(c.Server, step, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminSetOnboardingStep Mark an optional setup step not needed, or needed again (ADR-0129)
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+func (c *Client) AdminSetOnboardingStep(ctx context.Context, step string, body AdminSetOnboardingStepJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminSetOnboardingStepRequest(c.Server, step, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9148,6 +9279,80 @@ func NewAdminListKeysRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewAdminOnboardingRequest constructs an http.Request for the AdminOnboarding method
+func NewAdminOnboardingRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/onboarding")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminSetOnboardingStepRequest calls the generic AdminSetOnboardingStep builder with application/json body
+func NewAdminSetOnboardingStepRequest(server string, step string, body AdminSetOnboardingStepJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminSetOnboardingStepRequestWithBody(server, step, "application/json", bodyReader)
+}
+
+// NewAdminSetOnboardingStepRequestWithBody constructs an http.Request for the AdminSetOnboardingStep method, with any body, and a specified content type
+func NewAdminSetOnboardingStepRequestWithBody(server string, step string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "step", step, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/onboarding/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminListOrgsRequest constructs an http.Request for the AdminListOrgs method
 func NewAdminListOrgsRequest(server string) (*http.Request, error) {
 	var err error
@@ -13103,6 +13308,27 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/keys (the `AdminListKeys` operationId).
 	AdminListKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListKeysResponse, error)
 
+	// AdminOnboardingWithResponse The setup checklist (FR-D32, ADR-0129)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/onboarding (the `AdminOnboarding` operationId).
+	AdminOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminOnboardingResponse, error)
+
+	// AdminSetOnboardingStepWithBodyWithResponse Mark an optional setup step not needed, or needed again (ADR-0129)
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+	AdminSetOnboardingStepWithBodyWithResponse(ctx context.Context, step string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetOnboardingStepResponse, error)
+
+	// AdminSetOnboardingStepWithResponse Mark an optional setup step not needed, or needed again (ADR-0129)
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+	AdminSetOnboardingStepWithResponse(ctx context.Context, step string, body AdminSetOnboardingStepJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminSetOnboardingStepResponse, error)
+
 	// AdminListOrgsWithResponse Organizations (FR-Z6, ADR-0060)
 	//
 	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -16988,6 +17214,130 @@ func (r AdminListKeysResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminListKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminOnboardingResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Onboarding
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminOnboardingResponse) GetJSON200() *Onboarding {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminOnboardingResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminOnboardingResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminOnboardingResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminOnboardingResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminOnboardingResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminOnboardingResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminSetOnboardingStepResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Onboarding
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminSetOnboardingStepResponse) GetJSON200() *Onboarding {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminSetOnboardingStepResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminSetOnboardingStepResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminSetOnboardingStepResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminSetOnboardingStepResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminSetOnboardingStepResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminSetOnboardingStepResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminSetOnboardingStepResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminSetOnboardingStepResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23528,6 +23878,45 @@ func (c *ClientWithResponses) AdminListKeysWithResponse(ctx context.Context, req
 	return ParseAdminListKeysResponse(rsp)
 }
 
+// AdminOnboardingWithResponse The setup checklist (FR-D32, ADR-0129)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/onboarding (the `AdminOnboarding` operationId).
+func (c *ClientWithResponses) AdminOnboardingWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminOnboardingResponse, error) {
+	rsp, err := c.AdminOnboarding(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminOnboardingResponse(rsp)
+}
+
+// AdminSetOnboardingStepWithBodyWithResponse Mark an optional setup step not needed, or needed again (ADR-0129)
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+func (c *ClientWithResponses) AdminSetOnboardingStepWithBodyWithResponse(ctx context.Context, step string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetOnboardingStepResponse, error) {
+	rsp, err := c.AdminSetOnboardingStepWithBody(ctx, step, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminSetOnboardingStepResponse(rsp)
+}
+
+// AdminSetOnboardingStepWithResponse Mark an optional setup step not needed, or needed again (ADR-0129)
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/onboarding/{step} (the `AdminSetOnboardingStep` operationId).
+func (c *ClientWithResponses) AdminSetOnboardingStepWithResponse(ctx context.Context, step string, body AdminSetOnboardingStepJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminSetOnboardingStepResponse, error) {
+	rsp, err := c.AdminSetOnboardingStep(ctx, step, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminSetOnboardingStepResponse(rsp)
+}
+
 // AdminListOrgsWithResponse Organizations (FR-Z6, ADR-0060)
 //
 // Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
@@ -27454,6 +27843,100 @@ func ParseAdminListKeysResponse(rsp *http.Response) (*AdminListKeysResponse, err
 			return nil, err
 		}
 		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminOnboardingResponse parses an HTTP response from a AdminOnboardingWithResponse call
+func ParseAdminOnboardingResponse(rsp *http.Response) (*AdminOnboardingResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminOnboardingResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Onboarding
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminSetOnboardingStepResponse parses an HTTP response from a AdminSetOnboardingStepWithResponse call
+func ParseAdminSetOnboardingStepResponse(rsp *http.Response) (*AdminSetOnboardingStepResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminSetOnboardingStepResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Onboarding
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Problem

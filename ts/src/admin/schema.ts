@@ -708,6 +708,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The setup checklist (FR-D32, ADR-0129) */
+        get: operations["adminOnboarding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/onboarding/{step}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark an optional setup step not needed, or needed again (ADR-0129) */
+        put: operations["adminSetOnboardingStep"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs": {
         parameters: {
             query?: never;
@@ -2700,6 +2734,22 @@ export interface components {
         MemberList: {
             members: components["schemas"]["Member"][];
         };
+        Onboarding: {
+            /** @description Every required step done; every optional one done or not needed */
+            complete: boolean;
+            steps: components["schemas"]["OnboardingStep"][];
+        };
+        OnboardingMark: {
+            not_needed: boolean;
+        };
+        OnboardingStep: {
+            /** @description Worked out from the tenant's state */
+            done: boolean;
+            /** @enum {string} */
+            id: "app_client" | "sign_in_methods" | "second_admin" | "first_sign_in" | "roles" | "branding" | "webhook" | "domain";
+            not_needed: boolean;
+            required: boolean;
+        };
         Org: {
             /** Format: date-time */
             created_at: string;
@@ -4419,6 +4469,58 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminOnboarding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checklist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    adminSetOnboardingStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                step: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingMark"];
+            };
+        };
+        responses: {
+            /** @description Checklist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Onboarding"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
