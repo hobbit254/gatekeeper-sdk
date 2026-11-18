@@ -3599,7 +3599,7 @@ type ClientInterface interface {
 
 	// AdminPutOrgSSOWithBody Create or replace an organization's SAML or OIDC connection
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3608,7 +3608,7 @@ type ClientInterface interface {
 
 	// AdminPutOrgSSO Create or replace an organization's SAML or OIDC connection
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5807,7 +5807,7 @@ func (c *Client) AdminGetOrgSSO(ctx context.Context, id string, reqEditors ...Re
 
 // AdminPutOrgSSOWithBody Create or replace an organization's SAML or OIDC connection
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 //
 // Takes any type of body and a specified content type.
 //
@@ -5826,7 +5826,7 @@ func (c *Client) AdminPutOrgSSOWithBody(ctx context.Context, id string, contentT
 
 // AdminPutOrgSSO Create or replace an organization's SAML or OIDC connection
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13574,7 +13574,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminPutOrgSSOWithBodyWithResponse Create or replace an organization's SAML or OIDC connection
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13583,7 +13583,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminPutOrgSSOWithResponse Create or replace an organization's SAML or OIDC connection
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -24324,7 +24324,7 @@ func (c *ClientWithResponses) AdminGetOrgSSOWithResponse(ctx context.Context, id
 
 // AdminPutOrgSSOWithBodyWithResponse Create or replace an organization's SAML or OIDC connection
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -24339,7 +24339,7 @@ func (c *ClientWithResponses) AdminPutOrgSSOWithBodyWithResponse(ctx context.Con
 
 // AdminPutOrgSSOWithResponse Create or replace an organization's SAML or OIDC connection
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Without any of the IdP's details (metadata_xml, metadata_url, issuer, client_id, client_secret) it only sets enabled: with no connection yet it saves a disabled draft, so sp's addresses exist before the IdP's app does; otherwise it turns the connection off or on and keeps the IdP's details and secret. Enabling a connection without the IdP's details, or switching protocol without them, is 422 (ADR-0131).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
