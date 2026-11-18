@@ -1,0 +1,33 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - depguard
+    - gosec
+    - revive
+  settings:
+    revive:
+      rules:
+        - name: exported # every exported identifier documented
+        - name: package-comments
+        - name: blank-imports
+        - name: context-as-argument
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: indent-error-flow
+        - name: var-naming
+    depguard:
+      rules:
+        crypto-rand-only:
+          list-mode: lax
+          files:
+            - $all
+          deny:
+            - pkg: math/rand
+              desc: "use crypto/rand"
+
+formatters:
+  enable:
+    - gofmt

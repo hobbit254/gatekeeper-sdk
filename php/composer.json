@@ -1,8 +1,13 @@
 {
-  "name": "gatekeeper/laravel",
-  "description": "Gatekeeper PHP SDK and Laravel middleware: verify access tokens, resolve permissions, guard routes (ADR-0038)",
+  "name": "hobbit254/gatekeeper-laravel",
+  "description": "Gatekeeper PHP SDK and Laravel middleware: verify access tokens, resolve permissions, guard routes",
   "type": "library",
-  "license": "proprietary",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/hobbit254/gatekeeper-sdk",
+  "support": {
+    "issues": "https://github.com/hobbit254/gatekeeper-sdk/issues",
+    "source": "https://github.com/hobbit254/gatekeeper-sdk/tree/main/php"
+  },
   "require": {
     "php": "^8.3",
     "ext-curl": "*",

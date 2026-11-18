@@ -1,14 +1,24 @@
 {
-  "name": "@gatekeeper/sdk",
+  "name": "@hobbit254/gatekeeper-sdk",
   "version": "0.1.0",
-  "description": "Gatekeeper TypeScript SDK: verify access tokens, guard routes, sign in by redirect or headless, typed admin client (ADR-0038, ADR-0088, ADR-0089)",
-  "license": "UNLICENSED",
-  "private": true,
+  "description": "Gatekeeper TypeScript SDK: verify access tokens, guard routes, sign in by redirect or headless, typed admin client",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hobbit254/gatekeeper-sdk.git",
+    "directory": "ts"
+  },
+  "homepage": "https://github.com/hobbit254/gatekeeper-sdk#readme",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=22"

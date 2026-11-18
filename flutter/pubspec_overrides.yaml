@@ -1,0 +1,5 @@
+# This repository's own builds use the Dart SDK next to it; the release
+# workflow deletes this file, so pub.dev users get gatekeeper_sdk by version (ADR-0132).
+dependency_overrides:
+  gatekeeper_sdk:
+    path: ../dart

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gatekeeper example app</title>
+  </head>
+  <body>
+    <main>
+      <h1>Example app</h1>
+      <p id="status">Not signed in.</p>
+      <button id="sign-in">Sign in</button>
+      <button id="me" hidden>Call /api/me</button>
+      <button id="reports" hidden>Call /api/reports</button>
+      <button id="sign-out" hidden>Sign out</button>
+      <pre id="output"></pre>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

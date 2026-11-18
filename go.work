@@ -1,0 +1,11 @@
+// The examples build against the SDK in this repository; a copied example
+// uses the released module from its go.mod (ADR-0132).
+go 1.26.0
+
+use (
+	./examples/go-api
+	./go
+)
+
+// Until go/v0.1.0 is tagged the version above has nothing to look up.
+replace github.com/hobbit254/gatekeeper-sdk/go v0.1.0 => ./go

@@ -1,7 +1,8 @@
 name: gatekeeper_sdk
-description: Gatekeeper client SDK for Flutter and Dart apps - PKCE sign-in, refresh, step-up (ADR-0051).
+description: Gatekeeper client SDK for Flutter and Dart apps - PKCE sign-in, refresh, step-up.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/hobbit254/gatekeeper-sdk/tree/main/dart
+issue_tracker: https://github.com/hobbit254/gatekeeper-sdk/issues
 
 environment:
   sdk: ">=3.5.0 <4.0.0"

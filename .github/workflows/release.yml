@@ -1,0 +1,94 @@
+# Each package is released from its own tag; docs/runbooks/sdk-release.md in
+# the server repository covers the first publish and the secrets (ADR-0132).
+name: release
+
+on:
+  push:
+    tags: ["go/v*", "ts/v*", "php/v*", "dart/v*", "flutter/v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version: # the tag must match the manifest, so a release can't ship the wrong version
+    runs-on: ubuntu-24.04
+    outputs:
+      package: ${{ steps.tag.outputs.package }}
+      version: ${{ steps.tag.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: |
+          pkg="${GITHUB_REF_NAME%%/*}"; ver="${GITHUB_REF_NAME#*/v}"
+          case "$pkg" in
+            ts) have=$(jq -r .version ts/package.json) ;;
+            dart|flutter) have=$(sed -n 's/^version: //p' "$pkg/pubspec.yaml") ;;
+            *) have="$ver" ;; # Go and Packagist take the version from the tag itself
+          esac
+          [ "$have" = "$ver" ] || { echo "::error::tag $GITHUB_REF_NAME but $pkg is at $have"; exit 1; }
+          echo "package=$pkg" >> "$GITHUB_OUTPUT"; echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+  go:
+    needs: version
+    if: needs.version.outputs.package == 'go'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: GOPROXY=https://proxy.golang.org go list -m "github.com/hobbit254/gatekeeper-sdk/go@v${{ needs.version.outputs.version }}" # asks the proxy to fetch it now
+
+  npm:
+    needs: version
+    if: needs.version.outputs.package == 'ts'
+    runs-on: ubuntu-24.04
+    permissions: { contents: read, id-token: write } # provenance
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, registry-url: "https://registry.npmjs.org" }
+      - run: npm ci
+      - run: npm test -w ts && npm run build -w ts
+      - run: npm publish -w ts --provenance --access public
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+  pub-dart:
+    needs: version
+    if: needs.version.outputs.package == 'dart'
+    runs-on: ubuntu-24.04
+    environment: pub.dev
+    permissions: { contents: read, id-token: write } # pub.dev's GitHub OIDC publishing; no stored token
+    defaults: { run: { working-directory: dart } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - run: dart pub get && dart test
+      - run: dart pub publish --force
+
+  pub-flutter:
+    needs: version
+    if: needs.version.outputs.package == 'flutter'
+    runs-on: ubuntu-24.04
+    environment: pub.dev
+    permissions: { contents: read, id-token: write }
+    defaults: { run: { working-directory: flutter } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1 # sets up the OIDC token for pub.dev
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: rm pubspec_overrides.yaml # users get gatekeeper_sdk from pub.dev, at the version in pubspec.yaml
+      - run: flutter pub get && flutter test
+      - run: dart pub publish --force
+
+  packagist: # Packagist reads composer.json at a repository's root, so php/ is copied to a read-only repository
+    needs: version
+    if: needs.version.outputs.package == 'php'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - env: { KEY: "${{ secrets.PHP_SPLIT_DEPLOY_KEY }}" } # write key on hobbit254/gatekeeper-laravel only
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/split_key" && printf '%s\n' "$KEY" > "$RUNNER_TEMP/split_key"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/split_key -o IdentitiesOnly=yes"
+          git subtree split --prefix=php -b php-split
+          git push git@github.com:hobbit254/gatekeeper-laravel.git php-split:main
+          git push git@github.com:hobbit254/gatekeeper-laravel.git "php-split:refs/tags/v${{ needs.version.outputs.version }}"

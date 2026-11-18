@@ -1,0 +1,9 @@
+{
+  "name": "gatekeeper-sdk-workspace",
+  "private": true,
+  "description": "Links the TypeScript SDK into the examples for this repository's own tests; a copied example installs the released package (ADR-0132).",
+  "workspaces": [
+    "ts",
+    "examples/browser-app"
+  ]
+}

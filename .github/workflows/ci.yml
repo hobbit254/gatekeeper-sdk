@@ -1,0 +1,77 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOLANGCI_LINT_VERSION: v2.14.0
+  GOVULNCHECK_VERSION: v1.9.0
+
+jobs:
+  go: # every SDK passes contract/vectors.json; the Go example builds against this module through go.work
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go/go.mod }
+      - uses: golangci/golangci-lint-action@v8
+        with: { version: "${{ env.GOLANGCI_LINT_VERSION }}", working-directory: go }
+      - run: cd go && go test -race ./...
+      - run: go build ./examples/go-api
+      - run: cd go && go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+
+  ts: # the npm workspace links the browser example to ts/
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck -w ts
+      - run: npm test -w ts
+      - run: npm run build -w ts && npm run build -w examples/browser-app
+      - run: npm audit --omit=dev
+
+  php:
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: php } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: "8.3", tools: composer }
+      - run: composer validate --no-check-publish
+      - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpunit
+      - run: composer audit
+
+  dart:
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: dart } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with: { sdk: "3.5" }
+      - run: dart pub get
+      - run: dart analyze --fatal-infos
+      - run: dart test
+      - run: dart pub publish --dry-run
+
+  flutter:
+    runs-on: ubuntu-24.04
+    defaults: { run: { working-directory: flutter } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter pub get
+      - run: flutter analyze --fatal-infos
+      - run: flutter test

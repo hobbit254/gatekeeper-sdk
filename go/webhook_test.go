@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	gk "github.com/kevinm/gatekeeper/sdk/go"
+	gk "github.com/hobbit254/gatekeeper-sdk/go"
 )
 
 // FR-A27 (ADR-0111): products verify the webhook and relay pending pushes.

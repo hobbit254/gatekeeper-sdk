@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/rand/v2"
+	"math/rand/v2" //nolint:depguard // retry jitter, not a secret
 	"net/http"
 	"net/url"
 	"strings"

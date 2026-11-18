@@ -1,4 +1,4 @@
-module github.com/kevinm/gatekeeper/sdk/go
+module github.com/hobbit254/gatekeeper-sdk/go
 
 go 1.26.0
 
