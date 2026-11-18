@@ -332,14 +332,14 @@ export interface paths {
         post?: never;
         /**
          * Delete a client (gatekeeper-admin can't be deleted)
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients can't be deleted (409, ADR-0130).
          */
         delete: operations["adminDeleteClient"];
         options?: never;
         head?: never;
         /**
          * Update a client
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
          */
         patch: operations["adminPatchClient"];
         trace?: never;

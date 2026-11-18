@@ -3121,7 +3121,7 @@ type ClientInterface interface {
 
 	// AdminDeleteClient Delete a client (gatekeeper-admin can't be deleted)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients can't be deleted (409, ADR-0130).
 	//
 	// Corresponds with DELETE /v1/admin/clients/{id} (the `AdminDeleteClient` operationId).
 	AdminDeleteClient(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3135,7 +3135,7 @@ type ClientInterface interface {
 
 	// AdminPatchClientWithBody Update a client
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -3144,7 +3144,7 @@ type ClientInterface interface {
 
 	// AdminPatchClient Update a client
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4709,7 +4709,7 @@ func (c *Client) AdminCreateClient(ctx context.Context, params *AdminCreateClien
 
 // AdminDeleteClient Delete a client (gatekeeper-admin can't be deleted)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients can't be deleted (409, ADR-0130).
 //
 // Corresponds with DELETE /v1/admin/clients/{id} (the `AdminDeleteClient` operationId).
 func (c *Client) AdminDeleteClient(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4743,7 +4743,7 @@ func (c *Client) AdminGetClient(ctx context.Context, id string, reqEditors ...Re
 
 // AdminPatchClientWithBody Update a client
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 //
 // Takes any type of body and a specified content type.
 //
@@ -4762,7 +4762,7 @@ func (c *Client) AdminPatchClientWithBody(ctx context.Context, id string, conten
 
 // AdminPatchClient Update a client
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -13030,7 +13030,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminDeleteClientWithResponse Delete a client (gatekeeper-admin can't be deleted)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients can't be deleted (409, ADR-0130).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -13048,7 +13048,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminPatchClientWithBodyWithResponse Update a client
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -13057,7 +13057,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminPatchClientWithResponse Update a client
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -23408,7 +23408,7 @@ func (c *ClientWithResponses) AdminCreateClientWithResponse(ctx context.Context,
 
 // AdminDeleteClientWithResponse Delete a client (gatekeeper-admin can't be deleted)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients can't be deleted (409, ADR-0130).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -23438,7 +23438,7 @@ func (c *ClientWithResponses) AdminGetClientWithResponse(ctx context.Context, id
 
 // AdminPatchClientWithBodyWithResponse Update a client
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -23453,7 +23453,7 @@ func (c *ClientWithResponses) AdminPatchClientWithBodyWithResponse(ctx context.C
 
 // AdminPatchClientWithResponse Update a client
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). The built-in gatekeeper-admin and gatekeeper-account clients refuse changes to redirect_uris, post_logout_uris, allowed_scopes and allowed_audiences with 409 (ADR-0130).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
