@@ -2,6 +2,8 @@
 // uses the released module from its go.mod (ADR-0132).
 go 1.26.0
 
+toolchain go1.26.11
+
 use (
 	./examples/go-api
 	./go
