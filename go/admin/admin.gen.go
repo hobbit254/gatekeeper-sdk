@@ -825,6 +825,36 @@ func (e SSOConnectionInputProtocol) Valid() bool {
 	}
 }
 
+// Defines values for ServiceAccountCreateAdminScopes.
+const (
+	AdminAuditRead   ServiceAccountCreateAdminScopes = "admin:audit.read"
+	AdminOrgs        ServiceAccountCreateAdminScopes = "admin:orgs"
+	AdminPermissions ServiceAccountCreateAdminScopes = "admin:permissions"
+	AdminRoles       ServiceAccountCreateAdminScopes = "admin:roles"
+	AdminUsersRead   ServiceAccountCreateAdminScopes = "admin:users.read"
+	AdminUsersWrite  ServiceAccountCreateAdminScopes = "admin:users.write"
+)
+
+// Valid indicates whether the value is a known member of the ServiceAccountCreateAdminScopes enum.
+func (e ServiceAccountCreateAdminScopes) Valid() bool {
+	switch e {
+	case AdminAuditRead:
+		return true
+	case AdminOrgs:
+		return true
+	case AdminPermissions:
+		return true
+	case AdminRoles:
+		return true
+	case AdminUsersRead:
+		return true
+	case AdminUsersWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TenantPolicyAllowedMethods.
 const (
 	TenantPolicyAllowedMethodsApple     TenantPolicyAllowedMethods = "apple"
@@ -2310,9 +2340,14 @@ type ServiceAccount struct {
 
 // ServiceAccountCreate defines model for ServiceAccountCreate.
 type ServiceAccountCreate struct {
-	Audiences []string `json:"audiences"`
-	Name      string   `json:"name"`
+	// AdminScopes Admin API scopes for this service account (FR-M4, ADR-0134). Each opens a fixed set of admin routes; adding any adds the gatekeeper-admin-api audience.
+	AdminScopes *[]ServiceAccountCreateAdminScopes `json:"admin_scopes,omitempty"`
+	Audiences   []string                           `json:"audiences"`
+	Name        string                             `json:"name"`
 }
+
+// ServiceAccountCreateAdminScopes defines model for ServiceAccountCreate.AdminScopes.
+type ServiceAccountCreateAdminScopes string
 
 // ServiceAccountList defines model for ServiceAccountList.
 type ServiceAccountList struct {
