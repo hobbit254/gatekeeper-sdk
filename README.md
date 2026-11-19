@@ -39,6 +39,11 @@ Every SDK passes the same contract vectors in [`contract/vectors.json`](contract
 
 The admin clients are generated from the Gatekeeper server's OpenAPI document; changes to them come from there.
 
+Before a pull request, the same checks CI runs:
+- `go run ./tools/guidecheck check docs` checks the guide's pages, links and anchors.
+- `tools/guidecheck/compile.sh go|ts|php|dart` compiles the guide's samples against the SDKs.
+- `tools/release-dry-run.sh npm|dart|flutter|php|go` rehearses each package's release without publishing.
+
 ## Licence
 
 [Apache-2.0](LICENSE)
