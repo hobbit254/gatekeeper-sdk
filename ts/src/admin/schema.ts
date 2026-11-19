@@ -794,6 +794,26 @@ export interface paths {
         patch: operations["adminPatchOrg"];
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organization's own activity: events stamped with it and events about it (FR-D40, ADR-0138)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        get: operations["adminListOrgAuditEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/domains": {
         parameters: {
             query?: never;
@@ -897,6 +917,30 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Upload an organization's sign-in logo: PNG, at most 100 KB (FR-D41, ADR-0138)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        put: operations["adminPutOrgLogo"];
+        post?: never;
+        /**
+         * Remove an organization's sign-in logo (FR-D41)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        delete: operations["adminDeleteOrgLogo"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2785,6 +2829,8 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             entitlements?: components["schemas"]["Entitlements"];
+            /** @description An uploaded sign-in logo (FR-D41, ADR-0138). */
+            has_logo?: boolean;
             /** Format: uuid */
             id: string;
             name: string;
@@ -4685,6 +4731,54 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    adminListOrgAuditEvents: {
+        parameters: {
+            query?: {
+                /** @description Actor id */
+                actor_id?: string;
+                /** @description Target id */
+                target_id?: string;
+                /** @description Action, e.g. user.deleted */
+                action?: string;
+                /** @description success or failure */
+                outcome?: string;
+                /** @description Inclusive lower bound */
+                since?: string;
+                /** @description Exclusive upper bound */
+                until?: string;
+                limit?: components["parameters"]["Limit"];
+                /** @description next_cursor from the previous page */
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Page */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEvent"][];
+                        next_cursor?: string | null;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminListOrgDomains: {
         parameters: {
             query?: never;
@@ -4868,6 +4962,57 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["GrantableRoleList"];
                 };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminPutOrgLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+            };
+        };
+        responses: {
+            /** @description Stored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminDeleteOrgLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
