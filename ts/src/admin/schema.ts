@@ -3099,7 +3099,7 @@ export interface components {
         };
         ServiceAccountCreate: {
             /** @description Admin API scopes for this service account (FR-M4, ADR-0134). Each opens a fixed set of admin routes; adding any adds the gatekeeper-admin-api audience. */
-            admin_scopes?: ("admin:permissions" | "admin:users.read" | "admin:users.write" | "admin:roles" | "admin:orgs" | "admin:audit.read")[];
+            admin_scopes?: ("admin:permissions" | "admin:users.read" | "admin:users.write" | "admin:roles" | "admin:orgs" | "admin:audit.read" | "admin:consent")[];
             audiences: string[];
             name: string;
         };

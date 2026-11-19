@@ -29,15 +29,19 @@ A service account (see [Machine-to-machine](machine-to-machine.md#service-accoun
 | --- | --- |
 | `admin:permissions` | sync the permissions manifest (dry run included) and read roles and permissions |
 | `admin:users.read` | list and read users, invitations and sessions |
-| `admin:users.write` | create, edit, suspend and unsuspend users, end a user's sessions, send and withdraw invitations |
+| `admin:users.write` | create, edit, suspend and unsuspend users; import users from a CSV file; end sessions, a user's or by id; send and withdraw invitations |
 | `admin:roles` | grant and revoke roles and permissions on users |
 | `admin:orgs` | manage organizations, their members, and their plans and features |
 | `admin:audit.read` | read and export the audit log |
+| `admin:consent` | add, change and remove consent purposes |
 
 **What stays with people:**
-- **Any other route** answers `403`, whatever scopes the account holds: apps and secrets, service accounts, API keys, the tenant's policy and providers, webhooks, impersonation, MFA and password resets, deleting users or organizations, SSO, domains and SCIM, incidents and compliance packs.
+- **Any other route** answers `403`, whatever scopes the account holds: apps and secrets, service accounts, API keys, the tenant's policy and providers, terms and privacy versions, webhooks, impersonation, MFA and password resets, deleting users or organizations, SSO, domains and SCIM, incidents and compliance packs.
 - **Owners and admins:** a service account can never edit, suspend, end the sessions of, or change the roles of a tenant owner or admin.
 - **Admin roles:** it can never grant or revoke `owner`, `admin` or `*:*`, by any route.
+- **Imports and session revocation:**
+  - In a CSV import it starts, a row granting `owner` or `admin`, or naming an existing owner or admin, fails with its own error. The other rows go through, and a dry run (`dry_run=true`) shows the same outcomes.
+  - A revocation by id that includes an owner's or admin's session is refused whole: `403`, and nothing ends.
 
 **Giving it scopes:** tick them under **Admin access** on the dashboard's **Clients and API keys** page, or send `admin_scopes` to `POST /v1/admin/service-accounts`. `allowed_scopes` on `PATCH /v1/admin/clients/{client_id}` changes them later. The `gatekeeper-admin-api` audience comes and goes with them. A change applies from the account's next token.
 

@@ -828,6 +828,7 @@ func (e SSOConnectionInputProtocol) Valid() bool {
 // Defines values for ServiceAccountCreateAdminScopes.
 const (
 	AdminAuditRead   ServiceAccountCreateAdminScopes = "admin:audit.read"
+	AdminConsent     ServiceAccountCreateAdminScopes = "admin:consent"
 	AdminOrgs        ServiceAccountCreateAdminScopes = "admin:orgs"
 	AdminPermissions ServiceAccountCreateAdminScopes = "admin:permissions"
 	AdminRoles       ServiceAccountCreateAdminScopes = "admin:roles"
@@ -839,6 +840,8 @@ const (
 func (e ServiceAccountCreateAdminScopes) Valid() bool {
 	switch e {
 	case AdminAuditRead:
+		return true
+	case AdminConsent:
 		return true
 	case AdminOrgs:
 		return true
