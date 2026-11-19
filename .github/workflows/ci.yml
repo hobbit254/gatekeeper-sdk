@@ -28,6 +28,17 @@ jobs:
       - run: cd go && go test -race ./...
       - run: go build ./examples/go-api
       - run: cd go && go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+      - run: cd tools/guidecheck && go test ./...
+      - run: tools/guidecheck/compile.sh go
+      - run: tools/release-dry-run.sh go
+
+  docs: # the integration guide: every page, link and anchor, nothing internal (ADR-0133, ADR-0135)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: tools/guidecheck/go.mod }
+      - run: go run ./tools/guidecheck check docs
 
   ts: # the npm workspace links the browser example to ts/
     runs-on: ubuntu-24.04
@@ -35,23 +46,34 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      - uses: actions/setup-go@v5 # the guide tool extracts the samples (ADR-0135)
+        with: { go-version-file: go/go.mod }
       - run: npm ci
       - run: npm run typecheck -w ts
       - run: npm test -w ts
       - run: npm run build -w ts && npm run build -w examples/browser-app
       - run: npm audit --omit=dev
+      - run: tools/guidecheck/compile.sh ts
+      - run: tools/release-dry-run.sh npm
 
   php:
     runs-on: ubuntu-24.04
     defaults: { run: { working-directory: php } }
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # the subtree split needs the history
+      - uses: actions/setup-go@v5 # the guide tool extracts the samples (ADR-0135)
+        with: { go-version-file: go/go.mod }
       - uses: shivammathur/setup-php@v2
         with: { php-version: "8.3", tools: composer }
       - run: composer validate --no-check-publish
       - run: composer install --no-interaction --no-progress
       - run: vendor/bin/phpunit
       - run: composer audit
+      - run: tools/guidecheck/compile.sh php
+        working-directory: .
+      - run: tools/release-dry-run.sh php # the split Packagist reads
+        working-directory: .
 
   dart:
     runs-on: ubuntu-24.04
@@ -63,7 +85,8 @@ jobs:
       - run: dart pub get
       - run: dart analyze --fatal-infos
       - run: dart test
-      - run: dart pub publish --dry-run
+      - run: tools/release-dry-run.sh dart
+        working-directory: .
 
   flutter:
     runs-on: ubuntu-24.04
@@ -72,6 +95,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with: { channel: stable }
+      - uses: actions/setup-go@v5 # the guide tool extracts the samples (ADR-0135)
+        with: { go-version-file: go/go.mod }
       - run: flutter pub get
       - run: flutter analyze --fatal-infos
       - run: flutter test
+      - run: tools/guidecheck/compile.sh dart
+        working-directory: .
+      - run: tools/release-dry-run.sh flutter
+        working-directory: .

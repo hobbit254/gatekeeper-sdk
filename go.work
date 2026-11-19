@@ -7,7 +7,10 @@ toolchain go1.26.11
 use (
 	./examples/go-api
 	./go
+	./tools/guidecheck
 )
 
-// Until go/v0.1.0 is tagged the version above has nothing to look up.
+// Go looks up a required version even when the workspace has the module, so the
+// examples' required version is replaced with this checkout; move it with the
+// example's go.mod (tools/release-dry-run.sh go checks they match).
 replace github.com/hobbit254/gatekeeper-sdk/go v0.1.0 => ./go
