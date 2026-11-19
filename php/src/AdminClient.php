@@ -19,8 +19,8 @@ final class AdminClient
 {
     /**
      * @param string                 $issuer The tenant issuer, e.g. https://auth.example.com/t/acme
-     * @param string|callable():string $token A tenant admin's access token, or a callable that returns
-     *                                        a service account's client-credentials token per request
+     * @param string|callable():string $token A tenant admin's own access token (scope tenant:admin, a second
+     *                                        factor within 10 minutes), or a callable returning it per request
      */
     public static function make(string $issuer, string|callable $token, ?HandlerStack $stack = null): DefaultApi
     {

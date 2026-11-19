@@ -6,4 +6,4 @@ Flutter companion to [gatekeeper_sdk](https://pub.dev/packages/gatekeeper_sdk): 
 flutter pub add gatekeeper_flutter
 ```
 
-Register your app's custom-scheme redirect on its Gatekeeper client. Source: [hobbit254/gatekeeper-sdk](https://github.com/hobbit254/gatekeeper-sdk). Licence: Apache-2.0.
+Register your app's custom-scheme redirect on its Gatekeeper client. Guide: [integrating with Gatekeeper](https://github.com/hobbit254/gatekeeper-sdk/tree/main/docs). Source: [hobbit254/gatekeeper-sdk](https://github.com/hobbit254/gatekeeper-sdk). Licence: Apache-2.0.

@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// TokenSource returns the bearer token for a request: a tenant admin's
-// access token, or a service account's client-credentials token
-// (gk.ClientCredentials.Token).
+// TokenSource returns the bearer token for a request: a tenant admin's own
+// access token (scope tenant:admin, audience gatekeeper-admin-api, a second
+// factor within 10 minutes). Service accounts can't call the admin API.
 type TokenSource func(ctx context.Context) (string, error)
 
 // New returns an admin client for the tenant issuer, such as

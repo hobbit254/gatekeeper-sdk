@@ -2,6 +2,8 @@
 
 Client libraries and example apps for Gatekeeper, a multi-tenant sign-in and access service. Your Gatekeeper dashboard's **Connect** panel shows each snippet with your tenant's issuer and client id filled in.
 
+**Start with the [integration guide](docs/README.md):** getting started, signing users in, protecting an API, machine-to-machine, webhooks, the admin API, enterprise SSO and SCIM, and tenant policies.
+
 | SDK | Install | Folder |
 | --- | --- | --- |
 | Go | `go get github.com/hobbit254/gatekeeper-sdk/go` | [`go/`](go) |
