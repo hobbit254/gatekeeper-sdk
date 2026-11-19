@@ -13,4 +13,4 @@ import { startHeadless } from "@hobbit254/gatekeeper-sdk/headless";     // headl
 import { createAdminClient } from "@hobbit254/gatekeeper-sdk/admin";    // admin API
 ```
 
-See [the examples](https://github.com/hobbit254/gatekeeper-sdk/tree/main/examples) and your dashboard's **Connect** panel. Licence: Apache-2.0.
+See the [integration guide](https://github.com/hobbit254/gatekeeper-sdk/tree/main/docs), [the examples](https://github.com/hobbit254/gatekeeper-sdk/tree/main/examples) and your dashboard's **Connect** panel. Licence: Apache-2.0.

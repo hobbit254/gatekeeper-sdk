@@ -6,4 +6,4 @@ Gatekeeper for Dart and Flutter apps: PKCE sign-in, single-flight refresh, step-
 dart pub add gatekeeper_sdk
 ```
 
-Source and examples: [hobbit254/gatekeeper-sdk](https://github.com/hobbit254/gatekeeper-sdk). Licence: Apache-2.0.
+Guide: [integrating with Gatekeeper](https://github.com/hobbit254/gatekeeper-sdk/tree/main/docs). Source and examples: [hobbit254/gatekeeper-sdk](https://github.com/hobbit254/gatekeeper-sdk). Licence: Apache-2.0.

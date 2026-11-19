@@ -9,7 +9,7 @@ export type AdminClient = Client<paths>;
 export interface AdminClientConfig {
   /** The tenant issuer, e.g. https://auth.example.com/t/acme. */
   issuer: string;
-  /** A tenant admin's access token, or a service account's client-credentials token. */
+  /** A tenant admin's own access token (scope tenant:admin, a second factor within 10 minutes); service accounts can't call the admin API. */
   token: () => Promise<string> | string;
   fetch?: typeof fetch;
 }
