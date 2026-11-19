@@ -25,6 +25,9 @@ On the dashboard, the organization's page does all of this. The API calls are sh
 
 Organization admins can do all of this for their own organization (see [The admin API](admin-api.md#tokens)). On the dashboard they also invite people by email, see each member's email and roles, and change those roles, offered only the roles they may grant.
 
+- **Activity:** they see their organization's own activity: sign-ins into it, invitations, membership and role changes, SCIM and SSO changes, and their admins' actions (`GET /orgs/{id}/audit-events`). Nothing from other organizations appears there.
+- **Sign-in logo:** they upload the organization's logo (`PUT /orgs/{id}/logo`, PNG, at most 100 KB). Sign-in pages opened with `organization=<slug>` then show that logo and the organization's name.
+
 ## Day to day
 
 - **Logout:** signing out of your app (`/oauth2/logout`) also signs the user out at the provider. A logout at the provider ends their Gatekeeper sessions: only those from the provider session it names, or all of them. Providers may use HTTP-POST or HTTP-Redirect for logout requests and answers.
