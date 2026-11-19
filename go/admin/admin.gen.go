@@ -1561,6 +1561,14 @@ type GrantPending struct {
 // GrantPendingStatus defines model for GrantPending.Status.
 type GrantPendingStatus string
 
+// GrantableRoleList For an org admin, the roles RBAC.CanGrantInOrg allows them in that organization; for a tenant admin, every role but owner unless they hold owner.
+type GrantableRoleList struct {
+	Roles []struct {
+		Description string `json:"description"`
+		Name        string `json:"name"`
+	} `json:"roles"`
+}
+
 // IdentityProvider defines model for IdentityProvider.
 type IdentityProvider struct {
 	ClientId string  `json:"client_id"`
@@ -1894,10 +1902,16 @@ type LoginAnalytics struct {
 
 // Member defines model for Member.
 type Member struct {
-	DisplayName *string            `json:"display_name,omitempty"`
-	JoinedAt    time.Time          `json:"joined_at"`
-	Status      string             `json:"status"`
-	UserId      openapi_types.UUID `json:"user_id"`
+	DisplayName *string `json:"display_name,omitempty"`
+
+	// Email The member's primary email, if any (FR-D39).
+	Email    *string   `json:"email,omitempty"`
+	JoinedAt time.Time `json:"joined_at"`
+
+	// Roles The member's role names in this organization only (FR-D39).
+	Roles  *[]string          `json:"roles,omitempty"`
+	Status string             `json:"status"`
+	UserId openapi_types.UUID `json:"user_id"`
 }
 
 // MemberAdd defines model for MemberAdd.
@@ -3542,6 +3556,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
 	AdminPutOrgEntitlements(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListGrantableRoles The roles the caller may grant in an organization (FR-D39, ADR-0137)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
+	AdminListGrantableRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgMembers An organization's members
 	//
@@ -5621,6 +5642,23 @@ func (c *Client) AdminPutOrgEntitlementsWithBody(ctx context.Context, id string,
 // Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
 func (c *Client) AdminPutOrgEntitlements(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminPutOrgEntitlementsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListGrantableRoles The roles the caller may grant in an organization (FR-D39, ADR-0137)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
+func (c *Client) AdminListGrantableRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListGrantableRolesRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -9817,6 +9855,40 @@ func NewAdminPutOrgEntitlementsRequestWithBody(server string, id string, content
 	return req, nil
 }
 
+// NewAdminListGrantableRolesRequest constructs an http.Request for the AdminListGrantableRoles method
+func NewAdminListGrantableRolesRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/grantable-roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListOrgMembersRequest constructs an http.Request for the AdminListOrgMembers method
 func NewAdminListOrgMembersRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -13501,6 +13573,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
 	AdminPutOrgEntitlementsWithResponse(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error)
+
+	// AdminListGrantableRolesWithResponse The roles the caller may grant in an organization (FR-D39, ADR-0137)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
+	AdminListGrantableRolesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListGrantableRolesResponse, error)
 
 	// AdminListOrgMembersWithResponse An organization's members
 	//
@@ -18100,6 +18181,68 @@ func (r AdminPutOrgEntitlementsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminPutOrgEntitlementsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListGrantableRolesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GrantableRoleList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListGrantableRolesResponse) GetJSON200() *GrantableRoleList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListGrantableRolesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListGrantableRolesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListGrantableRolesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListGrantableRolesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListGrantableRolesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListGrantableRolesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListGrantableRolesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -24180,6 +24323,21 @@ func (c *ClientWithResponses) AdminPutOrgEntitlementsWithResponse(ctx context.Co
 	return ParseAdminPutOrgEntitlementsResponse(rsp)
 }
 
+// AdminListGrantableRolesWithResponse The roles the caller may grant in an organization (FR-D39, ADR-0137)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
+func (c *ClientWithResponses) AdminListGrantableRolesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListGrantableRolesResponse, error) {
+	rsp, err := c.AdminListGrantableRoles(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListGrantableRolesResponse(rsp)
+}
+
 // AdminListOrgMembersWithResponse An organization's members
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
@@ -28550,6 +28708,53 @@ func ParseAdminPutOrgEntitlementsResponse(rsp *http.Response) (*AdminPutOrgEntit
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListGrantableRolesResponse parses an HTTP response from a AdminListGrantableRolesWithResponse call
+func ParseAdminListGrantableRolesResponse(rsp *http.Response) (*AdminListGrantableRolesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListGrantableRolesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GrantableRoleList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 

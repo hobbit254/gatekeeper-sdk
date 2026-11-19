@@ -882,6 +882,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/grantable-roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The roles the caller may grant in an organization (FR-D39, ADR-0137)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        get: operations["adminListGrantableRoles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/members": {
         parameters: {
             query?: never;
@@ -2445,6 +2465,13 @@ export interface components {
             /** @enum {string} */
             status: "pending";
         };
+        /** @description For an org admin, the roles RBAC.CanGrantInOrg allows them in that organization; for a tenant admin, every role but owner unless they hold owner. */
+        GrantableRoleList: {
+            roles: {
+                description: string;
+                name: string;
+            }[];
+        };
         IdentityProvider: {
             client_id: string;
             enabled: boolean;
@@ -2721,8 +2748,12 @@ export interface components {
         };
         Member: {
             display_name?: string;
+            /** @description The member's primary email, if any (FR-D39). */
+            email?: string;
             /** Format: date-time */
             joined_at: string;
+            /** @description The member's role names in this organization only (FR-D39). */
+            roles?: string[];
             status: string;
             /** Format: uuid */
             user_id: string;
@@ -4816,6 +4847,31 @@ export interface operations {
             404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    adminListGrantableRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantableRoleList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     adminListOrgMembers: {

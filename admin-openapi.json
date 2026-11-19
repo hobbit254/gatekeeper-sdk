@@ -1410,6 +1410,33 @@
         ],
         "type": "object"
       },
+      "GrantableRoleList": {
+        "description": "For an org admin, the roles RBAC.CanGrantInOrg allows them in that organization; for a tenant admin, every role but owner unless they hold owner.",
+        "properties": {
+          "roles": {
+            "items": {
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "description"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "roles"
+        ],
+        "type": "object"
+      },
       "IdentityProvider": {
         "properties": {
           "client_id": {
@@ -2336,9 +2363,20 @@
           "display_name": {
             "type": "string"
           },
+          "email": {
+            "description": "The member's primary email, if any (FR-D39).",
+            "type": "string"
+          },
           "joined_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "roles": {
+            "description": "The member's role names in this organization only (FR-D39).",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "status": {
             "type": "string"
@@ -4255,7 +4293,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.50.0"
+    "version": "0.51.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -6915,6 +6953,49 @@
           }
         ],
         "summary": "Set an organization's own entitlements (FR-Z10)"
+      }
+    },
+    "/v1/admin/orgs/{id}/grantable-roles": {
+      "get": {
+        "description": "Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).",
+        "operationId": "adminListGrantableRoles",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantableRoleList"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The roles the caller may grant in an organization (FR-D39, ADR-0137)"
       }
     },
     "/v1/admin/orgs/{id}/members": {
