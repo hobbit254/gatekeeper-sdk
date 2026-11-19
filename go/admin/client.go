@@ -10,8 +10,8 @@ import (
 )
 
 // TokenSource returns the bearer token for a request: a tenant admin's own
-// access token (scope tenant:admin, audience gatekeeper-admin-api, a second
-// factor within 10 minutes). Service accounts can't call the admin API.
+// access token (scope tenant:admin, a second factor within 10 minutes), or a
+// service account's client-credentials token, within its admin scopes.
 type TokenSource func(ctx context.Context) (string, error)
 
 // New returns an admin client for the tenant issuer, such as

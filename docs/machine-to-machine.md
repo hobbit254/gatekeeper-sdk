@@ -6,7 +6,7 @@ A service with no user (a nightly job, a back office, one API calling another) s
 
 A **service account** is a client of type `m2m` with a service user behind it, so it can hold roles like a person. Create one on the dashboard's **Clients and API keys** page, or with the admin API: `POST /v1/admin/service-accounts {name, audiences}` returns `client_id: "svc-<name>"` and its secret, shown once.
 
-Grant it roles as for any user (`POST /v1/admin/users/{id}/roles`), using the service user's id from the answer. Give it only the permissions it needs. A service account can't call the admin API itself; that takes a person (see [The admin API](admin-api.md#tokens)).
+Grant it roles as for any user (`POST /v1/admin/users/{id}/roles`), using the service user's id from the answer. Give it only the permissions it needs. To let it call the admin API too (to sync a manifest from CI, or provision users from a back office), give it admin scopes (see [The admin API](admin-api.md#service-accounts)).
 
 ## Getting a token
 
