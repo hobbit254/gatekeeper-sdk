@@ -21,9 +21,9 @@ On the dashboard, the organization's page does all of this. The API calls are sh
    Then turn it on: `PUT /orgs/{id}/sso {protocol, enabled: true}`. `{protocol, enabled}` alone turns a connection off or on without resending its details.
 4. **Optional, required SSO:** `PATCH /orgs/{id} {require_sso: true}` stops members on the verified domains signing in any other way, and ends their sessions that didn't come through SSO. Keep a tenant admin outside the domain in case the provider is down.
 5. **Optional, the provider's MFA:** `trust_idp_mfa: true` lets a provider sign-in with MFA count as Gatekeeper's second factor. Only turn it on for a provider that enforces MFA.
-6. **Provisioning:** create a SCIM token (`POST /orgs/{id}/scim-tokens`) and give the provider the base URL `https://auth.<domain>/t/<tenant>/scim/v2` with that token. Push users and groups, then map groups to roles in Gatekeeper (`PUT /orgs/{id}/scim-groups/{group_id}/roles`).
+6. **Provisioning:** create a SCIM token (`POST /orgs/{id}/scim-tokens`) and give the provider the base URL `https://auth.<domain>/t/<tenant>/scim/v2` with that token. Push users and groups, then map each group to roles: on the organization's page under **Groups from your identity provider**, or with `PUT /orgs/{id}/scim-groups/{group_id}/roles`.
 
-Organization admins can do all of this for their own organization (see [The admin API](admin-api.md#tokens)).
+Organization admins can do all of this for their own organization (see [The admin API](admin-api.md#tokens)). On the dashboard they also invite people by email, see each member's email and roles, and change those roles, offered only the roles they may grant.
 
 ## Day to day
 
