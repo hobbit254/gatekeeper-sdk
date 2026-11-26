@@ -1162,6 +1162,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/permission-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List permission groups with what each level gives (FR-Z18, ADR-0141)
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         */
+        get: operations["adminListPermissionGroups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/permissions": {
         parameters: {
             query?: never;
@@ -1254,6 +1274,26 @@ export interface paths {
         patch: operations["adminPatchRole"];
         trace?: never;
     };
+    "/v1/admin/roles/{id}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         */
+        put: operations["adminSetRoleGroups"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/roles/{id}/permissions": {
         parameters: {
             query?: never;
@@ -1267,6 +1307,26 @@ export interface paths {
          * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
          */
         put: operations["adminSetRolePermissions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)
+         * @description People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).
+         */
+        get: operations["adminSearch"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2225,9 +2285,16 @@ export interface components {
         };
         AdminRole: {
             description: string;
+            /** @description A client's manifest names this role, so its patterns and groups are changed there */
+            from_manifest: boolean;
+            /** @description Permission groups the role holds, by key, at read or full (ADR-0141) */
+            groups: {
+                [key: string]: "read" | "full";
+            };
             id: string;
             is_system: boolean;
             name: string;
+            /** @description The role's own patterns; what its groups give is not listed here (ADR-0141) */
             permissions: string[];
         };
         AdminRoleList: {
@@ -2911,6 +2978,31 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
+        PermissionGroup: {
+            /** @description The client whose manifest declares it */
+            client_id: string;
+            /** @description By language: en (always) and sw */
+            description: {
+                [key: string]: string;
+            };
+            full_patterns: string[];
+            /** @description The permissions holding it at full gives today (read's included) */
+            full_permissions: string[];
+            /** @example campaigns */
+            key: string;
+            /** @description By language: en (always) and sw */
+            label: {
+                [key: string]: string;
+            };
+            read_patterns: string[];
+            /** @description The permissions holding the group at read gives today */
+            read_permissions: string[];
+            /** @description Never given by org admins (ADR-0141) */
+            tenant_only: boolean;
+        };
+        PermissionGroupList: {
+            items: components["schemas"]["PermissionGroup"][];
+        };
         Problem: {
             detail?: string;
             /** @description Request id */
@@ -3048,6 +3140,11 @@ export interface components {
             /** Format: uuid */
             user_id: string;
         };
+        RoleGroups: {
+            groups: {
+                [key: string]: "read" | "full";
+            };
+        };
         RoleNames: {
             roles: string[];
         };
@@ -3156,6 +3253,18 @@ export interface components {
             /** @description Count the IdP's MFA as Gatekeeper's second factor; off by default (ADR-0094) */
             trust_idp_mfa?: boolean;
         };
+        SearchHit: {
+            /** @description An email or phone, a slug, a description or a client type */
+            detail: string;
+            /** @description The user's id, the org's slug, the role's id or the client_id */
+            id: string;
+            /** @enum {string} */
+            kind: "user" | "org" | "role" | "client";
+            label: string;
+        };
+        SearchResults: {
+            results: components["schemas"]["SearchHit"][];
+        };
         SecretRotation: {
             client_id: string;
             /** @description Shown once */
@@ -3201,8 +3310,16 @@ export interface components {
             added?: string[];
             applied?: boolean;
             client_id?: string;
+            /** @description Groups this sync adds (ADR-0141) */
+            groups_added?: string[];
+            /** @description Groups this sync removes (ADR-0141) */
+            groups_removed?: string[];
+            /** @description Groups whose label, permissions or tenant_only change (ADR-0141) */
+            groups_updated?: string[];
             removed?: string[];
             roles?: string[];
+            /** @description Declared permissions no group gives (only when the manifest has groups) (ADR-0141) */
+            ungrouped?: string[];
             updated?: string[];
             version?: number;
             warnings?: string[];
@@ -5380,6 +5497,35 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
+    adminListPermissionGroups: {
+        parameters: {
+            query?: {
+                /** @description One client's groups; omitted lists every client's */
+                client_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionGroupList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminListPermissions: {
         parameters: {
             query?: {
@@ -5588,6 +5734,38 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    adminSetRoleGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleGroups"];
+            };
+        };
+        responses: {
+            /** @description Role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminRole"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
     adminSetRolePermissions: {
         parameters: {
             query?: never;
@@ -5610,6 +5788,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminRole"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminSearch: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hits */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
                 };
             };
             401: components["responses"]["Problem"];

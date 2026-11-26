@@ -491,6 +491,21 @@
           "description": {
             "type": "string"
           },
+          "from_manifest": {
+            "description": "A client's manifest names this role, so its patterns and groups are changed there",
+            "type": "boolean"
+          },
+          "groups": {
+            "additionalProperties": {
+              "enum": [
+                "read",
+                "full"
+              ],
+              "type": "string"
+            },
+            "description": "Permission groups the role holds, by key, at read or full (ADR-0141)",
+            "type": "object"
+          },
           "id": {
             "type": "string"
           },
@@ -501,6 +516,7 @@
             "type": "string"
           },
           "permissions": {
+            "description": "The role's own patterns; what its groups give is not listed here (ADR-0141)",
             "items": {
               "type": "string"
             },
@@ -512,7 +528,9 @@
           "name",
           "description",
           "is_system",
-          "permissions"
+          "permissions",
+          "groups",
+          "from_manifest"
         ],
         "type": "object"
       },
@@ -2765,6 +2783,88 @@
         ],
         "type": "object"
       },
+      "PermissionGroup": {
+        "properties": {
+          "client_id": {
+            "description": "The client whose manifest declares it",
+            "type": "string"
+          },
+          "description": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "By language: en (always) and sw",
+            "type": "object"
+          },
+          "full_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "full_permissions": {
+            "description": "The permissions holding it at full gives today (read's included)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "key": {
+            "example": "campaigns",
+            "type": "string"
+          },
+          "label": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "By language: en (always) and sw",
+            "type": "object"
+          },
+          "read_patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "read_permissions": {
+            "description": "The permissions holding the group at read gives today",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "tenant_only": {
+            "description": "Never given by org admins (ADR-0141)",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "client_id",
+          "label",
+          "description",
+          "read_patterns",
+          "full_patterns",
+          "read_permissions",
+          "full_permissions",
+          "tenant_only"
+        ],
+        "type": "object"
+      },
+      "PermissionGroupList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PermissionGroup"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "Problem": {
         "properties": {
           "detail": {
@@ -3196,6 +3296,25 @@
         ],
         "type": "object"
       },
+      "RoleGroups": {
+        "properties": {
+          "groups": {
+            "additionalProperties": {
+              "enum": [
+                "read",
+                "full"
+              ],
+              "type": "string"
+            },
+            "maxProperties": 100,
+            "type": "object"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "type": "object"
+      },
       "RoleNames": {
         "properties": {
           "roles": {
@@ -3538,6 +3657,52 @@
         ],
         "type": "object"
       },
+      "SearchHit": {
+        "properties": {
+          "detail": {
+            "description": "An email or phone, a slug, a description or a client type",
+            "type": "string"
+          },
+          "id": {
+            "description": "The user's id, the org's slug, the role's id or the client_id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "user",
+              "org",
+              "role",
+              "client"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "label",
+          "detail"
+        ],
+        "type": "object"
+      },
+      "SearchResults": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "maxItems": 40,
+            "type": "array"
+          }
+        },
+        "required": [
+          "results"
+        ],
+        "type": "object"
+      },
       "SecretRotation": {
         "properties": {
           "client_id": {
@@ -3706,6 +3871,27 @@
           "client_id": {
             "type": "string"
           },
+          "groups_added": {
+            "description": "Groups this sync adds (ADR-0141)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "groups_removed": {
+            "description": "Groups this sync removes (ADR-0141)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "groups_updated": {
+            "description": "Groups whose label, permissions or tenant_only change (ADR-0141)",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "removed": {
             "items": {
               "type": "string"
@@ -3713,6 +3899,13 @@
             "type": "array"
           },
           "roles": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "ungrouped": {
+            "description": "Declared permissions no group gives (only when the manifest has groups) (ADR-0141)",
             "items": {
               "type": "string"
             },
@@ -4297,7 +4490,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.52.0"
+    "version": "0.54.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -7843,6 +8036,59 @@
         "summary": "Authenticator models in FIDO metadata (FR-D29)"
       }
     },
+    "/v1/admin/permission-groups": {
+      "get": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
+        "operationId": "adminListPermissionGroups",
+        "parameters": [
+          {
+            "description": "One client's groups; omitted lists every client's",
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PermissionGroupList"
+                }
+              }
+            },
+            "description": "Groups"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List permission groups with what each level gives (FR-Z18, ADR-0141)"
+      }
+    },
     "/v1/admin/permissions": {
       "get": {
         "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
@@ -8221,6 +8467,68 @@
         "summary": "Update a role's description"
       }
     },
+    "/v1/admin/roles/{id}/groups": {
+      "put": {
+        "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
+        "operationId": "adminSetRoleGroups",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleGroups"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminRole"
+                }
+              }
+            },
+            "description": "Role"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409"
+      }
+    },
     "/v1/admin/roles/{id}/permissions": {
       "put": {
         "description": "Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).",
@@ -8281,6 +8589,60 @@
           }
         ],
         "summary": "Replace a role's admin-defined patterns (manifest patterns untouched)"
+      }
+    },
+    "/v1/admin/search": {
+      "get": {
+        "description": "People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).",
+        "operationId": "adminSearch",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 2,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            },
+            "description": "Hits"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)"
       }
     },
     "/v1/admin/service-accounts": {

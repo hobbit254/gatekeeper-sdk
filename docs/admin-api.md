@@ -175,3 +175,36 @@ roles:
 Apply it on the dashboard's **Roles and permissions** page (choose the client and the file, **Preview**, then **Apply**), or with `PUT /v1/admin/permissions/sync?client_id=shop-api&dry_run=true` and the YAML as the body. The dry run lists what would be added, changed or removed. A role change reaches users at their next token (see [Protecting an API](protecting-an-api.md#permissions-and-roles)).
 
 An `fga` block in the same file describes resource relationships (see [Protecting an API](protecting-an-api.md#resource-relationships)).
+
+### Permission groups
+
+Group your permissions into a few named jobs, so admins build roles from words like "Reports" or "Refunds" instead of keys. A role then holds a group at `read` or `full`:
+
+```yaml
+groups:
+  - key: reports
+    label: {en: Reports, sw: Ripoti}
+    description: {en: View and export reports}
+    read: [report:read]
+    full: [report:*]
+  - key: refunds
+    label: {en: Refunds, sw: Marejesho}
+    full: [refund:issue]
+roles:
+  viewer: [report:read]       # a plain list still works
+  clerk:
+    groups: {reports: read}
+  manager:
+    groups: {reports: full, refunds: full}
+    permissions: [user:impersonate]
+```
+
+- **Levels:** `read` gives the group's `read` permissions; `full` gives both lists. You say what "read" means; nothing is inferred.
+- **Labels and descriptions** are in English (`en`, required) and Swahili (`sw`), shown on the dashboard's role editor.
+- **A change to a group** reaches every role that holds it, including roles admins built on the dashboard, at their next token. Your SDK and tokens don't change: the role map still lists each role's permissions.
+- **`tenant_only: true`** keeps a group for the tenant's own admins: a role holding it is never granted by an organization's admins.
+- **Removing a group** that a dashboard-built role still holds fails; take it away from that role first.
+- **The dry run** lists group changes and the permissions no group gives.
+- **`/v1/authz/check`** names the group that allowed a permission in its `group` field.
+
+`GET /v1/admin/permission-groups?client_id=shop-api` lists the groups with what each level gives; a service account with `admin:permissions` may read it.

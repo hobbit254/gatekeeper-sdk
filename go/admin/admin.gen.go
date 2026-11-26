@@ -123,6 +123,24 @@ func (e AdminClientType) Valid() bool {
 	}
 }
 
+// Defines values for AdminRoleGroups.
+const (
+	AdminRoleGroupsFull AdminRoleGroups = "full"
+	AdminRoleGroupsRead AdminRoleGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the AdminRoleGroups enum.
+func (e AdminRoleGroups) Valid() bool {
+	switch e {
+	case AdminRoleGroupsFull:
+		return true
+	case AdminRoleGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BrandingDefaultLocale.
 const (
 	En BrandingDefaultLocale = "en"
@@ -789,6 +807,24 @@ func (e RiskBlockCreateKind) Valid() bool {
 	}
 }
 
+// Defines values for RoleGroupsGroups.
+const (
+	RoleGroupsGroupsFull RoleGroupsGroups = "full"
+	RoleGroupsGroupsRead RoleGroupsGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the RoleGroupsGroups enum.
+func (e RoleGroupsGroups) Valid() bool {
+	switch e {
+	case RoleGroupsGroupsFull:
+		return true
+	case RoleGroupsGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SSOConnectionProtocol.
 const (
 	SSOConnectionProtocolOidc SSOConnectionProtocol = "oidc"
@@ -819,6 +855,30 @@ func (e SSOConnectionInputProtocol) Valid() bool {
 	case SSOConnectionInputProtocolOidc:
 		return true
 	case SSOConnectionInputProtocolSaml:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SearchHitKind.
+const (
+	SearchHitKindClient SearchHitKind = "client"
+	SearchHitKindOrg    SearchHitKind = "org"
+	SearchHitKindRole   SearchHitKind = "role"
+	SearchHitKindUser   SearchHitKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the SearchHitKind enum.
+func (e SearchHitKind) Valid() bool {
+	switch e {
+	case SearchHitKindClient:
+		return true
+	case SearchHitKindOrg:
+		return true
+	case SearchHitKindRole:
+		return true
+	case SearchHitKindUser:
 		return true
 	default:
 		return false
@@ -1204,12 +1264,23 @@ type AdminPermissionPage struct {
 
 // AdminRole defines model for AdminRole.
 type AdminRole struct {
-	Description string   `json:"description"`
-	Id          string   `json:"id"`
-	IsSystem    bool     `json:"is_system"`
-	Name        string   `json:"name"`
+	Description string `json:"description"`
+
+	// FromManifest A client's manifest names this role, so its patterns and groups are changed there
+	FromManifest bool `json:"from_manifest"`
+
+	// Groups Permission groups the role holds, by key, at read or full (ADR-0141)
+	Groups   map[string]AdminRoleGroups `json:"groups"`
+	Id       string                     `json:"id"`
+	IsSystem bool                       `json:"is_system"`
+	Name     string                     `json:"name"`
+
+	// Permissions The role's own patterns; what its groups give is not listed here (ADR-0141)
 	Permissions []string `json:"permissions"`
 }
+
+// AdminRoleGroups defines model for AdminRole.Groups.
+type AdminRoleGroups string
 
 // AdminRoleList defines model for AdminRoleList.
 type AdminRoleList struct {
@@ -2058,6 +2129,37 @@ type PermissionGrantResult struct {
 // PermissionGrantResultEffect defines model for PermissionGrantResult.Effect.
 type PermissionGrantResultEffect string
 
+// PermissionGroup defines model for PermissionGroup.
+type PermissionGroup struct {
+	// ClientId The client whose manifest declares it
+	ClientId string `json:"client_id"`
+
+	// Description By language: en (always) and sw
+	Description  map[string]string `json:"description"`
+	FullPatterns []string          `json:"full_patterns"`
+
+	// FullPermissions The permissions holding it at full gives today (read's included)
+	FullPermissions []string `json:"full_permissions"`
+
+	// Key Example: campaigns
+	Key string `json:"key"`
+
+	// Label By language: en (always) and sw
+	Label        map[string]string `json:"label"`
+	ReadPatterns []string          `json:"read_patterns"`
+
+	// ReadPermissions The permissions holding the group at read gives today
+	ReadPermissions []string `json:"read_permissions"`
+
+	// TenantOnly Never given by org admins (ADR-0141)
+	TenantOnly bool `json:"tenant_only"`
+}
+
+// PermissionGroupList defines model for PermissionGroupList.
+type PermissionGroupList struct {
+	Items []PermissionGroup `json:"items"`
+}
+
 // Problem defines model for Problem.
 type Problem struct {
 	Detail *string `json:"detail,omitempty"`
@@ -2204,6 +2306,14 @@ type RoleGrantResult struct {
 	UserId openapi_types.UUID  `json:"user_id"`
 }
 
+// RoleGroups defines model for RoleGroups.
+type RoleGroups struct {
+	Groups map[string]RoleGroupsGroups `json:"groups"`
+}
+
+// RoleGroupsGroups defines model for RoleGroups.Groups.
+type RoleGroupsGroups string
+
 // RoleNames defines model for RoleNames.
 type RoleNames struct {
 	Roles []string `json:"roles"`
@@ -2337,6 +2447,25 @@ type SSOConnectionInput struct {
 // SSOConnectionInputProtocol defines model for SSOConnectionInput.Protocol.
 type SSOConnectionInputProtocol string
 
+// SearchHit defines model for SearchHit.
+type SearchHit struct {
+	// Detail An email or phone, a slug, a description or a client type
+	Detail string `json:"detail"`
+
+	// Id The user's id, the org's slug, the role's id or the client_id
+	Id    string        `json:"id"`
+	Kind  SearchHitKind `json:"kind"`
+	Label string        `json:"label"`
+}
+
+// SearchHitKind defines model for SearchHit.Kind.
+type SearchHitKind string
+
+// SearchResults defines model for SearchResults.
+type SearchResults struct {
+	Results []SearchHit `json:"results"`
+}
+
 // SecretRotation defines model for SecretRotation.
 type SecretRotation struct {
 	ClientId string `json:"client_id"`
@@ -2397,11 +2526,23 @@ type SyncResult struct {
 	Added    *[]string `json:"added,omitempty"`
 	Applied  *bool     `json:"applied,omitempty"`
 	ClientId *string   `json:"client_id,omitempty"`
-	Removed  *[]string `json:"removed,omitempty"`
-	Roles    *[]string `json:"roles,omitempty"`
-	Updated  *[]string `json:"updated,omitempty"`
-	Version  *int      `json:"version,omitempty"`
-	Warnings *[]string `json:"warnings,omitempty"`
+
+	// GroupsAdded Groups this sync adds (ADR-0141)
+	GroupsAdded *[]string `json:"groups_added,omitempty"`
+
+	// GroupsRemoved Groups this sync removes (ADR-0141)
+	GroupsRemoved *[]string `json:"groups_removed,omitempty"`
+
+	// GroupsUpdated Groups whose label, permissions or tenant_only change (ADR-0141)
+	GroupsUpdated *[]string `json:"groups_updated,omitempty"`
+	Removed       *[]string `json:"removed,omitempty"`
+	Roles         *[]string `json:"roles,omitempty"`
+
+	// Ungrouped Declared permissions no group gives (only when the manifest has groups) (ADR-0141)
+	Ungrouped *[]string `json:"ungrouped,omitempty"`
+	Updated   *[]string `json:"updated,omitempty"`
+	Version   *int      `json:"version,omitempty"`
+	Warnings  *[]string `json:"warnings,omitempty"`
 }
 
 // TenantPatch defines model for TenantPatch.
@@ -2739,6 +2880,12 @@ type AdminRotateOrgSSOKeyJSONBody struct {
 // AdminRotateOrgSSOKeyJSONBodyStep defines parameters for AdminRotateOrgSSOKey.
 type AdminRotateOrgSSOKeyJSONBodyStep string
 
+// AdminListPermissionGroupsParams defines parameters for AdminListPermissionGroups.
+type AdminListPermissionGroupsParams struct {
+	// ClientId One client's groups; omitted lists every client's
+	ClientId *string `form:"client_id,omitempty" json:"client_id,omitempty"`
+}
+
 // AdminListPermissionsParams defines parameters for AdminListPermissions.
 type AdminListPermissionsParams struct {
 	Limit *Limit `form:"limit,omitempty" json:"limit,omitempty"`
@@ -2757,6 +2904,11 @@ type AdminSyncPermissionsParams struct {
 type AdminCreateRoleParams struct {
 	// IdempotencyKey Replays the stored response for 24 h (API.md)
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
+}
+
+// AdminSearchParams defines parameters for AdminSearch.
+type AdminSearchParams struct {
+	Q string `form:"q" json:"q"`
 }
 
 // AdminListSessionsParams defines parameters for AdminListSessions.
@@ -2883,6 +3035,9 @@ type AdminCreateRoleJSONRequestBody = RoleCreate
 
 // AdminPatchRoleJSONRequestBody defines body for AdminPatchRole for application/json ContentType.
 type AdminPatchRoleJSONRequestBody = RolePatch
+
+// AdminSetRoleGroupsJSONRequestBody defines body for AdminSetRoleGroups for application/json ContentType.
+type AdminSetRoleGroupsJSONRequestBody = RoleGroups
 
 // AdminSetRolePermissionsJSONRequestBody defines body for AdminSetRolePermissions for application/json ContentType.
 type AdminSetRolePermissionsJSONRequestBody = RolePatterns
@@ -3757,6 +3912,13 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
 	AdminListPasskeyModels(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminListPermissionGroups List permission groups with what each level gives (FR-Z18, ADR-0141)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Corresponds with GET /v1/admin/permission-groups (the `AdminListPermissionGroups` operationId).
+	AdminListPermissionGroups(ctx context.Context, params *AdminListPermissionGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListPermissions List permissions
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -3830,6 +3992,24 @@ type ClientInterface interface {
 	// Corresponds with PATCH /v1/admin/roles/{id} (the `AdminPatchRole` operationId).
 	AdminPatchRole(ctx context.Context, id string, body AdminPatchRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminSetRoleGroupsWithBody Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+	AdminSetRoleGroupsWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminSetRoleGroups Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+	AdminSetRoleGroups(ctx context.Context, id string, body AdminSetRoleGroupsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminSetRolePermissionsWithBody Replace a role's admin-defined patterns (manifest patterns untouched)
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -3847,6 +4027,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/roles/{id}/permissions (the `AdminSetRolePermissions` operationId).
 	AdminSetRolePermissions(ctx context.Context, id string, body AdminSetRolePermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminSearch Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)
+	//
+	// People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).
+	//
+	// Corresponds with GET /v1/admin/search (the `AdminSearch` operationId).
+	AdminSearch(ctx context.Context, params *AdminSearchParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListServiceAccounts Service accounts (FR-M1, ADR-0056)
 	//
@@ -6095,6 +6282,23 @@ func (c *Client) AdminListPasskeyModels(ctx context.Context, reqEditors ...Reque
 	return c.Client.Do(req)
 }
 
+// AdminListPermissionGroups List permission groups with what each level gives (FR-Z18, ADR-0141)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Corresponds with GET /v1/admin/permission-groups (the `AdminListPermissionGroups` operationId).
+func (c *Client) AdminListPermissionGroups(ctx context.Context, params *AdminListPermissionGroupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListPermissionGroupsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListPermissions List permissions
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -6258,6 +6462,44 @@ func (c *Client) AdminPatchRole(ctx context.Context, id string, body AdminPatchR
 	return c.Client.Do(req)
 }
 
+// AdminSetRoleGroupsWithBody Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+func (c *Client) AdminSetRoleGroupsWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminSetRoleGroupsRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminSetRoleGroups Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+func (c *Client) AdminSetRoleGroups(ctx context.Context, id string, body AdminSetRoleGroupsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminSetRoleGroupsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminSetRolePermissionsWithBody Replace a role's admin-defined patterns (manifest patterns untouched)
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -6286,6 +6528,23 @@ func (c *Client) AdminSetRolePermissionsWithBody(ctx context.Context, id string,
 // Corresponds with PUT /v1/admin/roles/{id}/permissions (the `AdminSetRolePermissions` operationId).
 func (c *Client) AdminSetRolePermissions(ctx context.Context, id string, body AdminSetRolePermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminSetRolePermissionsRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminSearch Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)
+//
+// People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).
+//
+// Corresponds with GET /v1/admin/search (the `AdminSearch` operationId).
+func (c *Client) AdminSearch(ctx context.Context, params *AdminSearchParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminSearchRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -10743,6 +11002,60 @@ func NewAdminListPasskeyModelsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewAdminListPermissionGroupsRequest constructs an http.Request for the AdminListPermissionGroups method
+func NewAdminListPermissionGroupsRequest(server string, params *AdminListPermissionGroupsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/permission-groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ClientId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "client_id", *params.ClientId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListPermissionsRequest constructs an http.Request for the AdminListPermissions method
 func NewAdminListPermissionsRequest(server string, params *AdminListPermissionsParams) (*http.Request, error) {
 	var err error
@@ -11070,6 +11383,53 @@ func NewAdminPatchRoleRequestWithBody(server string, id string, contentType stri
 	return req, nil
 }
 
+// NewAdminSetRoleGroupsRequest calls the generic AdminSetRoleGroups builder with application/json body
+func NewAdminSetRoleGroupsRequest(server string, id string, body AdminSetRoleGroupsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminSetRoleGroupsRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminSetRoleGroupsRequestWithBody constructs an http.Request for the AdminSetRoleGroups method, with any body, and a specified content type
+func NewAdminSetRoleGroupsRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/roles/%s/groups", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminSetRolePermissionsRequest calls the generic AdminSetRolePermissions builder with application/json body
 func NewAdminSetRolePermissionsRequest(server string, id string, body AdminSetRolePermissionsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11113,6 +11473,56 @@ func NewAdminSetRolePermissionsRequestWithBody(server string, id string, content
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminSearchRequest constructs an http.Request for the AdminSearch method
+func NewAdminSearchRequest(server string, params *AdminSearchParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/search")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "q", params.Q, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -14091,6 +14501,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/passkey-models (the `AdminListPasskeyModels` operationId).
 	AdminListPasskeyModelsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*AdminListPasskeyModelsResponse, error)
 
+	// AdminListPermissionGroupsWithResponse List permission groups with what each level gives (FR-Z18, ADR-0141)
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/permission-groups (the `AdminListPermissionGroups` operationId).
+	AdminListPermissionGroupsWithResponse(ctx context.Context, params *AdminListPermissionGroupsParams, reqEditors ...RequestEditorFn) (*AdminListPermissionGroupsResponse, error)
+
 	// AdminListPermissionsWithResponse List permissions
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -14172,6 +14591,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /v1/admin/roles/{id} (the `AdminPatchRole` operationId).
 	AdminPatchRoleWithResponse(ctx context.Context, id string, body AdminPatchRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPatchRoleResponse, error)
 
+	// AdminSetRoleGroupsWithBodyWithResponse Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+	AdminSetRoleGroupsWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetRoleGroupsResponse, error)
+
+	// AdminSetRoleGroupsWithResponse Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+	//
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+	AdminSetRoleGroupsWithResponse(ctx context.Context, id string, body AdminSetRoleGroupsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminSetRoleGroupsResponse, error)
+
 	// AdminSetRolePermissionsWithBodyWithResponse Replace a role's admin-defined patterns (manifest patterns untouched)
 	//
 	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -14189,6 +14626,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /v1/admin/roles/{id}/permissions (the `AdminSetRolePermissions` operationId).
 	AdminSetRolePermissionsWithResponse(ctx context.Context, id string, body AdminSetRolePermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminSetRolePermissionsResponse, error)
+
+	// AdminSearchWithResponse Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)
+	//
+	// People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/search (the `AdminSearch` operationId).
+	AdminSearchWithResponse(ctx context.Context, params *AdminSearchParams, reqEditors ...RequestEditorFn) (*AdminSearchResponse, error)
 
 	// AdminListServiceAccountsWithResponse Service accounts (FR-M1, ADR-0056)
 	//
@@ -19655,6 +20101,89 @@ func (r AdminListPasskeyModelsResponse) ContentType() string {
 	return ""
 }
 
+type AdminListPermissionGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PermissionGroupList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListPermissionGroupsResponse) GetJSON200() *PermissionGroupList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminListPermissionGroupsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListPermissionGroupsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListPermissionGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListPermissionGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListPermissionGroupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListPermissionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20229,6 +20758,89 @@ func (r AdminPatchRoleResponse) ContentType() string {
 	return ""
 }
 
+type AdminSetRoleGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminRole
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminSetRoleGroupsResponse) GetJSON200() *AdminRole {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminSetRoleGroupsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminSetRoleGroupsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminSetRoleGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminSetRoleGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminSetRoleGroupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminSetRolePermissionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20306,6 +20918,89 @@ func (r AdminSetRolePermissionsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminSetRolePermissionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminSearchResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SearchResults
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminSearchResponse) GetJSON200() *SearchResults {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminSearchResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminSearchResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminSearchResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminSearchResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminSearchResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -25212,6 +25907,21 @@ func (c *ClientWithResponses) AdminListPasskeyModelsWithResponse(ctx context.Con
 	return ParseAdminListPasskeyModelsResponse(rsp)
 }
 
+// AdminListPermissionGroupsWithResponse List permission groups with what each level gives (FR-Z18, ADR-0141)
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/permission-groups (the `AdminListPermissionGroups` operationId).
+func (c *ClientWithResponses) AdminListPermissionGroupsWithResponse(ctx context.Context, params *AdminListPermissionGroupsParams, reqEditors ...RequestEditorFn) (*AdminListPermissionGroupsResponse, error) {
+	rsp, err := c.AdminListPermissionGroups(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListPermissionGroupsResponse(rsp)
+}
+
 // AdminListPermissionsWithResponse List permissions
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -25347,6 +26057,36 @@ func (c *ClientWithResponses) AdminPatchRoleWithResponse(ctx context.Context, id
 	return ParseAdminPatchRoleResponse(rsp)
 }
 
+// AdminSetRoleGroupsWithBodyWithResponse Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+func (c *ClientWithResponses) AdminSetRoleGroupsWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetRoleGroupsResponse, error) {
+	rsp, err := c.AdminSetRoleGroupsWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminSetRoleGroupsResponse(rsp)
+}
+
+// AdminSetRoleGroupsWithResponse Replace the permission groups an admin-defined role holds (FR-Z18, ADR-0141); a manifest role is 409
+//
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/roles/{id}/groups (the `AdminSetRoleGroups` operationId).
+func (c *ClientWithResponses) AdminSetRoleGroupsWithResponse(ctx context.Context, id string, body AdminSetRoleGroupsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminSetRoleGroupsResponse, error) {
+	rsp, err := c.AdminSetRoleGroups(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminSetRoleGroupsResponse(rsp)
+}
+
 // AdminSetRolePermissionsWithBodyWithResponse Replace a role's admin-defined patterns (manifest patterns untouched)
 //
 // Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
@@ -25375,6 +26115,21 @@ func (c *ClientWithResponses) AdminSetRolePermissionsWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseAdminSetRolePermissionsResponse(rsp)
+}
+
+// AdminSearchWithResponse Search people, organizations, roles and clients for the dashboard (FR-D45, ADR-0150)
+//
+// People are found by their exact email or phone only: identities are stored encrypted with a blind index (ADR-0018). Up to 10 hits of each kind. Org admins get their own organization and its members, nothing else. Requires a tenant:admin or org:admin token (ADR-0030, ADR-0061).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/search (the `AdminSearch` operationId).
+func (c *ClientWithResponses) AdminSearchWithResponse(ctx context.Context, params *AdminSearchParams, reqEditors ...RequestEditorFn) (*AdminSearchResponse, error) {
+	rsp, err := c.AdminSearch(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminSearchResponse(rsp)
 }
 
 // AdminListServiceAccountsWithResponse Service accounts (FR-M1, ADR-0056)
@@ -30185,6 +30940,74 @@ func ParseAdminListPasskeyModelsResponse(rsp *http.Response) (*AdminListPasskeyM
 	return response, nil
 }
 
+// ParseAdminListPermissionGroupsResponse parses an HTTP response from a AdminListPermissionGroupsWithResponse call
+func ParseAdminListPermissionGroupsResponse(rsp *http.Response) (*AdminListPermissionGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListPermissionGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PermissionGroupList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListPermissionsResponse parses an HTTP response from a AdminListPermissionsWithResponse call
 func ParseAdminListPermissionsResponse(rsp *http.Response) (*AdminListPermissionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -30657,6 +31480,74 @@ func ParseAdminPatchRoleResponse(rsp *http.Response) (*AdminPatchRoleResponse, e
 	return response, nil
 }
 
+// ParseAdminSetRoleGroupsResponse parses an HTTP response from a AdminSetRoleGroupsWithResponse call
+func ParseAdminSetRoleGroupsResponse(rsp *http.Response) (*AdminSetRoleGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminSetRoleGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminSetRolePermissionsResponse parses an HTTP response from a AdminSetRolePermissionsWithResponse call
 func ParseAdminSetRolePermissionsResponse(rsp *http.Response) (*AdminSetRolePermissionsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -30673,6 +31564,74 @@ func ParseAdminSetRolePermissionsResponse(rsp *http.Response) (*AdminSetRolePerm
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest AdminRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminSearchResponse parses an HTTP response from a AdminSearchWithResponse call
+func ParseAdminSearchResponse(rsp *http.Response) (*AdminSearchResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminSearchResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SearchResults
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
