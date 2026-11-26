@@ -232,4 +232,12 @@ roles:
 | `PATCH /v1/admin/orgs/{id}/roles/{role_id}` | Rename it, or change its description or groups; it reaches everyone holding it at once |
 | `DELETE /v1/admin/orgs/{id}/roles/{role_id}` | Retire it; its grants go with it |
 
+**Amount limits** ([Amount limits](protecting-an-api.md#amount-limits)): an org role carries `limits` (`{"refund:create": {"alone": 200000, "approves": 0}}`), copied from the template on a copy. An organization can override a tenant role's limits for itself. An org admin gives a limit only up to their own in the organization, and a permission given with no limit is unlimited, so they must state one. They can't edit, override or grant a role whose limits are above theirs. `GET /v1/admin/orgs/{id}/roles` lists the limited permissions they hold with their own limits (`limited`), and the tenant roles' limits with the organization's overrides (`tenant_roles`).
+
+| Call | What it does |
+| --- | --- |
+| `PUT /v1/admin/orgs/{id}/roles/{role_id}/limits` | `{limits}`: for a tenant role, the organization's override, used in its scope; for its own role, its limits. `{}` clears them |
+| `PATCH /v1/admin/orgs/{id}` | `{currency: "KES"}` sets the organization's currency (tenant admins only); `""` uses the tenant's `settings.currency` |
+| `POST /v1/admin/users/{id}/permissions` | `{permission, effect: "allow", limit: {alone, approves}}`: a direct allow's limit; without one it needs approval for any amount |
+
 Each change sends `role.updated` with `org_id` and the organization's new `orv` (see [Webhooks](webhooks.md)). Org admins reach these for their own organization; tenant admins for any.

@@ -37,6 +37,34 @@ An organization can also define its own roles ([Organization roles](admin-api.md
 
 Wildcards work in roles: `report:*` holds every `report:` permission.
 
+## Amount limits
+
+Some actions are fine up to an amount: a cashier refunds up to KES 2,000, and above that a manager must approve. Mark the permission `limit: amount` in the manifest, and give each role its limits in minor units (cents):
+
+```yaml
+permissions:
+  - key: refund:create
+    limit: amount
+roles:
+  cashier:
+    groups: {refunds: full}
+    limits: {refund:create: {alone: 200000, approves: 0}}   # KES 2,000.00
+```
+
+- **`alone`** is how much the holder does without approval; **`approves`** is how much they may approve for someone else. A missing value is no limit; `0` is none at all.
+- **A role that gives the permission with no limit set is unlimited.** Across a user's roles the most generous value wins.
+- **A direct allow without a limit** needs approval for any amount.
+- **Organizations** can override a tenant role's limits for themselves, and their own roles carry their own (see [Organization roles](admin-api.md#organization-roles)). In an organization, the SDKs fetch its role map when your client has limited permissions, and cache it by `orv`.
+- **The currency** is the organization's `currency`, else the tenant's `settings.currency`.
+
+| | Go | TypeScript | Laravel |
+| --- | --- | --- | --- |
+| Check in code | `p.CanAmount("refund:create", 250000)` | `p.canAmount("refund:create", 250000)` | `$principal->canAmount('refund:create', 250000)` |
+| The answer | `gk.AmountAllow`, `gk.AmountApprovalRequired` or `gk.AmountDeny` | `"allow"`, `"approval_required"` or `"deny"` | `Principal::AMOUNT_ALLOW`, `..._APPROVAL_REQUIRED`, `..._DENY` |
+| The limit | `p.Limits["refund:create"]`, `p.Currency` | `p.limits?.["refund:create"]`, `p.currency` | `$principal->limits['refund:create']`, `$principal->currency` |
+
+The SDK sees only the token's roles. For the authoritative answer, direct grants included, send the amount to the server: `POST /v1/authz/check {"permission": "refund:create", "amount": 250000}` answers `decision` (`allow`, `approval_required` or `deny`) and `limit {alone, approves, currency}`. Above `alone`, `allow` is `false`, so code that reads only `allow` never lets the amount through. Decisions above `alone` are audited.
+
 ## Step-up
 
 Some actions need a second factor from the last few minutes. `RequireStepUp(5*time.Minute)` (Go), `requireStepUp(300)` (TypeScript) and `gk.stepup:300` (Laravel) refuse a user whose last second factor is older, with `401` and an RFC 9470 challenge:

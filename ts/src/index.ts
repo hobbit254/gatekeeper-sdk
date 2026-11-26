@@ -63,10 +63,36 @@ export interface Principal {
   stepUp?: Record<string, number>;
   /** The customer's plan and features from the token; absent when the tenant set none (ADR-0098). */
   entitlements?: Entitlements;
+  /** The most generous amount limit on each held permission that carries one (ADR-0143). */
+  limits?: Record<string, Limit>;
+  /** The currency limits are counted in (ISO 4217): the organization's, else the tenant's. */
+  currency?: string;
   /** Exact key match; wildcards are already expanded in the role map. */
   can(permission: string): boolean;
+  /**
+   * For doing permission for amount (minor units): "allow" within the alone
+   * limit, "approval_required" above it, "deny" when the permission isn't
+   * held. Sees only the token's roles; /v1/authz/check with amount is the
+   * authoritative answer (ADR-0143).
+   */
+  canAmount(permission: string, amount: number): AmountDecision;
   /** Whether the token's entitlements include feature. */
   hasFeature(feature: string): boolean;
+}
+
+/** An amount limit in minor units (ADR-0143); a missing value is no limit, 0 is none at all. */
+export interface Limit {
+  alone?: number;
+  approves?: number;
+}
+
+/** What canAmount answers (ADR-0143). */
+export type AmountDecision = "allow" | "approval_required" | "deny";
+
+function canAmount(perms: string[], limits: Record<string, Limit> | undefined, permission: string, amount: number): AmountDecision {
+  if (!perms.includes(permission)) return "deny";
+  const alone = limits?.[permission]?.alone;
+  return alone !== undefined && amount > alone ? "approval_required" : "allow";
 }
 
 /** A customer's plan and paid-for features (ADR-0098). */
@@ -182,6 +208,10 @@ interface RoleMap {
   orv?: number; // set on an organization's map (ADR-0142)
   roles: Record<string, string[]>;
   step_up?: Record<string, number>; // seconds per sensitive permission (ADR-0097)
+  // Amount limits (ADR-0143); an organization's map has its overrides applied.
+  limited?: string[];
+  limits?: Record<string, Record<string, Limit>>;
+  currency?: string;
 }
 
 /** Returns an SDK instance for one API; safe to share across requests. */
@@ -268,7 +298,11 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     return fresh;
   }
 
-  async function permissions(roles: string[], rv: number, org = "", orv = 0): Promise<{ perms: string[]; stepUp?: Record<string, number> }> {
+  // A token in an organization holding one of its roles, or for a client
+  // with amount limits (which organizations may override), resolves through
+  // the organization's map (ADR-0142, ADR-0143).
+  async function permissions(roles: string[], rv: number, org = "", orv = 0):
+    Promise<{ perms: string[]; stepUp?: Record<string, number>; limits?: Record<string, Limit>; currency?: string }> {
     let map: RoleMap;
     if (org && roles.some((r) => r.startsWith(ORG_ROLE_PREFIX))) {
       map = await orgMap(org, rv, orv);
@@ -280,18 +314,32 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
         roleMap = await roleMapInflight;
       }
       map = roleMap;
+      if (org && map.limited?.length) map = await orgMap(org, rv, orv);
     }
     const out = new Set<string>();
+    let limits: Record<string, Limit> | undefined;
     for (const r of roles) {
       if (r.startsWith(ORG_ROLE_PREFIX) && !org) continue; // an organization's role means nothing outside it
-      for (const p of map.roles[r] ?? []) out.add(p);
+      for (const p of map.roles[r] ?? []) {
+        out.add(p);
+        if (!map.limited?.includes(p)) continue;
+        const l = map.limits?.[r]?.[p] ?? {}; // a role giving it with no limit listed is unlimited
+        const have = limits?.[p];
+        (limits ??= {})[p] = have ? { ...more("alone", have, l), ...more("approves", have, l) } : l;
+      }
     }
     let stepUp: Record<string, number> | undefined;
     for (const p of out) {
       const w = map.step_up?.[p];
       if (w) (stepUp ??= {})[p] = w;
     }
-    return { perms: [...out], stepUp };
+    return { perms: [...out], stepUp, limits, currency: limits ? map.currency : undefined };
+  }
+
+  /** The more generous value of k; missing (no limit) beats any number. */
+  function more(k: keyof Limit, a: Limit, b: Limit): Limit {
+    const x = a[k], y = b[k];
+    return x === undefined || y === undefined ? {} : { [k]: Math.max(x, y) };
   }
 
   // API keys: introspected with this API's client credentials, cached 60 s
@@ -323,6 +371,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
           sub: String(r.sub ?? ""), tenantId: String(r.tid ?? ""), clientId: "", roles: [], permissions: perms,
           scopes: typeof r.scope === "string" ? r.scope.split(" ").filter(Boolean) : [], amr: [], authTime: new Date(0),
           rv: 0, orv: 0, sid: "", jti: "", apiKey: true, ownerType: String(r.owner_type ?? ""), can: (x: string) => perms.includes(x),
+          canAmount: (x: string, amount: number) => canAmount(perms, undefined, x, amount),
           hasFeature: () => false,
         };
       }
@@ -354,7 +403,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     const rv = typeof c.rv === "number" ? c.rv : 0;
     const orv = typeof c.orv === "number" ? c.orv : 0;
     const org = typeof c.org === "string" ? c.org : "";
-    const { perms, stepUp } = await permissions(roles, rv, org, orv);
+    const { perms, stepUp, limits, currency } = await permissions(roles, rv, org, orv);
     const ents = entitlements(c.entitlements);
     return {
       ...(stepUp ? { stepUp } : {}),
@@ -374,7 +423,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       ...impersonation(c.act),
       ...(typeof (c.cnf as { jkt?: unknown } | undefined)?.jkt === "string" ? { jkt: (c.cnf as { jkt: string }).jkt } : {}),
       ...(ents ? { entitlements: ents } : {}),
+      ...(limits ? { limits, currency } : {}),
       can: (p: string) => perms.includes(p),
+      canAmount: (p: string, amount: number) => canAmount(perms, limits, p, amount),
       hasFeature: (f: string) => ents?.features.includes(f) ?? false,
     };
   }

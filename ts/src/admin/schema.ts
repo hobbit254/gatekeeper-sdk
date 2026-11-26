@@ -1033,9 +1033,29 @@ export interface paths {
         head?: never;
         /**
          * Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
-         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
          */
         patch: operations["adminUpdateOrgRole"];
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/roles/{role_id}/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+         */
+        put: operations["adminPutOrgRoleLimits"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/admin/orgs/{id}/scim-groups": {
@@ -2341,6 +2361,10 @@ export interface components {
             };
             id: string;
             is_system: boolean;
+            /** @description The role's own amount limits, from its manifest (ADR-0143) */
+            limits?: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
             name: string;
             /** @description The role's own patterns; what its groups give is not listed here (ADR-0141) */
             permissions: string[];
@@ -2389,6 +2413,21 @@ export interface components {
                 /** Format: uuid */
                 user_id: string;
             }[];
+        };
+        /** @description An amount limit in minor units (ADR-0143). A missing value is no limit; 0 is none at all. */
+        AmountLimit: {
+            /**
+             * Format: int64
+             * @description How much the holder does without approval
+             * @example 200000
+             */
+            alone?: number;
+            /**
+             * Format: int64
+             * @description How much they may approve for someone else
+             * @example 0
+             */
+            approves?: number;
         };
         AnchorCheck: {
             anchors: number;
@@ -2943,6 +2982,8 @@ export interface components {
         Org: {
             /** Format: date-time */
             created_at: string;
+            /** @description Its own currency for amount limits, or absent to use the tenant's (ADR-0143) */
+            currency?: string;
             entitlements?: components["schemas"]["Entitlements"];
             /** @description An uploaded sign-in logo (FR-D41, ADR-0138). */
             has_logo?: boolean;
@@ -2977,6 +3018,11 @@ export interface components {
             orgs: components["schemas"]["Org"][];
         };
         OrgPatch: {
+            /**
+             * @description ISO 4217 code for amount limits; "" uses the tenant's settings.currency. Tenant admins only (ADR-0143)
+             * @example KES
+             */
+            currency?: string;
             name?: string;
             /** @description Tenant admins only (ADR-0067) */
             require_sso?: boolean;
@@ -2986,7 +3032,7 @@ export interface components {
             /** @description The template it was copied from; a copy doesn't follow later template edits */
             copied_from?: string | null;
             description: string;
-            /** @description Whether the caller may edit or retire it: they hold every group it gives, at its level */
+            /** @description Whether the caller may edit or retire it: they hold every group it gives, at its level, and its limits are within their own */
             editable: boolean;
             /** @description Permission group key → level */
             groups: {
@@ -2994,13 +3040,17 @@ export interface components {
             };
             /** Format: uuid */
             id: string;
+            /** @description Permission key → limit, on permissions that carry one (ADR-0143) */
+            limits?: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
             /** @example senior-cashier */
             name: string;
             /**
              * @description Why it isn't editable
              * @enum {string}
              */
-            reason?: "not_held";
+            reason?: "not_held" | "above_limit";
             /**
              * @description How tokens, grants and the role map name it
              * @example org/senior-cashier
@@ -3015,18 +3065,30 @@ export interface components {
             groups?: {
                 [key: string]: "read" | "full";
             };
+            /** @description Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own */
+            limits?: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
             /** @example senior-cashier */
             name: string;
         };
         OrgRoleEditor: {
+            /**
+             * @description What limits are counted in: the organization's currency, else the tenant's; "" when neither is set
+             * @example KES
+             */
+            currency?: string;
             groups: components["schemas"]["OrgRoleGroup"][];
             /**
              * @description The most roles an organization may have
              * @example 50
              */
             limit?: number;
+            limited?: components["schemas"]["OrgRoleLimited"][];
             roles: components["schemas"]["OrgRole"][];
             templates: components["schemas"]["OrgRoleTemplate"][];
+            /** @description The tenant's roles with limits, and this organization's overrides of them */
+            tenant_roles?: components["schemas"]["OrgTenantRoleLimits"][];
         };
         OrgRoleGroup: components["schemas"]["PermissionGroup"] & {
             /**
@@ -3040,25 +3102,54 @@ export interface components {
              */
             reason?: "not_held" | "tenant_only";
         };
+        /** @description A limited permission the caller holds, with the most they may give */
+        OrgRoleLimited: {
+            /** @example sale:refund */
+            key: string;
+            max: components["schemas"]["AmountLimit"];
+        };
         OrgRolePatch: {
             description?: string;
             /** @description Replaces every group the role holds */
             groups?: {
                 [key: string]: "read" | "full";
             };
+            /** @description Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own */
+            limits?: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
             /** @example senior-cashier */
             name?: string;
         };
         /** @description A manifest role marked template: true */
         OrgRoleTemplate: {
-            /** @description Whether the caller may copy it as it is */
+            /** @description Whether the caller may copy it as it is: its groups and limits are within theirs */
             allowed: boolean;
             description: string;
             /** @description Permission group key → level */
             groups: {
                 [key: string]: "read" | "full";
             };
+            /** @description Permission key → limit, on permissions that carry one (ADR-0143) */
+            limits?: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
             name: string;
+        };
+        OrgTenantRoleLimits: {
+            /** @description Whether the caller may override them */
+            editable: boolean;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @description The organization's overrides, used in its scope instead of own */
+            overrides: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
+            /** @description Permission key → limit, on permissions that carry one (ADR-0143) */
+            own: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
         };
         Overview: {
             failed_logins_today: number;
@@ -3087,6 +3178,8 @@ export interface components {
             effect: "allow" | "deny";
             /** Format: date-time */
             expires_at?: string;
+            /** @description An allow's limit, on a permission that carries one; without it an allow needs approval for any amount (ADR-0143) */
+            limit?: components["schemas"]["AmountLimit"];
             /** @description Org id or slug; omitted is tenant-wide */
             org_id?: string;
             permission: string;
@@ -3271,6 +3364,22 @@ export interface components {
         RoleGroups: {
             groups: {
                 [key: string]: "read" | "full";
+            };
+        };
+        RoleLimits: {
+            /** @description Permission key → limit, on permissions that carry one (ADR-0143) */
+            limits: {
+                [key: string]: components["schemas"]["AmountLimit"];
+            };
+            /** @example cashier */
+            ref: string;
+            /** Format: uuid */
+            role_id: string;
+        };
+        RoleLimitsPut: {
+            /** @description Replaces them all; {} clears them */
+            limits: {
+                [key: string]: components["schemas"]["AmountLimit"];
             };
         };
         RoleNames: {
@@ -5452,6 +5561,39 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminPutOrgRoleLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleLimitsPut"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleLimits"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };

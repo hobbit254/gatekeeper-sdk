@@ -29,6 +29,13 @@ type vectors struct {
 			Name, Token, Permission, Expect string
 		} `json:"cases"`
 	} `json:"org_roles"`
+	AmountLimits struct {
+		Cases []struct {
+			Name, Token, Permission, Expect string
+			Amount                          int64
+		} `json:"cases"`
+		Currency map[string]string `json:"currency"`
+	} `json:"amount_limits"`
 	Cases []struct {
 		Name, Token, Permission, Expect string
 	} `json:"cases"`
@@ -159,6 +166,40 @@ func TestContractOrgRoles(t *testing.T) {
 			}
 			if got != c.Expect {
 				t.Fatalf("got %s, want %s (err %v)", got, c.Expect, err)
+			}
+		})
+	}
+}
+
+// TestContractAmountLimits: CanAmount answers allow within the alone limit,
+// approval_required above it, deny when the permission isn't held; in an
+// organization, through its map with its overrides (ADR-0143).
+func TestContractAmountLimits(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range v.AmountLimits.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+				HTTPClient: &http.Client{Transport: fixedServer{v}}})
+			p, err := sdk.Verify(context.Background(), c.Token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := p.CanAmount(c.Permission, c.Amount); got != c.Expect {
+				t.Fatalf("got %s, want %s", got, c.Expect)
+			}
+			want := v.AmountLimits.Currency["tenant"]
+			if p.OrgID == "acme" {
+				want = v.AmountLimits.Currency["acme"]
+			}
+			if p.Currency != want {
+				t.Fatalf("currency %q, want %q", p.Currency, want)
 			}
 		})
 	}

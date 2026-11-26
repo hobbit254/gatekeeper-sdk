@@ -30,3 +30,14 @@ describe("contract vectors: organization roles (ADR-0142)", () => {
     });
   }
 });
+
+describe("contract: amount limits (ADR-0143)", () => {
+  for (const c of v.amount_limits.cases as { name: string; token: string; permission: string; amount: number; expect: string }[]) {
+    it(c.name, async () => {
+      const p = await sdk(fixedFetch().f).verify(c.token);
+      expect(p.canAmount(c.permission, c.amount)).toBe(c.expect);
+      if (p.limits) expect(p.currency).toBe(p.orgId === "acme" ? v.amount_limits.currency.acme : v.amount_limits.currency.tenant);
+    });
+  }
+});
+
