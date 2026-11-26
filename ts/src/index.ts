@@ -47,6 +47,8 @@ export interface Principal {
   amr: string[];
   authTime: Date;
   rv: number;
+  /** The organization's role-map version; 0 outside an organization (ADR-0142). */
+  orv: number;
   sid: string;
   jti: string;
   /** The admin acting as `sub`, and when that ends; set only on impersonation tokens (ADR-0058). Show a banner. */
@@ -171,9 +173,13 @@ function htu(raw: string): string | undefined {
 }
 
 const JWKS_COOLDOWN_MS = 30_000;
+/** Marks an organization's own role in a token's roles (ADR-0142). */
+export const ORG_ROLE_PREFIX = "org/";
+const MAX_ORG_MAPS = 1000;
 
 interface RoleMap {
   rv: number;
+  orv?: number; // set on an organization's map (ADR-0142)
   roles: Record<string, string[]>;
   step_up?: Record<string, number>; // seconds per sensitive permission (ADR-0097)
 }
@@ -192,6 +198,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   let lastJWKSFetch = 0;
   let roleMap: RoleMap | undefined;
   let roleMapInflight: Promise<RoleMap> | undefined;
+  // Each organization's map, with its own roles as org/<name>, by slug (ADR-0142).
+  let orgMaps = new Map<string, RoleMap>();
+  const orgMapsInflight = new Map<string, Promise<RoleMap>>();
 
   async function getJSON<T>(url: string, auth: boolean): Promise<T> {
     const headers: Record<string, string> = { Accept: "application/json" };
@@ -243,18 +252,43 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     return payload;
   }
 
-  async function permissions(roles: string[], rv: number): Promise<{ perms: string[]; stepUp?: Record<string, number> }> {
-    if (!roleMap || rv > roleMap.rv) {
-      // Single-flight: concurrent requests share one refetch.
-      roleMapInflight ??= getJSON<RoleMap>(`${issuer}/v1/clients/${encodeURIComponent(config.clientId)}/role-map`, true)
-        .finally(() => { roleMapInflight = undefined; });
-      roleMap = await roleMapInflight;
+  /** The organization's map, refetched when the token's rv or orv is newer (ADR-0142). */
+  async function orgMap(org: string, rv: number, orv: number): Promise<RoleMap> {
+    const cached = orgMaps.get(org);
+    if (cached && rv <= cached.rv && orv <= (cached.orv ?? 0)) return cached;
+    let inflight = orgMapsInflight.get(org);
+    if (!inflight) {
+      inflight = getJSON<RoleMap>(`${issuer}/v1/clients/${encodeURIComponent(config.clientId)}/role-map?org=${encodeURIComponent(org)}`, true)
+        .finally(() => orgMapsInflight.delete(org));
+      orgMapsInflight.set(org, inflight);
+    }
+    const fresh = await inflight;
+    if (orgMaps.size >= MAX_ORG_MAPS) orgMaps = new Map();
+    orgMaps.set(org, fresh);
+    return fresh;
+  }
+
+  async function permissions(roles: string[], rv: number, org = "", orv = 0): Promise<{ perms: string[]; stepUp?: Record<string, number> }> {
+    let map: RoleMap;
+    if (org && roles.some((r) => r.startsWith(ORG_ROLE_PREFIX))) {
+      map = await orgMap(org, rv, orv);
+    } else {
+      if (!roleMap || rv > roleMap.rv) {
+        // Single-flight: concurrent requests share one refetch.
+        roleMapInflight ??= getJSON<RoleMap>(`${issuer}/v1/clients/${encodeURIComponent(config.clientId)}/role-map`, true)
+          .finally(() => { roleMapInflight = undefined; });
+        roleMap = await roleMapInflight;
+      }
+      map = roleMap;
     }
     const out = new Set<string>();
-    for (const r of roles) for (const p of roleMap.roles[r] ?? []) out.add(p);
+    for (const r of roles) {
+      if (r.startsWith(ORG_ROLE_PREFIX) && !org) continue; // an organization's role means nothing outside it
+      for (const p of map.roles[r] ?? []) out.add(p);
+    }
     let stepUp: Record<string, number> | undefined;
     for (const p of out) {
-      const w = roleMap.step_up?.[p];
+      const w = map.step_up?.[p];
       if (w) (stepUp ??= {})[p] = w;
     }
     return { perms: [...out], stepUp };
@@ -288,7 +322,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
         p = {
           sub: String(r.sub ?? ""), tenantId: String(r.tid ?? ""), clientId: "", roles: [], permissions: perms,
           scopes: typeof r.scope === "string" ? r.scope.split(" ").filter(Boolean) : [], amr: [], authTime: new Date(0),
-          rv: 0, sid: "", jti: "", apiKey: true, ownerType: String(r.owner_type ?? ""), can: (x: string) => perms.includes(x),
+          rv: 0, orv: 0, sid: "", jti: "", apiKey: true, ownerType: String(r.owner_type ?? ""), can: (x: string) => perms.includes(x),
           hasFeature: () => false,
         };
       }
@@ -318,7 +352,9 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     }
     const roles = strings(c.roles);
     const rv = typeof c.rv === "number" ? c.rv : 0;
-    const { perms, stepUp } = await permissions(roles, rv);
+    const orv = typeof c.orv === "number" ? c.orv : 0;
+    const org = typeof c.org === "string" ? c.org : "";
+    const { perms, stepUp } = await permissions(roles, rv, org, orv);
     const ents = entitlements(c.entitlements);
     return {
       ...(stepUp ? { stepUp } : {}),
@@ -332,6 +368,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       amr: strings(c.amr),
       authTime: new Date((typeof c.auth_time === "number" ? c.auth_time : 0) * 1000),
       rv,
+      orv,
       sid: String(c.sid ?? ""),
       jti: String(c.jti ?? ""),
       ...impersonation(c.act),

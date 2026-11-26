@@ -23,7 +23,13 @@ type vectors struct {
 	ClientSecret string          `json:"client_secret"`
 	JWKS         json.RawMessage `json:"jwks"`
 	RoleMap      json.RawMessage `json:"role_map"`
-	Cases        []struct {
+	OrgRoles     struct {
+		RoleMaps map[string]json.RawMessage `json:"role_maps"`
+		Cases    []struct {
+			Name, Token, Permission, Expect string
+		} `json:"cases"`
+	} `json:"org_roles"`
+	Cases []struct {
 		Name, Token, Permission, Expect string
 	} `json:"cases"`
 	Denylist struct {
@@ -94,6 +100,14 @@ func (f fixedServer) RoundTrip(r *http.Request) (*http.Response, error) {
 		} else {
 			code = http.StatusUnauthorized
 		}
+	default:
+		u := *r.URL
+		u.RawQuery = ""
+		if u.String() == f.v.Issuer+"/v1/clients/"+f.v.ClientID+"/role-map" && r.URL.Query().Has("org") {
+			if m, ok := f.v.OrgRoles.RoleMaps[r.URL.Query().Get("org")]; ok {
+				body, code = m, http.StatusOK
+			}
+		}
 	}
 	return &http.Response{StatusCode: code, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}, Request: r}, nil
 }
@@ -120,6 +134,80 @@ func TestContractVectors(t *testing.T) {
 				t.Fatalf("got %s, want %s (err %v)", got, c.Expect, err)
 			}
 		})
+	}
+}
+
+// TestContractOrgRoles: org/<name> roles resolve only through their own
+// organization's role map (ADR-0142).
+func TestContractOrgRoles(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range v.OrgRoles.Cases {
+		t.Run(c.Name, func(t *testing.T) {
+			sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+				HTTPClient: &http.Client{Transport: fixedServer{v}}})
+			p, err := sdk.Verify(context.Background(), c.Token)
+			got := "reject"
+			if err == nil {
+				got = map[bool]string{true: "allow", false: "deny"}[p.Can(c.Permission)]
+			}
+			if got != c.Expect {
+				t.Fatalf("got %s, want %s (err %v)", got, c.Expect, err)
+			}
+		})
+	}
+}
+
+// staleOrgMap serves acme's role map at orv 1 first, then as the vectors
+// have it (orv 2), counting the organization's fetches.
+type staleOrgMap struct {
+	fixedServer
+	fetches *int
+}
+
+func (s staleOrgMap) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.URL.Query().Get("org") != "acme" {
+		return s.fixedServer.RoundTrip(r)
+	}
+	*s.fetches++
+	body := s.v.OrgRoles.RoleMaps["acme"]
+	if *s.fetches == 1 {
+		body = []byte(`{"rv": 3, "orv": 1, "org": "acme", "roles": {}}`)
+	}
+	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(body)), Header: http.Header{}, Request: r}, nil
+}
+
+// An organization's map is cached until a token carries a newer orv (ADR-0142).
+func TestOrgRoleMapIsCachedUntilATokenCarriesANewerOrv(t *testing.T) {
+	raw, err := os.ReadFile("../contract/vectors.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v vectors
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatal(err)
+	}
+	fetches := 0
+	sdk := New(Config{Issuer: v.Issuer, Audience: v.Audience, ClientID: v.ClientID, ClientSecret: v.ClientSecret,
+		HTTPClient: &http.Client{Transport: staleOrgMap{fixedServer{v}, &fetches}}})
+	tok := v.OrgRoles.Cases[0].Token // org acme, orv 2
+	for i := range 3 {
+		p, err := sdk.Verify(context.Background(), tok)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i > 0 && !p.Can("invoice:read") {
+			t.Fatalf("verify %d: the fresh map wasn't used", i)
+		}
+	}
+	if fetches != 2 {
+		t.Fatalf("fetched the organization's map %d times, want 2: the stale orv 1, then orv 2 once", fetches)
 	}
 }
 

@@ -26,6 +26,22 @@ final class SdkTest extends TestCase
         self::assertSame(2, $f->roleMapFetches, 'no fetch while rv is current');
     }
 
+    public function testAnOrganizationsMapIsCachedUntilATokenCarriesANewerOrv(): void
+    {
+        $f = new Fixtures();
+        $acme = $f->v['org_roles']['role_maps']['acme'];
+        $f = new Fixtures(null, ['acme' => [['rv' => 3, 'orv' => 1, 'org' => 'acme', 'roles' => []], $acme]]);
+        $sdk = $f->sdk();
+        $token = $f->v['org_roles']['cases'][0]['token']; // org acme, orv 2
+        self::assertFalse($sdk->verify($token)->can('invoice:read'), 'first fetch is the stale orv 1 map');
+        $p = $sdk->verify($token);
+        self::assertTrue($p->can('invoice:read'), 'token orv 2 > 1: refetched');
+        self::assertSame(2, $p->orv);
+        $sdk->verify($token);
+        self::assertSame(2, $f->orgMapFetches, 'no fetch while orv is current');
+        self::assertSame(0, $f->roleMapFetches, "the tenant's map isn't needed");
+    }
+
     public function testLeewayIsRestored(): void
     {
         JWT::$leeway = 7;

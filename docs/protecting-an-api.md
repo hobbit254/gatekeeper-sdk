@@ -28,6 +28,8 @@ Permissions are strings such as `report:read`. Your app declares them, and the r
 
 A token carries the user's roles and a role-map version (`rv`). The SDK fetches your client's role map once, turns roles into permissions locally, and refetches when a token's `rv` is newer. So a role change applies at the user's next token, without a call per request.
 
+An organization can also define its own roles ([Organization roles](admin-api.md#organization-roles)). A token in that organization carries them as `org/<name>`, with the organization's role-map version, `orv`. When a token holds one, the SDK fetches that organization's map (`role-map?org=<slug>`) and caches it until a token carries a newer `rv` or `orv`. An `org/` role never counts outside its organization.
+
 | | Go | TypeScript | Laravel |
 | --- | --- | --- | --- |
 | Guard a route | `gk.RequirePermission("report:read")` | `requirePermission("report:read")` | `gk.can:report:read` |

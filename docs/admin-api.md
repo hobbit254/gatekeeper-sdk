@@ -137,7 +137,7 @@ Errors are problem documents (`type`, `title`, `detail`). Lists page with `limit
 | Users | `/users`, `/users/{id}`, `…/suspend`, `…/roles`, `…/permissions`, `…/revoke-sessions`, `…/reset-mfa`, `/users/import`, `/invitations`, `/sessions` |
 | Roles and permissions | `/roles`, `/permissions`, `/permissions/sync` |
 | Apps | `/clients`, `/clients/{id}/rotate-secret`, `/service-accounts`, `/api-keys` |
-| Organizations | `/orgs`, `/orgs/{id}/members`, `…/sso`, `…/domains`, `…/scim-tokens` |
+| Organizations | `/orgs`, `/orgs/{id}/members`, `…/roles`, `…/sso`, `…/domains`, `…/scim-tokens` |
 | Policy | `/tenant`, `/tenant/policy`, `/tenant/identity-providers/{provider}`, `/tenant/legal-documents` |
 | Events and evidence | `/webhooks`, `/audit-events`, `/compliance/packs`, `/incidents` |
 
@@ -208,3 +208,28 @@ roles:
 - **`/v1/authz/check`** names the group that allowed a permission in its `group` field.
 
 `GET /v1/admin/permission-groups?client_id=shop-api` lists the groups with what each level gives; a service account with `admin:permissions` may read it.
+
+### Organization roles
+
+An organization's admins can build their own roles, such as a "Senior cashier" for one shop, from the groups they hold. Mark the roles they may start from with `template: true`:
+
+```yaml
+roles:
+  cashier:
+    template: true
+    groups: {sales: read}
+```
+
+- **Templates hold groups only**, and never a `tenant_only` group or a system role; the sync refuses anything else.
+- **A copy is independent.** A later change to the template doesn't reach it, but a change to a *group* does.
+- **Guard rails, on the server:** an org admin gives a group only at a level they hold, can't edit or retire a role holding a group they lack, and never gives a `tenant_only` group. At most 50 roles per organization; names never clash with a tenant role.
+- **Names:** tokens, grants and the role map call them `org/<name>`. Grant one with `POST /v1/admin/users/{id}/roles {"role": "org/senior-cashier", "org_id": "acme"}`; it applies only in that organization.
+
+| Call | What it does |
+| --- | --- |
+| `GET /v1/admin/orgs/{id}/roles` | The organization's roles, the templates, and each group with the highest level the caller may give (`max`, and `reason`: `not_held` or `tenant_only`) |
+| `POST /v1/admin/orgs/{id}/roles` | `{name, description?, copy_from?, groups?}`; with `copy_from` and no `groups`, the template's groups are copied |
+| `PATCH /v1/admin/orgs/{id}/roles/{role_id}` | Rename it, or change its description or groups; it reaches everyone holding it at once |
+| `DELETE /v1/admin/orgs/{id}/roles/{role_id}` | Retire it; its grants go with it |
+
+Each change sends `role.updated` with `org_id` and the organization's new `orv` (see [Webhooks](webhooks.md)). Org admins reach these for their own organization; tenant admins for any.

@@ -711,6 +711,132 @@ func (e OnboardingStepId) Valid() bool {
 	}
 }
 
+// Defines values for OrgRoleGroups.
+const (
+	OrgRoleGroupsFull OrgRoleGroups = "full"
+	OrgRoleGroupsRead OrgRoleGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleGroups enum.
+func (e OrgRoleGroups) Valid() bool {
+	switch e {
+	case OrgRoleGroupsFull:
+		return true
+	case OrgRoleGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleReason.
+const (
+	OrgRoleReasonNotHeld OrgRoleReason = "not_held"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleReason enum.
+func (e OrgRoleReason) Valid() bool {
+	switch e {
+	case OrgRoleReasonNotHeld:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleCreateGroups.
+const (
+	OrgRoleCreateGroupsFull OrgRoleCreateGroups = "full"
+	OrgRoleCreateGroupsRead OrgRoleCreateGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleCreateGroups enum.
+func (e OrgRoleCreateGroups) Valid() bool {
+	switch e {
+	case OrgRoleCreateGroupsFull:
+		return true
+	case OrgRoleCreateGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleGroupMax.
+const (
+	OrgRoleGroupMaxFull OrgRoleGroupMax = "full"
+	OrgRoleGroupMaxNone OrgRoleGroupMax = "none"
+	OrgRoleGroupMaxRead OrgRoleGroupMax = "read"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleGroupMax enum.
+func (e OrgRoleGroupMax) Valid() bool {
+	switch e {
+	case OrgRoleGroupMaxFull:
+		return true
+	case OrgRoleGroupMaxNone:
+		return true
+	case OrgRoleGroupMaxRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleGroupReason.
+const (
+	OrgRoleGroupReasonNotHeld    OrgRoleGroupReason = "not_held"
+	OrgRoleGroupReasonTenantOnly OrgRoleGroupReason = "tenant_only"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleGroupReason enum.
+func (e OrgRoleGroupReason) Valid() bool {
+	switch e {
+	case OrgRoleGroupReasonNotHeld:
+		return true
+	case OrgRoleGroupReasonTenantOnly:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRolePatchGroups.
+const (
+	OrgRolePatchGroupsFull OrgRolePatchGroups = "full"
+	OrgRolePatchGroupsRead OrgRolePatchGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the OrgRolePatchGroups enum.
+func (e OrgRolePatchGroups) Valid() bool {
+	switch e {
+	case OrgRolePatchGroupsFull:
+		return true
+	case OrgRolePatchGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgRoleTemplateGroups.
+const (
+	OrgRoleTemplateGroupsFull OrgRoleTemplateGroups = "full"
+	OrgRoleTemplateGroupsRead OrgRoleTemplateGroups = "read"
+)
+
+// Valid indicates whether the value is a known member of the OrgRoleTemplateGroups enum.
+func (e OrgRoleTemplateGroups) Valid() bool {
+	switch e {
+	case OrgRoleTemplateGroupsFull:
+		return true
+	case OrgRoleTemplateGroupsRead:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PermissionGrantEffect.
 const (
 	PermissionGrantEffectAllow PermissionGrantEffect = "allow"
@@ -2077,6 +2203,131 @@ type OrgPatch struct {
 	RequireSso *bool `json:"require_sso,omitempty"`
 }
 
+// OrgRole An organization's own role, built from permission groups only (FR-Z19, ADR-0142)
+type OrgRole struct {
+	// CopiedFrom The template it was copied from; a copy doesn't follow later template edits
+	CopiedFrom  *string `json:"copied_from,omitempty"`
+	Description string  `json:"description"`
+
+	// Editable Whether the caller may edit or retire it: they hold every group it gives, at its level
+	Editable bool `json:"editable"`
+
+	// Groups Permission group key → level
+	Groups map[string]OrgRoleGroups `json:"groups"`
+	Id     openapi_types.UUID       `json:"id"`
+
+	// Name Example: senior-cashier
+	Name string `json:"name"`
+
+	// Reason Why it isn't editable
+	Reason *OrgRoleReason `json:"reason,omitempty"`
+
+	// Ref How tokens, grants and the role map name it
+	//
+	// Example: org/senior-cashier
+	Ref string `json:"ref"`
+}
+
+// OrgRoleGroups defines model for OrgRole.Groups.
+type OrgRoleGroups string
+
+// OrgRoleReason Why it isn't editable
+type OrgRoleReason string
+
+// OrgRoleCreate defines model for OrgRoleCreate.
+type OrgRoleCreate struct {
+	// CopyFrom A template's name; its groups are copied unless groups is given
+	CopyFrom    *string `json:"copy_from,omitempty"`
+	Description *string `json:"description,omitempty"`
+
+	// Groups Permission group key → level
+	Groups *map[string]OrgRoleCreateGroups `json:"groups,omitempty"`
+
+	// Name Example: senior-cashier
+	Name string `json:"name"`
+}
+
+// OrgRoleCreateGroups defines model for OrgRoleCreate.Groups.
+type OrgRoleCreateGroups string
+
+// OrgRoleEditor defines model for OrgRoleEditor.
+type OrgRoleEditor struct {
+	Groups []OrgRoleGroup `json:"groups"`
+
+	// Limit The most roles an organization may have
+	//
+	// Example: 50
+	Limit     *int              `json:"limit,omitempty"`
+	Roles     []OrgRole         `json:"roles"`
+	Templates []OrgRoleTemplate `json:"templates"`
+}
+
+// OrgRoleGroup defines model for OrgRoleGroup.
+type OrgRoleGroup struct {
+	// ClientId The client whose manifest declares it
+	ClientId string `json:"client_id"`
+
+	// Description By language: en (always) and sw
+	Description  map[string]string `json:"description"`
+	FullPatterns []string          `json:"full_patterns"`
+
+	// FullPermissions The permissions holding it at full gives today (read's included)
+	FullPermissions []string `json:"full_permissions"`
+
+	// Key Example: campaigns
+	Key string `json:"key"`
+
+	// Label By language: en (always) and sw
+	Label map[string]string `json:"label"`
+
+	// Max The highest level the caller may give
+	Max          OrgRoleGroupMax `json:"max"`
+	ReadPatterns []string        `json:"read_patterns"`
+
+	// ReadPermissions The permissions holding the group at read gives today
+	ReadPermissions []string `json:"read_permissions"`
+
+	// Reason Why max is below full: the caller doesn't hold it, or it's kept for the tenant's admins
+	Reason *OrgRoleGroupReason `json:"reason,omitempty"`
+
+	// TenantOnly Never given by org admins (ADR-0141)
+	TenantOnly bool `json:"tenant_only"`
+}
+
+// OrgRoleGroupMax The highest level the caller may give
+type OrgRoleGroupMax string
+
+// OrgRoleGroupReason Why max is below full: the caller doesn't hold it, or it's kept for the tenant's admins
+type OrgRoleGroupReason string
+
+// OrgRolePatch defines model for OrgRolePatch.
+type OrgRolePatch struct {
+	Description *string `json:"description,omitempty"`
+
+	// Groups Replaces every group the role holds
+	Groups *map[string]OrgRolePatchGroups `json:"groups,omitempty"`
+
+	// Name Example: senior-cashier
+	Name *string `json:"name,omitempty"`
+}
+
+// OrgRolePatchGroups defines model for OrgRolePatch.Groups.
+type OrgRolePatchGroups string
+
+// OrgRoleTemplate A manifest role marked template: true
+type OrgRoleTemplate struct {
+	// Allowed Whether the caller may copy it as it is
+	Allowed     bool   `json:"allowed"`
+	Description string `json:"description"`
+
+	// Groups Permission group key → level
+	Groups map[string]OrgRoleTemplateGroups `json:"groups"`
+	Name   string                           `json:"name"`
+}
+
+// OrgRoleTemplateGroups defines model for OrgRoleTemplate.Groups.
+type OrgRoleTemplateGroups string
+
 // Overview defines model for Overview.
 type Overview struct {
 	FailedLoginsToday int `json:"failed_logins_today"`
@@ -2293,7 +2544,9 @@ type RoleGrant struct {
 
 	// OrgId Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership.
 	OrgId *string `json:"org_id,omitempty"`
-	Role  string  `json:"role"`
+
+	// Role A tenant role's name, or org/<name> for one of the organization's own roles, granted in that organization only (ADR-0142)
+	Role string `json:"role"`
 }
 
 // RoleGrantResult defines model for RoleGrantResult.
@@ -3020,6 +3273,12 @@ type AdminPutOrgEntitlementsJSONRequestBody = Entitlements
 
 // AdminAddOrgMemberJSONRequestBody defines body for AdminAddOrgMember for application/json ContentType.
 type AdminAddOrgMemberJSONRequestBody = MemberAdd
+
+// AdminCreateOrgRoleJSONRequestBody defines body for AdminCreateOrgRole for application/json ContentType.
+type AdminCreateOrgRoleJSONRequestBody = OrgRoleCreate
+
+// AdminUpdateOrgRoleJSONRequestBody defines body for AdminUpdateOrgRole for application/json ContentType.
+type AdminUpdateOrgRoleJSONRequestBody = OrgRolePatch
 
 // AdminSetSCIMGroupRolesJSONRequestBody defines body for AdminSetSCIMGroupRoles for application/json ContentType.
 type AdminSetSCIMGroupRolesJSONRequestBody = RoleNames
@@ -3801,6 +4060,56 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 	AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListOrgRoles An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/roles (the `AdminListOrgRoles` operationId).
+	AdminListOrgRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCreateOrgRoleWithBody Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+	AdminCreateOrgRoleWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCreateOrgRole Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+	AdminCreateOrgRole(ctx context.Context, id string, body AdminCreateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRetireOrgRole Retire an organization role; its grants are revoked in the same transaction (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/roles/{role_id} (the `AdminRetireOrgRole` operationId).
+	AdminRetireOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUpdateOrgRoleWithBody Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+	AdminUpdateOrgRoleWithBody(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUpdateOrgRole Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+	AdminUpdateOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListSCIMGroups The groups an organization's IdP has provisioned, with their mapped roles
 	//
@@ -6022,6 +6331,116 @@ func (c *Client) AdminAddOrgMember(ctx context.Context, id string, body AdminAdd
 // Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 func (c *Client) AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminRemoveOrgMemberRequest(c.Server, id, userId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListOrgRoles An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/roles (the `AdminListOrgRoles` operationId).
+func (c *Client) AdminListOrgRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListOrgRolesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCreateOrgRoleWithBody Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+func (c *Client) AdminCreateOrgRoleWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCreateOrgRoleRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCreateOrgRole Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+func (c *Client) AdminCreateOrgRole(ctx context.Context, id string, body AdminCreateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCreateOrgRoleRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRetireOrgRole Retire an organization role; its grants are revoked in the same transaction (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/roles/{role_id} (the `AdminRetireOrgRole` operationId).
+func (c *Client) AdminRetireOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRetireOrgRoleRequest(c.Server, id, roleId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUpdateOrgRoleWithBody Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+func (c *Client) AdminUpdateOrgRoleWithBody(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUpdateOrgRoleRequestWithBody(c.Server, id, roleId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUpdateOrgRole Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+func (c *Client) AdminUpdateOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUpdateOrgRoleRequest(c.Server, id, roleId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10589,6 +11008,182 @@ func NewAdminRemoveOrgMemberRequest(server string, id string, userId string) (*h
 	return req, nil
 }
 
+// NewAdminListOrgRolesRequest constructs an http.Request for the AdminListOrgRoles method
+func NewAdminListOrgRolesRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminCreateOrgRoleRequest calls the generic AdminCreateOrgRole builder with application/json body
+func NewAdminCreateOrgRoleRequest(server string, id string, body AdminCreateOrgRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminCreateOrgRoleRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminCreateOrgRoleRequestWithBody constructs an http.Request for the AdminCreateOrgRole method, with any body, and a specified content type
+func NewAdminCreateOrgRoleRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminRetireOrgRoleRequest constructs an http.Request for the AdminRetireOrgRole method
+func NewAdminRetireOrgRoleRequest(server string, id string, roleId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "role_id", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminUpdateOrgRoleRequest calls the generic AdminUpdateOrgRole builder with application/json body
+func NewAdminUpdateOrgRoleRequest(server string, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminUpdateOrgRoleRequestWithBody(server, id, roleId, "application/json", bodyReader)
+}
+
+// NewAdminUpdateOrgRoleRequestWithBody constructs an http.Request for the AdminUpdateOrgRole method, with any body, and a specified content type
+func NewAdminUpdateOrgRoleRequestWithBody(server string, id string, roleId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "role_id", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminListSCIMGroupsRequest constructs an http.Request for the AdminListSCIMGroups method
 func NewAdminListSCIMGroupsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -14374,6 +14969,60 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 	AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error)
+
+	// AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/roles (the `AdminListOrgRoles` operationId).
+	AdminListOrgRolesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgRolesResponse, error)
+
+	// AdminCreateOrgRoleWithBodyWithResponse Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+	AdminCreateOrgRoleWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCreateOrgRoleResponse, error)
+
+	// AdminCreateOrgRoleWithResponse Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+	AdminCreateOrgRoleWithResponse(ctx context.Context, id string, body AdminCreateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCreateOrgRoleResponse, error)
+
+	// AdminRetireOrgRoleWithResponse Retire an organization role; its grants are revoked in the same transaction (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/roles/{role_id} (the `AdminRetireOrgRole` operationId).
+	AdminRetireOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRetireOrgRoleResponse, error)
+
+	// AdminUpdateOrgRoleWithBodyWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+	AdminUpdateOrgRoleWithBodyWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminUpdateOrgRoleResponse, error)
+
+	// AdminUpdateOrgRoleWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+	AdminUpdateOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminUpdateOrgRoleResponse, error)
 
 	// AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
 	//
@@ -19420,6 +20069,303 @@ func (r AdminRemoveOrgMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminRemoveOrgMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListOrgRolesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgRoleEditor
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListOrgRolesResponse) GetJSON200() *OrgRoleEditor {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListOrgRolesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListOrgRolesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListOrgRolesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListOrgRolesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListOrgRolesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListOrgRolesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListOrgRolesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminCreateOrgRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *OrgRole
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AdminCreateOrgRoleResponse) GetJSON201() *OrgRole {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminCreateOrgRoleResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminCreateOrgRoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminCreateOrgRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminCreateOrgRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminCreateOrgRoleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRetireOrgRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRetireOrgRoleResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRetireOrgRoleResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRetireOrgRoleResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRetireOrgRoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRetireOrgRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRetireOrgRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRetireOrgRoleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminUpdateOrgRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgRole
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminUpdateOrgRoleResponse) GetJSON200() *OrgRole {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminUpdateOrgRoleResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminUpdateOrgRoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminUpdateOrgRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminUpdateOrgRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminUpdateOrgRoleResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -25697,6 +26643,96 @@ func (c *ClientWithResponses) AdminRemoveOrgMemberWithResponse(ctx context.Conte
 	return ParseAdminRemoveOrgMemberResponse(rsp)
 }
 
+// AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/roles (the `AdminListOrgRoles` operationId).
+func (c *ClientWithResponses) AdminListOrgRolesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgRolesResponse, error) {
+	rsp, err := c.AdminListOrgRoles(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListOrgRolesResponse(rsp)
+}
+
+// AdminCreateOrgRoleWithBodyWithResponse Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+func (c *ClientWithResponses) AdminCreateOrgRoleWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCreateOrgRoleResponse, error) {
+	rsp, err := c.AdminCreateOrgRoleWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCreateOrgRoleResponse(rsp)
+}
+
+// AdminCreateOrgRoleWithResponse Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles (the `AdminCreateOrgRole` operationId).
+func (c *ClientWithResponses) AdminCreateOrgRoleWithResponse(ctx context.Context, id string, body AdminCreateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCreateOrgRoleResponse, error) {
+	rsp, err := c.AdminCreateOrgRole(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCreateOrgRoleResponse(rsp)
+}
+
+// AdminRetireOrgRoleWithResponse Retire an organization role; its grants are revoked in the same transaction (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/roles/{role_id} (the `AdminRetireOrgRole` operationId).
+func (c *ClientWithResponses) AdminRetireOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRetireOrgRoleResponse, error) {
+	rsp, err := c.AdminRetireOrgRole(ctx, id, roleId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRetireOrgRoleResponse(rsp)
+}
+
+// AdminUpdateOrgRoleWithBodyWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+func (c *ClientWithResponses) AdminUpdateOrgRoleWithBodyWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminUpdateOrgRoleResponse, error) {
+	rsp, err := c.AdminUpdateOrgRoleWithBody(ctx, id, roleId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUpdateOrgRoleResponse(rsp)
+}
+
+// AdminUpdateOrgRoleWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
+func (c *ClientWithResponses) AdminUpdateOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminUpdateOrgRoleResponse, error) {
+	rsp, err := c.AdminUpdateOrgRole(ctx, id, roleId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUpdateOrgRoleResponse(rsp)
+}
+
 // AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -30418,6 +31454,246 @@ func ParseAdminRemoveOrgMemberResponse(rsp *http.Response) (*AdminRemoveOrgMembe
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListOrgRolesResponse parses an HTTP response from a AdminListOrgRolesWithResponse call
+func ParseAdminListOrgRolesResponse(rsp *http.Response) (*AdminListOrgRolesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListOrgRolesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgRoleEditor
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminCreateOrgRoleResponse parses an HTTP response from a AdminCreateOrgRoleWithResponse call
+func ParseAdminCreateOrgRoleResponse(rsp *http.Response) (*AdminCreateOrgRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminCreateOrgRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest OrgRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRetireOrgRoleResponse parses an HTTP response from a AdminRetireOrgRoleWithResponse call
+func ParseAdminRetireOrgRoleResponse(rsp *http.Response) (*AdminRetireOrgRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRetireOrgRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminUpdateOrgRoleResponse parses an HTTP response from a AdminUpdateOrgRoleWithResponse call
+func ParseAdminUpdateOrgRoleResponse(rsp *http.Response) (*AdminUpdateOrgRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminUpdateOrgRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
 
 	}
 

@@ -61,7 +61,9 @@ final class Gatekeeper
         }
         $roles = self::strings($claims->roles ?? []);
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
-        [$permissions, $stepUp] = $this->permissions($roles, $rv);
+        $orv = is_int($claims->orv ?? null) ? $claims->orv : 0;
+        $org = isset($claims->org) && is_string($claims->org) ? $claims->org : '';
+        [$permissions, $stepUp] = $this->permissions($roles, $rv, $org, $orv);
 
         return new Principal(
             sub: (string) ($claims->sub ?? ''),
@@ -74,6 +76,7 @@ final class Gatekeeper
             amr: self::strings($claims->amr ?? []),
             authTime: is_int($claims->auth_time ?? null) ? $claims->auth_time : 0,
             rv: $rv,
+            orv: $orv,
             sid: $sid,
             jti: $jti,
             actor: isset($claims->act->sub) && is_string($claims->act->sub) ? $claims->act->sub : null,
@@ -330,23 +333,40 @@ final class Gatekeeper
         return JWK::parseKeySet($jwks['set'], 'ES256');
     }
 
+    /** Marks an organization's own role in a token's roles (ADR-0142). */
+    public const ORG_ROLE_PREFIX = 'org/';
+
     /**
      * Resolves roles through the cached role map, refetching when the token's
-     * rv is newer than the cached one.
+     * rv is newer than the cached one. A token in an organization holding one
+     * of its own roles (org/<name>) is resolved through that organization's
+     * map, cached by (org, rv, orv) (ADR-0142).
      *
      * @param list<string> $roles
      * @return array{list<string>, array<string, int>} permissions and their step-up windows (ADR-0097)
      */
-    private function permissions(array $roles, int $rv): array
+    private function permissions(array $roles, int $rv, string $org = '', int $orv = 0): array
     {
+        $url = $this->config->issuer . '/v1/clients/' . rawurlencode($this->config->clientId) . '/role-map';
         $cacheKey = 'gatekeeper.rolemap.' . sha1($this->config->issuer . '|' . $this->config->clientId);
+        $hasOrgRole = false;
+        foreach ($roles as $role) {
+            $hasOrgRole = $hasOrgRole || str_starts_with($role, self::ORG_ROLE_PREFIX);
+        }
+        if ($org !== '' && $hasOrgRole) {
+            $cacheKey .= '.org.' . sha1($org);
+            $url .= '?org=' . rawurlencode($org);
+        }
         $map = $this->cache->get($cacheKey);
-        if ($map === null || $rv > ($map['rv'] ?? 0)) {
-            $map = $this->getJSON($this->config->issuer . '/v1/clients/' . rawurlencode($this->config->clientId) . '/role-map', true);
+        if ($map === null || $rv > ($map['rv'] ?? 0) || $orv > ($map['orv'] ?? 0)) {
+            $map = $this->getJSON($url, true);
             $this->cache->set($cacheKey, $map);
         }
         $out = [];
         foreach ($roles as $role) {
+            if ($org === '' && str_starts_with($role, self::ORG_ROLE_PREFIX)) {
+                continue; // an organization's role means nothing outside it
+            }
             foreach ($map['roles'][$role] ?? [] as $p) {
                 $out[$p] = true;
             }
