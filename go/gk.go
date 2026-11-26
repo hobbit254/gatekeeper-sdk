@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"sync"
@@ -49,6 +50,7 @@ type Principal struct {
 	AMR         []string
 	AuthTime    time.Time
 	RV          int64
+	ORV         int64  // the organization's role-map version, 0 outside one (ADR-0142)
 	SID         string // browser session (ADR-0044)
 	JTI         string
 	// Actor is the admin acting as Sub, and ImpersonationEndsAt when that
@@ -109,7 +111,23 @@ type SDK struct {
 	roleStepUp map[string]int // permission → seconds (ADR-0097)
 	roleMapRV  int64
 	roleMapSet bool
+	orgMaps    map[string]roleMap // by org slug (ADR-0142)
 }
+
+// roleMap is one fetched role map: the tenant's, or an organization's with
+// its own roles added as org/<name>.
+type roleMap struct {
+	RV     int64               `json:"rv"`
+	ORV    int64               `json:"orv"`
+	Roles  map[string][]string `json:"roles"`
+	StepUp map[string]int      `json:"step_up"`
+}
+
+// maxOrgMaps bounds the per-organization cache; past it the cache starts over.
+const maxOrgMaps = 1000
+
+// OrgRolePrefix marks an organization's own role in a token's roles (ADR-0142).
+const OrgRolePrefix = "org/"
 
 // New returns an SDK for cfg.
 func New(cfg Config) *SDK {
@@ -157,6 +175,7 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		Org      string   `json:"org"`
 		Roles    []string `json:"roles"`
 		RV       int64    `json:"rv"`
+		ORV      int64    `json:"orv"`
 		Scope    string   `json:"scope"`
 		AMR      []string `json:"amr"`
 		AuthTime int64    `json:"auth_time"`
@@ -188,12 +207,12 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 			return nil, fmt.Errorf("%w: denied", errors.Join(ErrInvalidToken, err))
 		}
 	}
-	perms, stepUp, err := s.permissions(ctx, c.Roles, c.RV)
+	perms, stepUp, err := s.permissions(ctx, c.Roles, c.RV, c.Org, c.ORV)
 	if err != nil {
 		return nil, err
 	}
 	p := &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
-		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV,
+		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV, ORV: c.ORV,
 		SID: c.SID, JTI: c.JTI, StepUp: stepUp, Entitlements: c.Entitlements}
 	if c.Act != nil {
 		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
@@ -228,32 +247,50 @@ func (s *SDK) key(ctx context.Context, kid string) (any, error) {
 }
 
 // permissions resolves roles through the cached role map, refetching when the
-// token's rv is newer than the cached one.
-func (s *SDK) permissions(ctx context.Context, roles []string, rv int64) ([]string, map[string]time.Duration, error) {
+// token's rv is newer than the cached one. A token in an organization that
+// holds one of its own roles (org/<name>) is resolved through that
+// organization's map instead, refetched when rv or orv is newer (ADR-0142).
+func (s *SDK) permissions(ctx context.Context, roles []string, rv int64, org string, orv int64) ([]string, map[string]time.Duration, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.roleMapSet || rv > s.roleMapRV {
-		var rm struct {
-			RV     int64               `json:"rv"`
-			Roles  map[string][]string `json:"roles"`
-			StepUp map[string]int      `json:"step_up"`
+	base := s.cfg.Issuer + "/v1/clients/" + s.cfg.ClientID + "/role-map"
+	var rm roleMap
+	if org != "" && slices.ContainsFunc(roles, func(r string) bool { return strings.HasPrefix(r, OrgRolePrefix) }) {
+		cached, ok := s.orgMaps[org]
+		if !ok || rv > cached.RV || orv > cached.ORV {
+			if err := s.getJSON(ctx, base+"?org="+url.QueryEscape(org), true, &cached); err != nil {
+				return nil, nil, err
+			}
+			if s.orgMaps == nil || len(s.orgMaps) >= maxOrgMaps {
+				s.orgMaps = map[string]roleMap{}
+			}
+			s.orgMaps[org] = cached
 		}
-		if err := s.getJSON(ctx, s.cfg.Issuer+"/v1/clients/"+s.cfg.ClientID+"/role-map", true, &rm); err != nil {
-			return nil, nil, err
+		rm = cached
+	} else {
+		if !s.roleMapSet || rv > s.roleMapRV {
+			var fresh roleMap
+			if err := s.getJSON(ctx, base, true, &fresh); err != nil {
+				return nil, nil, err
+			}
+			s.roleMap, s.roleStepUp, s.roleMapRV, s.roleMapSet = fresh.Roles, fresh.StepUp, fresh.RV, true
 		}
-		s.roleMap, s.roleStepUp, s.roleMapRV, s.roleMapSet = rm.Roles, rm.StepUp, rm.RV, true
+		rm = roleMap{Roles: s.roleMap, StepUp: s.roleStepUp}
 	}
 	seen := map[string]bool{}
 	var out []string
 	var stepUp map[string]time.Duration
 	for _, r := range roles {
-		for _, p := range s.roleMap[r] {
+		if strings.HasPrefix(r, OrgRolePrefix) && org == "" {
+			continue // an organization's role means nothing outside it
+		}
+		for _, p := range rm.Roles[r] {
 			if seen[p] {
 				continue
 			}
 			seen[p] = true
 			out = append(out, p)
-			if w := s.roleStepUp[p]; w > 0 {
+			if w := rm.StepUp[p]; w > 0 {
 				if stepUp == nil {
 					stepUp = map[string]time.Duration{}
 				}

@@ -19,6 +19,21 @@ final class ContractTest extends TestCase
         }
     }
 
+    /** @return iterable<string, array{string, string, string}> */
+    public static function orgCases(): iterable
+    {
+        foreach ((new Fixtures())->v['org_roles']['cases'] as $c) {
+            yield $c['name'] => [$c['token'], $c['permission'], $c['expect']];
+        }
+    }
+
+    /** Organization roles resolve only through their own organization's map (ADR-0142). */
+    #[DataProvider('orgCases')]
+    public function testOrgRoleVector(string $token, string $permission, string $expect): void
+    {
+        $this->testVector($token, $permission, $expect);
+    }
+
     #[DataProvider('cases')]
     public function testVector(string $token, string $permission, string $expect): void
     {

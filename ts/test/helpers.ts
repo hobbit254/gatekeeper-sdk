@@ -5,8 +5,8 @@ import { createGatekeeper } from "../src/index.js";
 const v = JSON.parse(readFileSync(new URL("../../contract/vectors.json", import.meta.url), "utf8"));
 
 /** Serves the JWKS and role map from the vectors file and counts role-map fetches. */
-export function fixedFetch(roleMaps: unknown[] = [v.role_map]) {
-  const calls = { roleMap: 0, introspect: 0 };
+export function fixedFetch(roleMaps: unknown[] = [v.role_map], orgMaps: Record<string, unknown[]> = {}) {
+  const calls = { roleMap: 0, introspect: 0, orgMap: 0 };
   const f = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
     if (url === `${v.issuer}/oauth2/introspect` && init?.method === "POST") {
@@ -19,6 +19,12 @@ export function fixedFetch(roleMaps: unknown[] = [v.role_map]) {
       return Response.json(v.api_keys.introspection[token] ?? { active: false });
     }
     if (url === `${v.issuer}/.well-known/jwks.json`) return Response.json(v.jwks);
+    if (url.startsWith(`${v.issuer}/v1/clients/${v.client_id}/role-map?org=`)) {
+      const org = new URL(url).searchParams.get("org") ?? "";
+      const maps = orgMaps[org] ?? (v.org_roles.role_maps[org] ? [v.org_roles.role_maps[org]] : undefined);
+      if (!maps) return new Response("{}", { status: 404 });
+      return Response.json(maps[Math.min(calls.orgMap++, maps.length - 1)]);
+    }
     if (url === `${v.issuer}/v1/clients/${v.client_id}/role-map`) {
       const auth = new Headers(init?.headers).get("authorization");
       if (auth !== "Basic " + Buffer.from(`${v.client_id}:${v.client_secret}`).toString("base64")) {

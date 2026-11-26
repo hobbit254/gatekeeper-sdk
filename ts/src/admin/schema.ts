@@ -990,6 +990,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        get: operations["adminListOrgRoles"];
+        put?: never;
+        /**
+         * Create an organization role, blank or copied from a template (FR-Z19, ADR-0142)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Names are unique in the organization and never a tenant role's (409); at most 50 roles (422). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+         */
+        post: operations["adminCreateOrgRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/roles/{role_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retire an organization role; its grants are revoked in the same transaction (FR-Z19)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+         */
+        delete: operations["adminRetireOrgRole"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+         */
+        patch: operations["adminUpdateOrgRole"];
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/scim-groups": {
         parameters: {
             query?: never;
@@ -2933,6 +2981,85 @@ export interface components {
             /** @description Tenant admins only (ADR-0067) */
             require_sso?: boolean;
         };
+        /** @description An organization's own role, built from permission groups only (FR-Z19, ADR-0142) */
+        OrgRole: {
+            /** @description The template it was copied from; a copy doesn't follow later template edits */
+            copied_from?: string | null;
+            description: string;
+            /** @description Whether the caller may edit or retire it: they hold every group it gives, at its level */
+            editable: boolean;
+            /** @description Permission group key → level */
+            groups: {
+                [key: string]: "read" | "full";
+            };
+            /** Format: uuid */
+            id: string;
+            /** @example senior-cashier */
+            name: string;
+            /**
+             * @description Why it isn't editable
+             * @enum {string}
+             */
+            reason?: "not_held";
+            /**
+             * @description How tokens, grants and the role map name it
+             * @example org/senior-cashier
+             */
+            ref: string;
+        };
+        OrgRoleCreate: {
+            /** @description A template's name; its groups are copied unless groups is given */
+            copy_from?: string;
+            description?: string;
+            /** @description Permission group key → level */
+            groups?: {
+                [key: string]: "read" | "full";
+            };
+            /** @example senior-cashier */
+            name: string;
+        };
+        OrgRoleEditor: {
+            groups: components["schemas"]["OrgRoleGroup"][];
+            /**
+             * @description The most roles an organization may have
+             * @example 50
+             */
+            limit?: number;
+            roles: components["schemas"]["OrgRole"][];
+            templates: components["schemas"]["OrgRoleTemplate"][];
+        };
+        OrgRoleGroup: components["schemas"]["PermissionGroup"] & {
+            /**
+             * @description The highest level the caller may give
+             * @enum {string}
+             */
+            max: "none" | "read" | "full";
+            /**
+             * @description Why max is below full: the caller doesn't hold it, or it's kept for the tenant's admins
+             * @enum {string}
+             */
+            reason?: "not_held" | "tenant_only";
+        };
+        OrgRolePatch: {
+            description?: string;
+            /** @description Replaces every group the role holds */
+            groups?: {
+                [key: string]: "read" | "full";
+            };
+            /** @example senior-cashier */
+            name?: string;
+        };
+        /** @description A manifest role marked template: true */
+        OrgRoleTemplate: {
+            /** @description Whether the caller may copy it as it is */
+            allowed: boolean;
+            description: string;
+            /** @description Permission group key → level */
+            groups: {
+                [key: string]: "read" | "full";
+            };
+            name: string;
+        };
         Overview: {
             failed_logins_today: number;
             lockouts_today: number;
@@ -3126,6 +3253,7 @@ export interface components {
             expires_at?: string;
             /** @description Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership. */
             org_id?: string;
+            /** @description A tenant role's name, or org/<name> for one of the organization's own roles, granted in that organization only (ADR-0142) */
             role: string;
         };
         RoleGrantResult: {
@@ -5210,6 +5338,122 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    adminListOrgRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRoleEditor"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminCreateOrgRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgRoleCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRole"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminRetireOrgRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminUpdateOrgRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgRolePatch"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRole"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     adminListSCIMGroups: {

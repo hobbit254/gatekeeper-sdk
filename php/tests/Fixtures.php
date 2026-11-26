@@ -11,13 +11,17 @@ use Gatekeeper\Gatekeeper;
 final class Fixtures
 {
     public int $roleMapFetches = 0;
+    public int $orgMapFetches = 0;
     public int $introspections = 0;
 
     /** @var array<string, mixed> */
     public array $v;
 
-    /** @param list<array<string, mixed>>|null $roleMaps successive role-map responses */
-    public function __construct(private ?array $roleMaps = null)
+    /**
+     * @param list<array<string, mixed>>|null $roleMaps successive role-map responses
+     * @param array<string, list<array<string, mixed>>> $orgMaps successive ?org= responses by slug (ADR-0142)
+     */
+    public function __construct(private ?array $roleMaps = null, private array $orgMaps = [])
     {
         $this->v = json_decode((string) file_get_contents(__DIR__ . '/../../contract/vectors.json'), true, flags: JSON_THROW_ON_ERROR);
         $this->roleMaps ??= [$this->v['role_map']];
@@ -35,6 +39,16 @@ final class Fixtures
                     }
                     parse_str($body, $form);
                     return [200, json_encode($v['api_keys']['introspection'][$form['token'] ?? ''] ?? ['active' => false])];
+                }
+                $orgPrefix = $v['issuer'] . '/v1/clients/' . $v['client_id'] . '/role-map?org=';
+                if (str_starts_with($url, $orgPrefix)) {
+                    $org = rawurldecode(substr($url, strlen($orgPrefix)));
+                    $maps = $this->orgMaps[$org] ?? (isset($v['org_roles']['role_maps'][$org]) ? [$v['org_roles']['role_maps'][$org]] : null);
+                    if ($maps === null) {
+                        return [404, '{}'];
+                    }
+                    $i = min($this->orgMapFetches++, count($maps) - 1);
+                    return [200, json_encode($maps[$i])];
                 }
                 if ($url === $v['issuer'] . '/.well-known/jwks.json') {
                     return [200, json_encode($v['jwks'])];

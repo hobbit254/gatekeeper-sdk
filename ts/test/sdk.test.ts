@@ -65,6 +65,18 @@ describe("role map cache", () => {
     expect(calls.roleMap).toBe(2);
   });
 
+  it("an organization's map is cached until a token carries a newer orv (ADR-0142)", async () => {
+    const tok = v.org_roles.cases[0].token; // org acme, orv 2
+    const stale = { ...v.org_roles.role_maps.acme, orv: 1, roles: {} };
+    const { f, calls } = fixedFetch([v.role_map], { acme: [stale, v.org_roles.role_maps.acme] });
+    const g = sdk(f);
+    expect((await g.verify(tok)).can("invoice:read")).toBe(false); // the stale orv 1 map
+    expect((await g.verify(tok)).can("invoice:read")).toBe(true); // token orv 2 > cached 1: refetched
+    expect((await g.verify(tok)).orv).toBe(2);
+    expect(calls.orgMap).toBe(2);
+    expect(calls.roleMap).toBe(0);
+  });
+
   it("concurrent verifies share one fetch", async () => {
     const { f, calls } = fixedFetch();
     const g = sdk(f);

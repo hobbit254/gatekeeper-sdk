@@ -40,6 +40,8 @@ final readonly class Principal
         public array $stepUp = [],
         /** The customer's plan and features, ['plan' => string, 'features' => list<string>], or null (ADR-0098). */
         public ?array $entitlements = null,
+        /** The organization's role-map version; 0 outside an organization (ADR-0142). */
+        public int $orv = 0,
     ) {
     }
 
