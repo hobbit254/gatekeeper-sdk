@@ -34,6 +34,26 @@ final class ContractTest extends TestCase
         $this->testVector($token, $permission, $expect);
     }
 
+    /** @return iterable<string, array{string, string, int, string}> */
+    public static function amountCases(): iterable
+    {
+        foreach ((new Fixtures())->v['amount_limits']['cases'] as $c) {
+            yield $c['name'] => [$c['token'], $c['permission'], $c['amount'], $c['expect']];
+        }
+    }
+
+    /** canAmount answers within, above or without the permission; in an organization, with its overrides (ADR-0143). */
+    #[DataProvider('amountCases')]
+    public function testAmountLimit(string $token, string $permission, int $amount, string $expect): void
+    {
+        $f = new Fixtures();
+        $p = $f->sdk()->verify($token);
+        self::assertSame($expect, $p->canAmount($permission, $amount));
+        if ($p->limits !== []) {
+            self::assertSame($f->v['amount_limits']['currency'][$p->orgId === 'acme' ? 'acme' : 'tenant'], $p->currency);
+        }
+    }
+
     #[DataProvider('cases')]
     public function testVector(string $token, string $permission, string $expect): void
     {

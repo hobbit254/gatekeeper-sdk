@@ -512,6 +512,14 @@
           "is_system": {
             "type": "boolean"
           },
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "The role's own amount limits, from its manifest (ADR-0143)",
+            "maxProperties": 100,
+            "type": "object"
+          },
           "name": {
             "type": "string"
           },
@@ -685,6 +693,29 @@
           "relations",
           "truncated"
         ],
+        "type": "object"
+      },
+      "AmountLimit": {
+        "additionalProperties": false,
+        "description": "An amount limit in minor units (ADR-0143). A missing value is no limit; 0 is none at all.",
+        "properties": {
+          "alone": {
+            "description": "How much the holder does without approval",
+            "example": 200000,
+            "format": "int64",
+            "maximum": 9007199254740992,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "approves": {
+            "description": "How much they may approve for someone else",
+            "example": 0,
+            "format": "int64",
+            "maximum": 9007199254740992,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
         "type": "object"
       },
       "AnchorCheck": {
@@ -2507,6 +2538,10 @@
             "format": "date-time",
             "type": "string"
           },
+          "currency": {
+            "description": "Its own currency for amount limits, or absent to use the tenant's (ADR-0143)",
+            "type": "string"
+          },
           "entitlements": {
             "$ref": "#/components/schemas/Entitlements"
           },
@@ -2629,6 +2664,11 @@
       },
       "OrgPatch": {
         "properties": {
+          "currency": {
+            "description": "ISO 4217 code for amount limits; \"\" uses the tenant's settings.currency. Tenant admins only (ADR-0143)",
+            "example": "KES",
+            "type": "string"
+          },
           "name": {
             "maxLength": 100,
             "type": "string"
@@ -2652,7 +2692,7 @@
             "type": "string"
           },
           "editable": {
-            "description": "Whether the caller may edit or retire it: they hold every group it gives, at its level",
+            "description": "Whether the caller may edit or retire it: they hold every group it gives, at its level, and its limits are within their own",
             "type": "boolean"
           },
           "groups": {
@@ -2671,6 +2711,14 @@
             "format": "uuid",
             "type": "string"
           },
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit, on permissions that carry one (ADR-0143)",
+            "maxProperties": 100,
+            "type": "object"
+          },
           "name": {
             "example": "senior-cashier",
             "pattern": "^[a-z][a-z0-9_-]{0,62}$",
@@ -2679,7 +2727,8 @@
           "reason": {
             "description": "Why it isn't editable",
             "enum": [
-              "not_held"
+              "not_held",
+              "above_limit"
             ],
             "type": "string"
           },
@@ -2722,6 +2771,14 @@
             "maxProperties": 100,
             "type": "object"
           },
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own",
+            "maxProperties": 100,
+            "type": "object"
+          },
           "name": {
             "example": "senior-cashier",
             "pattern": "^[a-z][a-z0-9_-]{0,62}$",
@@ -2735,6 +2792,11 @@
       },
       "OrgRoleEditor": {
         "properties": {
+          "currency": {
+            "description": "What limits are counted in: the organization's currency, else the tenant's; \"\" when neither is set",
+            "example": "KES",
+            "type": "string"
+          },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/OrgRoleGroup"
@@ -2746,6 +2808,12 @@
             "example": 50,
             "type": "integer"
           },
+          "limited": {
+            "items": {
+              "$ref": "#/components/schemas/OrgRoleLimited"
+            },
+            "type": "array"
+          },
           "roles": {
             "items": {
               "$ref": "#/components/schemas/OrgRole"
@@ -2755,6 +2823,13 @@
           "templates": {
             "items": {
               "$ref": "#/components/schemas/OrgRoleTemplate"
+            },
+            "type": "array"
+          },
+          "tenant_roles": {
+            "description": "The tenant's roles with limits, and this organization's overrides of them",
+            "items": {
+              "$ref": "#/components/schemas/OrgTenantRoleLimits"
             },
             "type": "array"
           }
@@ -2798,6 +2873,23 @@
           }
         ]
       },
+      "OrgRoleLimited": {
+        "description": "A limited permission the caller holds, with the most they may give",
+        "properties": {
+          "key": {
+            "example": "sale:refund",
+            "type": "string"
+          },
+          "max": {
+            "$ref": "#/components/schemas/AmountLimit"
+          }
+        },
+        "required": [
+          "key",
+          "max"
+        ],
+        "type": "object"
+      },
       "OrgRolePatch": {
         "additionalProperties": false,
         "properties": {
@@ -2817,6 +2909,14 @@
             "maxProperties": 100,
             "type": "object"
           },
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own",
+            "maxProperties": 100,
+            "type": "object"
+          },
           "name": {
             "example": "senior-cashier",
             "pattern": "^[a-z][a-z0-9_-]{0,62}$",
@@ -2829,7 +2929,7 @@
         "description": "A manifest role marked template: true",
         "properties": {
           "allowed": {
-            "description": "Whether the caller may copy it as it is",
+            "description": "Whether the caller may copy it as it is: its groups and limits are within theirs",
             "type": "boolean"
           },
           "description": {
@@ -2847,6 +2947,14 @@
             "maxProperties": 100,
             "type": "object"
           },
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit, on permissions that carry one (ADR-0143)",
+            "maxProperties": 100,
+            "type": "object"
+          },
           "name": {
             "type": "string"
           }
@@ -2856,6 +2964,45 @@
           "description",
           "groups",
           "allowed"
+        ],
+        "type": "object"
+      },
+      "OrgTenantRoleLimits": {
+        "properties": {
+          "editable": {
+            "description": "Whether the caller may override them",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "The organization's overrides, used in its scope instead of own",
+            "maxProperties": 100,
+            "type": "object"
+          },
+          "own": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit, on permissions that carry one (ADR-0143)",
+            "maxProperties": 100,
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "own",
+          "overrides",
+          "editable"
         ],
         "type": "object"
       },
@@ -2950,6 +3097,14 @@
           "expires_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "limit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AmountLimit"
+              }
+            ],
+            "description": "An allow's limit, on a permission that carries one; without it an allow needs approval for any amount (ADR-0143)"
           },
           "org_id": {
             "description": "Org id or slug; omitted is tenant-wide",
@@ -3533,6 +3688,49 @@
         },
         "required": [
           "groups"
+        ],
+        "type": "object"
+      },
+      "RoleLimits": {
+        "properties": {
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Permission key → limit, on permissions that carry one (ADR-0143)",
+            "maxProperties": 100,
+            "type": "object"
+          },
+          "ref": {
+            "example": "cashier",
+            "type": "string"
+          },
+          "role_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role_id",
+          "ref",
+          "limits"
+        ],
+        "type": "object"
+      },
+      "RoleLimitsPut": {
+        "additionalProperties": false,
+        "properties": {
+          "limits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/AmountLimit"
+            },
+            "description": "Replaces them all; {} clears them",
+            "maxProperties": 100,
+            "type": "object"
+          }
+        },
+        "required": [
+          "limits"
         ],
         "type": "object"
       },
@@ -4711,7 +4909,7 @@
   "info": {
     "description": "Generated from api/openapi.json by cmd/adminspec (ADR-0088). Base URL: the tenant issuer, https://auth.\u003cdomain\u003e/t/\u003ctenant\u003e.",
     "title": "Gatekeeper Admin API",
-    "version": "0.55.0"
+    "version": "0.56.0"
   },
   "openapi": "3.0.3",
   "paths": {
@@ -7914,7 +8112,7 @@
         "summary": "Retire an organization role; its grants are revoked in the same transaction (FR-Z19)"
       },
       "patch": {
-        "description": "Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).",
+        "description": "Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).",
         "operationId": "adminUpdateOrgRole",
         "parameters": [
           {
@@ -7984,6 +8182,77 @@
           }
         ],
         "summary": "Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)"
+      }
+    },
+    "/v1/admin/orgs/{id}/roles/{role_id}/limits": {
+      "put": {
+        "description": "Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).",
+        "operationId": "adminPutOrgRoleLimits",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "role_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleLimitsPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoleLimits"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "413": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)"
       }
     },
     "/v1/admin/orgs/{id}/scim-groups": {

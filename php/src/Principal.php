@@ -14,6 +14,7 @@ final readonly class Principal
      * @param list<string> $amr
      * @param array<string, int> $stepUp
      * @param array{plan: string, features: list<string>}|null $entitlements
+     * @param array<string, array{alone?: int, approves?: int}> $limits
      */
     public function __construct(
         public string $sub,
@@ -42,7 +43,30 @@ final readonly class Principal
         public ?array $entitlements = null,
         /** The organization's role-map version; 0 outside an organization (ADR-0142). */
         public int $orv = 0,
+        /** The most generous amount limit on each held permission that carries one, in minor units; a missing value is no limit (ADR-0143). */
+        public array $limits = [],
+        /** The currency those limits are counted in (ISO 4217): the organization's, else the tenant's. */
+        public string $currency = '',
     ) {
+    }
+
+    public const AMOUNT_ALLOW = 'allow';
+    public const AMOUNT_APPROVAL_REQUIRED = 'approval_required';
+    public const AMOUNT_DENY = 'deny';
+
+    /**
+     * For doing $permission for $amount (minor units): 'allow' within the alone
+     * limit, 'approval_required' above it, 'deny' when the permission isn't
+     * held. Sees only the token's roles; /v1/authz/check with amount is the
+     * authoritative answer (ADR-0143).
+     */
+    public function canAmount(string $permission, int $amount): string
+    {
+        if (!$this->can($permission)) {
+            return self::AMOUNT_DENY;
+        }
+        $alone = $this->limits[$permission]['alone'] ?? null;
+        return $alone !== null && $amount > $alone ? self::AMOUNT_APPROVAL_REQUIRED : self::AMOUNT_ALLOW;
     }
 
     /** Exact key match; wildcards are already expanded in the role map. */

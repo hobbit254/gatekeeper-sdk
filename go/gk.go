@@ -69,6 +69,39 @@ type Principal struct {
 	// Entitlements are the customer's plan and features from the token, or
 	// nil when the tenant set none (ADR-0098).
 	Entitlements *Entitlements
+	// Limits are the most generous amount limit on each held permission
+	// that carries one, and Currency what they're counted in (ADR-0143).
+	Limits   map[string]Limit
+	Currency string
+}
+
+// Limit is an amount limit in minor units (ADR-0143): how much the holder
+// does alone, and how much they may approve for someone else. Nil is no
+// limit; 0 is none at all.
+type Limit struct {
+	Alone    *int64 `json:"alone,omitempty"`
+	Approves *int64 `json:"approves,omitempty"`
+}
+
+// The answers of CanAmount (ADR-0143).
+const (
+	AmountAllow            = "allow"
+	AmountApprovalRequired = "approval_required"
+	AmountDeny             = "deny"
+)
+
+// CanAmount answers for doing permission for amount (minor units):
+// AmountAllow within the alone limit, AmountApprovalRequired above it, and
+// AmountDeny when the permission isn't held. It sees only the token's
+// roles; /v1/authz/check with amount is the authoritative answer (ADR-0143).
+func (p *Principal) CanAmount(permission string, amount int64) string {
+	if !p.Can(permission) {
+		return AmountDeny
+	}
+	if l, ok := p.Limits[permission]; ok && l.Alone != nil && amount > *l.Alone {
+		return AmountApprovalRequired
+	}
+	return AmountAllow
 }
 
 // Entitlements are a customer's plan and paid-for features (ADR-0098).
@@ -104,14 +137,12 @@ type SDK struct {
 
 	cc ccToken // the client's authz:check token (ADR-0119)
 
-	mu         sync.Mutex
-	keys       jose.JSONWebKeySet
-	lastFetch  time.Time
-	roleMap    map[string][]string
-	roleStepUp map[string]int // permission → seconds (ADR-0097)
-	roleMapRV  int64
-	roleMapSet bool
-	orgMaps    map[string]roleMap // by org slug (ADR-0142)
+	mu        sync.Mutex
+	keys      jose.JSONWebKeySet
+	lastFetch time.Time
+	base      roleMap // the tenant's
+	baseSet   bool
+	orgMaps   map[string]roleMap // by org slug (ADR-0142)
 }
 
 // roleMap is one fetched role map: the tenant's, or an organization's with
@@ -121,6 +152,10 @@ type roleMap struct {
 	ORV    int64               `json:"orv"`
 	Roles  map[string][]string `json:"roles"`
 	StepUp map[string]int      `json:"step_up"`
+	// Amount limits (ADR-0143); an organization's map has its overrides applied.
+	Limited  []string                    `json:"limited"`
+	Limits   map[string]map[string]Limit `json:"limits"`
+	Currency string                      `json:"currency"`
 }
 
 // maxOrgMaps bounds the per-organization cache; past it the cache starts over.
@@ -207,13 +242,13 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 			return nil, fmt.Errorf("%w: denied", errors.Join(ErrInvalidToken, err))
 		}
 	}
-	perms, stepUp, err := s.permissions(ctx, c.Roles, c.RV, c.Org, c.ORV)
+	res, err := s.permissions(ctx, c.Roles, c.RV, c.Org, c.ORV)
 	if err != nil {
 		return nil, err
 	}
 	p := &Principal{Sub: c.Sub, TenantID: c.Tid, OrgID: c.Org, ClientID: c.ClientID, Roles: c.Roles,
-		Permissions: perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV, ORV: c.ORV,
-		SID: c.SID, JTI: c.JTI, StepUp: stepUp, Entitlements: c.Entitlements}
+		Permissions: res.perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV, ORV: c.ORV,
+		SID: c.SID, JTI: c.JTI, StepUp: res.stepUp, Entitlements: c.Entitlements, Limits: res.limits, Currency: res.currency}
 	if c.Act != nil {
 		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
 	}
@@ -246,20 +281,40 @@ func (s *SDK) key(ctx context.Context, kid string) (any, error) {
 	return nil, fmt.Errorf("%w: unknown kid", ErrInvalidToken)
 }
 
+// resolved is what a token's roles give through the role map.
+type resolved struct {
+	perms    []string
+	stepUp   map[string]time.Duration
+	limits   map[string]Limit
+	currency string
+}
+
 // permissions resolves roles through the cached role map, refetching when the
 // token's rv is newer than the cached one. A token in an organization that
-// holds one of its own roles (org/<name>) is resolved through that
-// organization's map instead, refetched when rv or orv is newer (ADR-0142).
-func (s *SDK) permissions(ctx context.Context, roles []string, rv int64, org string, orv int64) ([]string, map[string]time.Duration, error) {
+// holds one of its own roles (org/<name>), or for a client with amount
+// limits, which organizations may override, is resolved through that
+// organization's map instead, refetched when rv or orv is newer (ADR-0142, ADR-0143).
+func (s *SDK) permissions(ctx context.Context, roles []string, rv int64, org string, orv int64) (resolved, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	base := s.cfg.Issuer + "/v1/clients/" + s.cfg.ClientID + "/role-map"
+	needOrg := org != "" && slices.ContainsFunc(roles, func(r string) bool { return strings.HasPrefix(r, OrgRolePrefix) })
 	var rm roleMap
-	if org != "" && slices.ContainsFunc(roles, func(r string) bool { return strings.HasPrefix(r, OrgRolePrefix) }) {
+	if !needOrg {
+		if !s.baseSet || rv > s.base.RV {
+			var fresh roleMap
+			if err := s.getJSON(ctx, base, true, &fresh); err != nil {
+				return resolved{}, err
+			}
+			s.base, s.baseSet = fresh, true
+		}
+		rm, needOrg = s.base, org != "" && len(s.base.Limited) > 0
+	}
+	if needOrg {
 		cached, ok := s.orgMaps[org]
 		if !ok || rv > cached.RV || orv > cached.ORV {
 			if err := s.getJSON(ctx, base+"?org="+url.QueryEscape(org), true, &cached); err != nil {
-				return nil, nil, err
+				return resolved{}, err
 			}
 			if s.orgMaps == nil || len(s.orgMaps) >= maxOrgMaps {
 				s.orgMaps = map[string]roleMap{}
@@ -267,38 +322,47 @@ func (s *SDK) permissions(ctx context.Context, roles []string, rv int64, org str
 			s.orgMaps[org] = cached
 		}
 		rm = cached
-	} else {
-		if !s.roleMapSet || rv > s.roleMapRV {
-			var fresh roleMap
-			if err := s.getJSON(ctx, base, true, &fresh); err != nil {
-				return nil, nil, err
-			}
-			s.roleMap, s.roleStepUp, s.roleMapRV, s.roleMapSet = fresh.Roles, fresh.StepUp, fresh.RV, true
-		}
-		rm = roleMap{Roles: s.roleMap, StepUp: s.roleStepUp}
 	}
+	out := resolved{currency: rm.Currency}
 	seen := map[string]bool{}
-	var out []string
-	var stepUp map[string]time.Duration
 	for _, r := range roles {
 		if strings.HasPrefix(r, OrgRolePrefix) && org == "" {
 			continue // an organization's role means nothing outside it
 		}
 		for _, p := range rm.Roles[r] {
+			if slices.Contains(rm.Limited, p) {
+				l := rm.Limits[r][p] // a role giving it with no limit listed is unlimited
+				if have, ok := out.limits[p]; ok {
+					l = Limit{Alone: maxOf(have.Alone, l.Alone), Approves: maxOf(have.Approves, l.Approves)}
+				}
+				if out.limits == nil {
+					out.limits = map[string]Limit{}
+				}
+				out.limits[p] = l
+			}
 			if seen[p] {
 				continue
 			}
 			seen[p] = true
-			out = append(out, p)
+			out.perms = append(out.perms, p)
 			if w := rm.StepUp[p]; w > 0 {
-				if stepUp == nil {
-					stepUp = map[string]time.Duration{}
+				if out.stepUp == nil {
+					out.stepUp = map[string]time.Duration{}
 				}
-				stepUp[p] = time.Duration(w) * time.Second
+				out.stepUp[p] = time.Duration(w) * time.Second
 			}
 		}
 	}
-	return out, stepUp, nil
+	return out, nil
+}
+
+// maxOf is the more generous of two limit values; nil (no limit) beats any number.
+func maxOf(a, b *int64) *int64 {
+	if a == nil || b == nil {
+		return nil
+	}
+	m := max(*a, *b)
+	return &m
 }
 
 func (s *SDK) getJSON(ctx context.Context, url string, auth bool, v any) error {

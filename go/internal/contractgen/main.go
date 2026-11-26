@@ -44,6 +44,16 @@ type permStepUpCase struct {
 	MaxAge     int    `json:"max_age,omitempty"`
 }
 
+// amountCase checks CanAmount (ADR-0143): allow within the alone limit,
+// approval_required above it, deny when the permission isn't held.
+type amountCase struct {
+	Name       string `json:"name"`
+	Token      string `json:"token"`
+	Permission string `json:"permission"`
+	Amount     int64  `json:"amount"`
+	Expect     string `json:"expect"`
+}
+
 type testCase struct {
 	Name       string `json:"name"`
 	Token      string `json:"token"`
@@ -186,15 +196,27 @@ func main() {
 			}
 		})
 	}
-	tenantRoles := map[string][]string{"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"}}
+	tenantRoles := map[string][]string{"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"},
+		"cashier": {"invoice:read", "invoice:pay"}, "manager": {"invoice:pay"}, "payer": {"invoice:pay"}}
+	// Amount limits (ADR-0143): invoice:pay carries one, in minor units; a
+	// role giving it with no limit listed (payer) is unlimited.
+	n := func(v int64) *int64 { return &v }
+	type limit struct {
+		Alone    *int64 `json:"alone,omitempty"`
+		Approves *int64 `json:"approves,omitempty"`
+	}
+	tenantLimits := map[string]map[string]limit{"cashier": {"invoice:pay": {n(2000), n(0)}}, "manager": {"invoice:pay": {n(10000), nil}}}
+	acmeLimits := map[string]map[string]limit{"cashier": {"invoice:pay": {n(5000), n(0)}}, "manager": tenantLimits["manager"]} // acme overrides cashier
 	acmeRoles := map[string][]string{"org/till-lead": {"subscriber:read", "invoice:read"}}
 	for k, v := range tenantRoles {
 		acmeRoles[k] = v
 	}
 	orgRoles := map[string]any{
 		"role_maps": map[string]any{
-			"acme":   map[string]any{"client_id": clientID, "rv": 3, "org": "acme", "orv": 2, "roles": acmeRoles, "step_up": map[string]int{"subscriber:delete": 300}},
-			"globex": map[string]any{"client_id": clientID, "rv": 3, "org": "globex", "orv": 1, "roles": tenantRoles, "step_up": map[string]int{"subscriber:delete": 300}},
+			"acme": map[string]any{"client_id": clientID, "rv": 3, "org": "acme", "orv": 2, "roles": acmeRoles, "step_up": map[string]int{"subscriber:delete": 300},
+				"limited": []string{"invoice:pay"}, "limits": acmeLimits, "currency": "UGX"},
+			"globex": map[string]any{"client_id": clientID, "rv": 3, "org": "globex", "orv": 1, "roles": tenantRoles, "step_up": map[string]int{"subscriber:delete": 300},
+				"limited": []string{"invoice:pay"}, "limits": tenantLimits, "currency": "KES"},
 		},
 		"cases": []testCase{
 			{"an org role resolves in its organization", inOrg([]string{"org/till-lead"}, "acme", 2), "invoice:read", "allow"},
@@ -204,6 +226,21 @@ func main() {
 			{"an org role without its organization grants nothing", inOrg([]string{"org/till-lead"}, "", 0), "invoice:read", "deny"},
 			{"another organization's role of that name grants nothing", inOrg([]string{"org/till-lead"}, "globex", 1), "invoice:read", "deny"},
 		},
+	}
+	as := func(roles ...string) string { return inOrg(roles, "", 0) }
+	amountLimits := map[string]any{
+		"cases": []amountCase{
+			{"within alone", as("cashier"), "invoice:pay", 1500, "allow"},
+			{"exactly alone", as("cashier"), "invoice:pay", 2000, "allow"},
+			{"above alone needs approval", as("cashier"), "invoice:pay", 2001, "approval_required"},
+			{"the most generous role wins", as("cashier", "manager"), "invoice:pay", 9000, "allow"},
+			{"a role with no limit set is unlimited", as("cashier", "payer"), "invoice:pay", 999999999, "allow"},
+			{"not held", as("viewer"), "invoice:pay", 1, "deny"},
+			{"a permission without a limit ignores the amount", as("cashier"), "invoice:read", 999999999, "allow"},
+			{"an organization's override in it", inOrg([]string{"cashier"}, "acme", 2), "invoice:pay", 4000, "allow"},
+			{"never another organization's", inOrg([]string{"cashier"}, "globex", 1), "invoice:pay", 4000, "approval_required"},
+		},
+		"currency": map[string]string{"tenant": "KES", "acme": "UGX"},
 	}
 	// DPoP (RFC 9449, ADR-0070): the token is bound to dkey; check the cases
 	// in order with one replay cache, at time now, for a GET of url.
@@ -259,8 +296,12 @@ func main() {
 		"issuer": issuer, "audience": audience, "client_id": clientID, "client_secret": "contract-secret",
 		"jwks": jose.JSONWebKeySet{Keys: []jose.JSONWebKey{pub}},
 		"role_map": map[string]any{"client_id": clientID, "rv": 3, "roles": map[string][]string{
-			"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"}},
-			"step_up": map[string]int{"subscriber:delete": 300}}, // ADR-0097
+			"viewer": {"subscriber:read"}, "admin": {"subscriber:read", "subscriber:delete"}, "billing": {"invoice:read"},
+			"cashier": {"invoice:read", "invoice:pay"}, "manager": {"invoice:pay"}, "payer": {"invoice:pay"}},
+			"step_up":  map[string]int{"subscriber:delete": 300}, // ADR-0097
+			"limited":  []string{"invoice:pay"},                  // ADR-0143
+			"limits":   tenantLimits,
+			"currency": "KES"},
 		"cases":              cases,
 		"step_up":            stepUps,
 		"permission_step_up": permStepUps,
@@ -270,6 +311,7 @@ func main() {
 		"dpop":               dpop,
 		"entitlements":       entitlements,
 		"org_roles":          orgRoles,
+		"amount_limits":      amountLimits,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

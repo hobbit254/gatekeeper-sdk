@@ -151,7 +151,7 @@ Every event's `data` carries `tenant_id` and `tenant` (the slug). User events al
 | `mfa.push_requested` | a sign-in waits for push approval | `challenge_id`, `expires_at` |
 | `signup.risky` | a sign-up scored high but was let through | `score`, `signals`, `outcome` |
 | `role.assigned`, `role.revoked` | a role is granted or removed | `role_id`, `org_id`, `rv` |
-| `role.updated` | a role, its permissions or the manifest change | `rv`; for an organization's own role, `org_id` and `orv` instead (ADR-0142) |
+| `role.updated` | a role, its permissions, its limits or the manifest change | `rv`; for an organization's own role or an organization's limits, `org_id` and `orv` instead, with `change: limits` for limits (ADR-0142, ADR-0143) |
 | `permission.granted`, `permission.revoked` | a direct permission grant changes | `org_id`, `rv` |
 | `org.created`, `org.updated`, `org.deleted` | organizations change | `org_id`, `slug`, `name` |
 | `membership.added`, `membership.removed` | someone joins or leaves an organization | `org_id` |

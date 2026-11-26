@@ -731,12 +731,15 @@ func (e OrgRoleGroups) Valid() bool {
 
 // Defines values for OrgRoleReason.
 const (
-	OrgRoleReasonNotHeld OrgRoleReason = "not_held"
+	OrgRoleReasonAboveLimit OrgRoleReason = "above_limit"
+	OrgRoleReasonNotHeld    OrgRoleReason = "not_held"
 )
 
 // Valid indicates whether the value is a known member of the OrgRoleReason enum.
 func (e OrgRoleReason) Valid() bool {
 	switch e {
+	case OrgRoleReasonAboveLimit:
+		return true
 	case OrgRoleReasonNotHeld:
 		return true
 	default:
@@ -1399,7 +1402,10 @@ type AdminRole struct {
 	Groups   map[string]AdminRoleGroups `json:"groups"`
 	Id       string                     `json:"id"`
 	IsSystem bool                       `json:"is_system"`
-	Name     string                     `json:"name"`
+
+	// Limits The role's own amount limits, from its manifest (ADR-0143)
+	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+	Name   string                  `json:"name"`
 
 	// Permissions The role's own patterns; what its groups give is not listed here (ADR-0141)
 	Permissions []string `json:"permissions"`
@@ -1463,6 +1469,19 @@ type AdminUserList struct {
 		DisplayName string             `json:"display_name"`
 		UserId      openapi_types.UUID `json:"user_id"`
 	} `json:"users"`
+}
+
+// AmountLimit An amount limit in minor units (ADR-0143). A missing value is no limit; 0 is none at all.
+type AmountLimit struct {
+	// Alone How much the holder does without approval
+	//
+	// Example: 200000
+	Alone *int64 `json:"alone,omitempty"`
+
+	// Approves How much they may approve for someone else
+	//
+	// Example: 0
+	Approves *int64 `json:"approves,omitempty"`
 }
 
 // AnchorCheck defines model for AnchorCheck.
@@ -2149,6 +2168,9 @@ type OnboardingStepId string
 type Org struct {
 	CreatedAt time.Time `json:"created_at"`
 
+	// Currency Its own currency for amount limits, or absent to use the tenant's (ADR-0143)
+	Currency *string `json:"currency,omitempty"`
+
 	// Entitlements A customer's plan and paid-for features, carried in access tokens as `entitlements` (ADR-0098)
 	Entitlements *Entitlements `json:"entitlements,omitempty"`
 
@@ -2197,7 +2219,11 @@ type OrgList struct {
 
 // OrgPatch defines model for OrgPatch.
 type OrgPatch struct {
-	Name *string `json:"name,omitempty"`
+	// Currency ISO 4217 code for amount limits; "" uses the tenant's settings.currency. Tenant admins only (ADR-0143)
+	//
+	// Example: KES
+	Currency *string `json:"currency,omitempty"`
+	Name     *string `json:"name,omitempty"`
 
 	// RequireSso Tenant admins only (ADR-0067)
 	RequireSso *bool `json:"require_sso,omitempty"`
@@ -2209,12 +2235,15 @@ type OrgRole struct {
 	CopiedFrom  *string `json:"copied_from,omitempty"`
 	Description string  `json:"description"`
 
-	// Editable Whether the caller may edit or retire it: they hold every group it gives, at its level
+	// Editable Whether the caller may edit or retire it: they hold every group it gives, at its level, and its limits are within their own
 	Editable bool `json:"editable"`
 
 	// Groups Permission group key → level
 	Groups map[string]OrgRoleGroups `json:"groups"`
 	Id     openapi_types.UUID       `json:"id"`
+
+	// Limits Permission key → limit, on permissions that carry one (ADR-0143)
+	Limits *map[string]AmountLimit `json:"limits,omitempty"`
 
 	// Name Example: senior-cashier
 	Name string `json:"name"`
@@ -2243,6 +2272,9 @@ type OrgRoleCreate struct {
 	// Groups Permission group key → level
 	Groups *map[string]OrgRoleCreateGroups `json:"groups,omitempty"`
 
+	// Limits Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own
+	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+
 	// Name Example: senior-cashier
 	Name string `json:"name"`
 }
@@ -2252,14 +2284,22 @@ type OrgRoleCreateGroups string
 
 // OrgRoleEditor defines model for OrgRoleEditor.
 type OrgRoleEditor struct {
-	Groups []OrgRoleGroup `json:"groups"`
+	// Currency What limits are counted in: the organization's currency, else the tenant's; "" when neither is set
+	//
+	// Example: KES
+	Currency *string        `json:"currency,omitempty"`
+	Groups   []OrgRoleGroup `json:"groups"`
 
 	// Limit The most roles an organization may have
 	//
 	// Example: 50
 	Limit     *int              `json:"limit,omitempty"`
+	Limited   *[]OrgRoleLimited `json:"limited,omitempty"`
 	Roles     []OrgRole         `json:"roles"`
 	Templates []OrgRoleTemplate `json:"templates"`
+
+	// TenantRoles The tenant's roles with limits, and this organization's overrides of them
+	TenantRoles *[]OrgTenantRoleLimits `json:"tenant_roles,omitempty"`
 }
 
 // OrgRoleGroup defines model for OrgRoleGroup.
@@ -2300,12 +2340,24 @@ type OrgRoleGroupMax string
 // OrgRoleGroupReason Why max is below full: the caller doesn't hold it, or it's kept for the tenant's admins
 type OrgRoleGroupReason string
 
+// OrgRoleLimited A limited permission the caller holds, with the most they may give
+type OrgRoleLimited struct {
+	// Key Example: sale:refund
+	Key string `json:"key"`
+
+	// Max An amount limit in minor units (ADR-0143). A missing value is no limit; 0 is none at all.
+	Max AmountLimit `json:"max"`
+}
+
 // OrgRolePatch defines model for OrgRolePatch.
 type OrgRolePatch struct {
 	Description *string `json:"description,omitempty"`
 
 	// Groups Replaces every group the role holds
 	Groups *map[string]OrgRolePatchGroups `json:"groups,omitempty"`
+
+	// Limits Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own
+	Limits *map[string]AmountLimit `json:"limits,omitempty"`
 
 	// Name Example: senior-cashier
 	Name *string `json:"name,omitempty"`
@@ -2316,17 +2368,34 @@ type OrgRolePatchGroups string
 
 // OrgRoleTemplate A manifest role marked template: true
 type OrgRoleTemplate struct {
-	// Allowed Whether the caller may copy it as it is
+	// Allowed Whether the caller may copy it as it is: its groups and limits are within theirs
 	Allowed     bool   `json:"allowed"`
 	Description string `json:"description"`
 
 	// Groups Permission group key → level
 	Groups map[string]OrgRoleTemplateGroups `json:"groups"`
-	Name   string                           `json:"name"`
+
+	// Limits Permission key → limit, on permissions that carry one (ADR-0143)
+	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+	Name   string                  `json:"name"`
 }
 
 // OrgRoleTemplateGroups defines model for OrgRoleTemplate.Groups.
 type OrgRoleTemplateGroups string
+
+// OrgTenantRoleLimits defines model for OrgTenantRoleLimits.
+type OrgTenantRoleLimits struct {
+	// Editable Whether the caller may override them
+	Editable bool               `json:"editable"`
+	Id       openapi_types.UUID `json:"id"`
+	Name     string             `json:"name"`
+
+	// Overrides The organization's overrides, used in its scope instead of own
+	Overrides map[string]AmountLimit `json:"overrides"`
+
+	// Own Permission key → limit, on permissions that carry one (ADR-0143)
+	Own map[string]AmountLimit `json:"own"`
+}
 
 // Overview defines model for Overview.
 type Overview struct {
@@ -2357,6 +2426,9 @@ type PasskeyModelList struct {
 type PermissionGrant struct {
 	Effect    PermissionGrantEffect `json:"effect"`
 	ExpiresAt *time.Time            `json:"expires_at,omitempty"`
+
+	// Limit An allow's limit, on a permission that carries one; without it an allow needs approval for any amount (ADR-0143)
+	Limit *AmountLimit `json:"limit,omitempty"`
 
 	// OrgId Org id or slug; omitted is tenant-wide
 	OrgId      *string `json:"org_id,omitempty"`
@@ -2566,6 +2638,22 @@ type RoleGroups struct {
 
 // RoleGroupsGroups defines model for RoleGroups.Groups.
 type RoleGroupsGroups string
+
+// RoleLimits defines model for RoleLimits.
+type RoleLimits struct {
+	// Limits Permission key → limit, on permissions that carry one (ADR-0143)
+	Limits map[string]AmountLimit `json:"limits"`
+
+	// Ref Example: cashier
+	Ref    string             `json:"ref"`
+	RoleId openapi_types.UUID `json:"role_id"`
+}
+
+// RoleLimitsPut defines model for RoleLimitsPut.
+type RoleLimitsPut struct {
+	// Limits Replaces them all; {} clears them
+	Limits map[string]AmountLimit `json:"limits"`
+}
 
 // RoleNames defines model for RoleNames.
 type RoleNames struct {
@@ -3279,6 +3367,9 @@ type AdminCreateOrgRoleJSONRequestBody = OrgRoleCreate
 
 // AdminUpdateOrgRoleJSONRequestBody defines body for AdminUpdateOrgRole for application/json ContentType.
 type AdminUpdateOrgRoleJSONRequestBody = OrgRolePatch
+
+// AdminPutOrgRoleLimitsJSONRequestBody defines body for AdminPutOrgRoleLimits for application/json ContentType.
+type AdminPutOrgRoleLimitsJSONRequestBody = RoleLimitsPut
 
 // AdminSetSCIMGroupRolesJSONRequestBody defines body for AdminSetSCIMGroupRoles for application/json ContentType.
 type AdminSetSCIMGroupRolesJSONRequestBody = RoleNames
@@ -4095,7 +4186,7 @@ type ClientInterface interface {
 
 	// AdminUpdateOrgRoleWithBody Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -4104,12 +4195,30 @@ type ClientInterface interface {
 
 	// AdminUpdateOrgRole Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
 	AdminUpdateOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutOrgRoleLimitsWithBody Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+	AdminPutOrgRoleLimitsWithBody(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminPutOrgRoleLimits Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+	AdminPutOrgRoleLimits(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListSCIMGroups The groups an organization's IdP has provisioned, with their mapped roles
 	//
@@ -6415,7 +6524,7 @@ func (c *Client) AdminRetireOrgRole(ctx context.Context, id string, roleId opena
 
 // AdminUpdateOrgRoleWithBody Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 //
 // Takes any type of body and a specified content type.
 //
@@ -6434,13 +6543,51 @@ func (c *Client) AdminUpdateOrgRoleWithBody(ctx context.Context, id string, role
 
 // AdminUpdateOrgRole Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 //
 // Takes a body of the `application/json` content type.
 //
 // Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
 func (c *Client) AdminUpdateOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminUpdateOrgRoleRequest(c.Server, id, roleId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminPutOrgRoleLimitsWithBody Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+func (c *Client) AdminPutOrgRoleLimitsWithBody(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutOrgRoleLimitsRequestWithBody(c.Server, id, roleId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminPutOrgRoleLimits Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+func (c *Client) AdminPutOrgRoleLimits(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminPutOrgRoleLimitsRequest(c.Server, id, roleId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11184,6 +11331,60 @@ func NewAdminUpdateOrgRoleRequestWithBody(server string, id string, roleId opena
 	return req, nil
 }
 
+// NewAdminPutOrgRoleLimitsRequest calls the generic AdminPutOrgRoleLimits builder with application/json body
+func NewAdminPutOrgRoleLimitsRequest(server string, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminPutOrgRoleLimitsRequestWithBody(server, id, roleId, "application/json", bodyReader)
+}
+
+// NewAdminPutOrgRoleLimitsRequestWithBody constructs an http.Request for the AdminPutOrgRoleLimits method, with any body, and a specified content type
+func NewAdminPutOrgRoleLimitsRequestWithBody(server string, id string, roleId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "role_id", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles/%s/limits", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewAdminListSCIMGroupsRequest constructs an http.Request for the AdminListSCIMGroups method
 func NewAdminListSCIMGroupsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -15008,7 +15209,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminUpdateOrgRoleWithBodyWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15017,12 +15218,30 @@ type ClientWithResponsesInterface interface {
 
 	// AdminUpdateOrgRoleWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /v1/admin/orgs/{id}/roles/{role_id} (the `AdminUpdateOrgRole` operationId).
 	AdminUpdateOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminUpdateOrgRoleJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminUpdateOrgRoleResponse, error)
+
+	// AdminPutOrgRoleLimitsWithBodyWithResponse Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+	AdminPutOrgRoleLimitsWithBodyWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutOrgRoleLimitsResponse, error)
+
+	// AdminPutOrgRoleLimitsWithResponse Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+	AdminPutOrgRoleLimitsWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgRoleLimitsResponse, error)
 
 	// AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
 	//
@@ -20366,6 +20585,89 @@ func (r AdminUpdateOrgRoleResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminUpdateOrgRoleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminPutOrgRoleLimitsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *RoleLimits
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON413 the response for an HTTP 413 `application/problem+json` response
+	ApplicationproblemJSON413 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminPutOrgRoleLimitsResponse) GetJSON200() *RoleLimits {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON413 returns the response for an HTTP 413 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON413() *Problem {
+	return r.ApplicationproblemJSON413
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminPutOrgRoleLimitsResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminPutOrgRoleLimitsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminPutOrgRoleLimitsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminPutOrgRoleLimitsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminPutOrgRoleLimitsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -26705,7 +27007,7 @@ func (c *ClientWithResponses) AdminRetireOrgRoleWithResponse(ctx context.Context
 
 // AdminUpdateOrgRoleWithBodyWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26720,7 +27022,7 @@ func (c *ClientWithResponses) AdminUpdateOrgRoleWithBodyWithResponse(ctx context
 
 // AdminUpdateOrgRoleWithResponse Rename an organization role, or change its description or groups; it reaches everyone holding it at once (FR-Z19)
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Guard rails, checked whatever the dashboard shows: an org admin gives a group only at a level they hold in the organization or tenant-wide, and can't edit or retire a role holding one they lack (403); tenant-only groups are refused (422). Limits (ADR-0143): an org admin gives a limit only up to their own, and can't edit a role whose limits are above theirs (403).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -26731,6 +27033,36 @@ func (c *ClientWithResponses) AdminUpdateOrgRoleWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseAdminUpdateOrgRoleResponse(rsp)
+}
+
+// AdminPutOrgRoleLimitsWithBodyWithResponse Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+func (c *ClientWithResponses) AdminPutOrgRoleLimitsWithBodyWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminPutOrgRoleLimitsResponse, error) {
+	rsp, err := c.AdminPutOrgRoleLimitsWithBody(ctx, id, roleId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutOrgRoleLimitsResponse(rsp)
+}
+
+// AdminPutOrgRoleLimitsWithResponse Set a role's amount limits in an organization: a tenant role's override there, or one of its own roles' limits (FR-Z20)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An override is used for that tenant role in the organization's scope, whether it was granted there or tenant-wide, and moves the organization's orv. Guard rails: an org admin sets limits only up to their own, and only on a role within their reach and limits (403); limits only on permissions that carry one and the role gives (422) (ADR-0143).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
+func (c *ClientWithResponses) AdminPutOrgRoleLimitsWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgRoleLimitsResponse, error) {
+	rsp, err := c.AdminPutOrgRoleLimits(ctx, id, roleId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminPutOrgRoleLimitsResponse(rsp)
 }
 
 // AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
@@ -31680,6 +32012,74 @@ func ParseAdminUpdateOrgRoleResponse(rsp *http.Response) (*AdminUpdateOrgRoleRes
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminPutOrgRoleLimitsResponse parses an HTTP response from a AdminPutOrgRoleLimitsWithResponse call
+func ParseAdminPutOrgRoleLimitsResponse(rsp *http.Response) (*AdminPutOrgRoleLimitsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminPutOrgRoleLimitsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RoleLimits
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 413:
 		var dest Problem

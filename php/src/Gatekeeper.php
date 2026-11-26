@@ -63,7 +63,7 @@ final class Gatekeeper
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
         $orv = is_int($claims->orv ?? null) ? $claims->orv : 0;
         $org = isset($claims->org) && is_string($claims->org) ? $claims->org : '';
-        [$permissions, $stepUp] = $this->permissions($roles, $rv, $org, $orv);
+        [$permissions, $stepUp, $limits, $currency] = $this->permissions($roles, $rv, $org, $orv);
 
         return new Principal(
             sub: (string) ($claims->sub ?? ''),
@@ -84,6 +84,8 @@ final class Gatekeeper
             jkt: isset($claims->cnf->jkt) && is_string($claims->cnf->jkt) ? $claims->cnf->jkt : '',
             stepUp: $stepUp,
             entitlements: self::entitlements($claims->entitlements ?? null),
+            limits: $limits,
+            currency: $currency,
         );
     }
 
@@ -339,36 +341,51 @@ final class Gatekeeper
     /**
      * Resolves roles through the cached role map, refetching when the token's
      * rv is newer than the cached one. A token in an organization holding one
-     * of its own roles (org/<name>) is resolved through that organization's
-     * map, cached by (org, rv, orv) (ADR-0142).
+     * of its own roles (org/<name>), or for a client with amount limits (which
+     * organizations may override), is resolved through that organization's
+     * map, cached by (org, rv, orv) (ADR-0142, ADR-0143).
      *
      * @param list<string> $roles
-     * @return array{list<string>, array<string, int>} permissions and their step-up windows (ADR-0097)
+     * @return array{list<string>, array<string, int>, array<string, array{alone?: int, approves?: int}>, string}
+     *         permissions, their step-up windows (ADR-0097), the limits on held limited permissions and their currency (ADR-0143)
      */
     private function permissions(array $roles, int $rv, string $org = '', int $orv = 0): array
     {
-        $url = $this->config->issuer . '/v1/clients/' . rawurlencode($this->config->clientId) . '/role-map';
-        $cacheKey = 'gatekeeper.rolemap.' . sha1($this->config->issuer . '|' . $this->config->clientId);
         $hasOrgRole = false;
         foreach ($roles as $role) {
             $hasOrgRole = $hasOrgRole || str_starts_with($role, self::ORG_ROLE_PREFIX);
         }
         if ($org !== '' && $hasOrgRole) {
-            $cacheKey .= '.org.' . sha1($org);
-            $url .= '?org=' . rawurlencode($org);
+            $map = $this->roleMap($rv, $org, $orv);
+        } else {
+            $map = $this->roleMap($rv);
+            if ($org !== '' && ($map['limited'] ?? []) !== []) {
+                $map = $this->roleMap($rv, $org, $orv);
+            }
         }
-        $map = $this->cache->get($cacheKey);
-        if ($map === null || $rv > ($map['rv'] ?? 0) || $orv > ($map['orv'] ?? 0)) {
-            $map = $this->getJSON($url, true);
-            $this->cache->set($cacheKey, $map);
-        }
+        $limited = $map['limited'] ?? [];
         $out = [];
+        $limits = [];
         foreach ($roles as $role) {
             if ($org === '' && str_starts_with($role, self::ORG_ROLE_PREFIX)) {
                 continue; // an organization's role means nothing outside it
             }
             foreach ($map['roles'][$role] ?? [] as $p) {
                 $out[$p] = true;
+                if (!in_array($p, $limited, true)) {
+                    continue;
+                }
+                $l = array_intersect_key((array) ($map['limits'][$role][$p] ?? []), ['alone' => 0, 'approves' => 0]); // none listed: unlimited
+                if (isset($limits[$p])) {
+                    $merged = [];
+                    foreach (['alone', 'approves'] as $k) {
+                        if (isset($limits[$p][$k], $l[$k])) {
+                            $merged[$k] = max((int) $limits[$p][$k], (int) $l[$k]); // a missing value is no limit, and beats any number
+                        }
+                    }
+                    $l = $merged;
+                }
+                $limits[$p] = array_map('intval', $l);
             }
         }
         $stepUp = [];
@@ -377,7 +394,29 @@ final class Gatekeeper
                 $stepUp[(string) $p] = $sec;
             }
         }
-        return [array_keys($out), $stepUp];
+        return [array_keys($out), $stepUp, $limits, $limits === [] ? '' : (string) ($map['currency'] ?? '')];
+    }
+
+    /**
+     * The tenant's role map, or with $org that organization's, cached and
+     * refetched when the token's rv or orv is newer.
+     *
+     * @return array<string, mixed>
+     */
+    private function roleMap(int $rv, string $org = '', int $orv = 0): array
+    {
+        $url = $this->config->issuer . '/v1/clients/' . rawurlencode($this->config->clientId) . '/role-map';
+        $cacheKey = 'gatekeeper.rolemap.' . sha1($this->config->issuer . '|' . $this->config->clientId);
+        if ($org !== '') {
+            $cacheKey .= '.org.' . sha1($org);
+            $url .= '?org=' . rawurlencode($org);
+        }
+        $map = $this->cache->get($cacheKey);
+        if ($map === null || $rv > ($map['rv'] ?? 0) || $orv > ($map['orv'] ?? 0)) {
+            $map = $this->getJSON($url, true);
+            $this->cache->set($cacheKey, $map);
+        }
+        return $map;
     }
 
     /**
