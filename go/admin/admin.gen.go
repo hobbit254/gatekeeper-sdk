@@ -675,6 +675,30 @@ func (e LegalDocumentInputKind) Valid() bool {
 	}
 }
 
+// Defines values for MemberPINStatus.
+const (
+	MemberPINStatusActive MemberPINStatus = "active"
+	MemberPINStatusHeld   MemberPINStatus = "held"
+	MemberPINStatusLocked MemberPINStatus = "locked"
+	MemberPINStatusNone   MemberPINStatus = "none"
+)
+
+// Valid indicates whether the value is a known member of the MemberPINStatus enum.
+func (e MemberPINStatus) Valid() bool {
+	switch e {
+	case MemberPINStatusActive:
+		return true
+	case MemberPINStatusHeld:
+		return true
+	case MemberPINStatusLocked:
+		return true
+	case MemberPINStatusNone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OnboardingStepId.
 const (
 	OnboardingStepIdAppClient     OnboardingStepId = "app_client"
@@ -878,16 +902,16 @@ func (e PermissionGrantResultEffect) Valid() bool {
 
 // Defines values for ProfileStatus.
 const (
-	Active    ProfileStatus = "active"
-	Suspended ProfileStatus = "suspended"
+	ProfileStatusActive    ProfileStatus = "active"
+	ProfileStatusSuspended ProfileStatus = "suspended"
 )
 
 // Valid indicates whether the value is a known member of the ProfileStatus enum.
 func (e ProfileStatus) Valid() bool {
 	switch e {
-	case Active:
+	case ProfileStatusActive:
 		return true
-	case Suspended:
+	case ProfileStatusSuspended:
 		return true
 	default:
 		return false
@@ -1041,6 +1065,48 @@ func (e ServiceAccountCreateAdminScopes) Valid() bool {
 	case AdminUsersRead:
 		return true
 	case AdminUsersWrite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SharedDeviceStatus.
+const (
+	SharedDeviceStatusActive  SharedDeviceStatus = "active"
+	SharedDeviceStatusRevoked SharedDeviceStatus = "revoked"
+	SharedDeviceStatusWaiting SharedDeviceStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the SharedDeviceStatus enum.
+func (e SharedDeviceStatus) Valid() bool {
+	switch e {
+	case SharedDeviceStatusActive:
+		return true
+	case SharedDeviceStatusRevoked:
+		return true
+	case SharedDeviceStatusWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SharedDeviceRegisteredStatus.
+const (
+	SharedDeviceRegisteredStatusActive  SharedDeviceRegisteredStatus = "active"
+	SharedDeviceRegisteredStatusRevoked SharedDeviceRegisteredStatus = "revoked"
+	SharedDeviceRegisteredStatusWaiting SharedDeviceRegisteredStatus = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the SharedDeviceRegisteredStatus enum.
+func (e SharedDeviceRegisteredStatus) Valid() bool {
+	switch e {
+	case SharedDeviceRegisteredStatusActive:
+		return true
+	case SharedDeviceRegisteredStatusRevoked:
+		return true
+	case SharedDeviceRegisteredStatusWaiting:
 		return true
 	default:
 		return false
@@ -1409,6 +1475,9 @@ type AdminRole struct {
 
 	// Permissions The role's own patterns; what its groups give is not listed here (ADR-0141)
 	Permissions []string `json:"permissions"`
+
+	// PinSignIn Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144)
+	PinSignIn *bool `json:"pin_sign_in,omitempty"`
 }
 
 // AdminRoleGroups defines model for AdminRole.Groups.
@@ -2140,6 +2209,26 @@ type MemberList struct {
 	Members []Member `json:"members"`
 }
 
+// MemberPIN defines model for MemberPIN.
+type MemberPIN struct {
+	DisplayName string `json:"display_name"`
+
+	// Failures Wrong PINs in a row
+	Failures    *int               `json:"failures,omitempty"`
+	LockedUntil *time.Time         `json:"locked_until,omitempty"`
+	SetAt       *time.Time         `json:"set_at,omitempty"`
+	Status      MemberPINStatus    `json:"status"`
+	UserId      openapi_types.UUID `json:"user_id"`
+}
+
+// MemberPINStatus defines model for MemberPIN.Status.
+type MemberPINStatus string
+
+// MemberPINList defines model for MemberPINList.
+type MemberPINList struct {
+	Items []MemberPIN `json:"items"`
+}
+
 // Onboarding defines model for Onboarding.
 type Onboarding struct {
 	// Complete Every required step done; every optional one done or not needed
@@ -2248,6 +2337,9 @@ type OrgRole struct {
 	// Name Example: senior-cashier
 	Name string `json:"name"`
 
+	// PinSignIn Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144)
+	PinSignIn *bool `json:"pin_sign_in,omitempty"`
+
 	// Reason Why it isn't editable
 	Reason *OrgRoleReason `json:"reason,omitempty"`
 
@@ -2277,6 +2369,9 @@ type OrgRoleCreate struct {
 
 	// Name Example: senior-cashier
 	Name string `json:"name"`
+
+	// PinSignIn Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144)
+	PinSignIn *bool `json:"pin_sign_in,omitempty"`
 }
 
 // OrgRoleCreateGroups defines model for OrgRoleCreate.Groups.
@@ -2361,6 +2456,9 @@ type OrgRolePatch struct {
 
 	// Name Example: senior-cashier
 	Name *string `json:"name,omitempty"`
+
+	// PinSignIn Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144)
+	PinSignIn *bool `json:"pin_sign_in,omitempty"`
 }
 
 // OrgRolePatchGroups defines model for OrgRolePatch.Groups.
@@ -2854,6 +2952,63 @@ type SessionsRevoked struct {
 	Revoked int `json:"revoked"`
 }
 
+// SharedDevice A shared device registered for one client (FR-A45, ADR-0144)
+type SharedDevice struct {
+	ClaimedAt     *time.Time         `json:"claimed_at,omitempty"`
+	ClientId      string             `json:"client_id"`
+	CodeExpiresAt *time.Time         `json:"code_expires_at,omitempty"`
+	Id            openapi_types.UUID `json:"id"`
+	LastUsedAt    *time.Time         `json:"last_used_at,omitempty"`
+	Name          string             `json:"name"`
+	RegisteredAt  time.Time          `json:"registered_at"`
+	RevokedAt     *time.Time         `json:"revoked_at,omitempty"`
+
+	// Status waiting: registered, not yet claimed
+	Status SharedDeviceStatus `json:"status"`
+}
+
+// SharedDeviceStatus waiting: registered, not yet claimed
+type SharedDeviceStatus string
+
+// SharedDeviceCreate defines model for SharedDeviceCreate.
+type SharedDeviceCreate struct {
+	// ClientId The client the device signs in to
+	//
+	// Example: pos
+	ClientId string `json:"client_id"`
+
+	// Name Example: Front till
+	Name string `json:"name"`
+}
+
+// SharedDeviceList defines model for SharedDeviceList.
+type SharedDeviceList struct {
+	Items []SharedDevice `json:"items"`
+}
+
+// SharedDeviceRegistered defines model for SharedDeviceRegistered.
+type SharedDeviceRegistered struct {
+	ClaimedAt *time.Time `json:"claimed_at,omitempty"`
+	ClientId  string     `json:"client_id"`
+
+	// Code Shown once; the device redeems it within 10 minutes
+	//
+	// Example: K7QM-2XRP
+	Code          string             `json:"code"`
+	CodeExpiresAt *time.Time         `json:"code_expires_at,omitempty"`
+	Id            openapi_types.UUID `json:"id"`
+	LastUsedAt    *time.Time         `json:"last_used_at,omitempty"`
+	Name          string             `json:"name"`
+	RegisteredAt  time.Time          `json:"registered_at"`
+	RevokedAt     *time.Time         `json:"revoked_at,omitempty"`
+
+	// Status waiting: registered, not yet claimed
+	Status SharedDeviceRegisteredStatus `json:"status"`
+}
+
+// SharedDeviceRegisteredStatus waiting: registered, not yet claimed
+type SharedDeviceRegisteredStatus string
+
 // SigningKey defines model for SigningKey.
 type SigningKey struct {
 	ActiveFrom *time.Time `json:"active_from,omitempty"`
@@ -2971,6 +3126,12 @@ type TenantPolicy struct {
 		MaxLength     int  `json:"max_length"`
 		MinLength     int  `json:"min_length"`
 	} `json:"password"`
+
+	// Pin PIN sign-in on shared devices (ADR-0144)
+	Pin *struct {
+		SessionMaxSec *int  `json:"session_max_sec,omitempty"`
+		SignIn        *bool `json:"sign_in,omitempty"`
+	} `json:"pin,omitempty"`
 
 	// Risk Sign-in risk bands (ADR-0069); omitted = enabled, step_up 40, block 80
 	Risk *struct {
@@ -3352,6 +3513,9 @@ type AdminCreateOrgJSONRequestBody = OrgCreate
 
 // AdminPatchOrgJSONRequestBody defines body for AdminPatchOrg for application/json ContentType.
 type AdminPatchOrgJSONRequestBody = OrgPatch
+
+// AdminRegisterOrgDeviceJSONRequestBody defines body for AdminRegisterOrgDevice for application/json ContentType.
+type AdminRegisterOrgDeviceJSONRequestBody = SharedDeviceCreate
 
 // AdminAddOrgDomainJSONRequestBody defines body for AdminAddOrgDomain for application/json ContentType.
 type AdminAddOrgDomainJSONRequestBody = OrgDomainInput
@@ -4033,6 +4197,45 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/audit-events (the `AdminListOrgAuditEvents` operationId).
 	AdminListOrgAuditEvents(ctx context.Context, id string, params *AdminListOrgAuditEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminListOrgDevices The organization's shared devices (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/devices (the `AdminListOrgDevices` operationId).
+	AdminListOrgDevices(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRegisterOrgDeviceWithBody Register a shared device; returns its one-time code (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+	AdminRegisterOrgDeviceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRegisterOrgDevice Register a shared device; returns its one-time code (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+	AdminRegisterOrgDevice(ctx context.Context, id string, body AdminRegisterOrgDeviceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRevokeOrgDevice Revoke a shared device; its signatures stop and its sessions end at once
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/devices/{device_id} (the `AdminRevokeOrgDevice` operationId).
+	AdminRevokeOrgDevice(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminNewOrgDeviceCode Register a device again: its key goes and its sessions end; a new one-time code
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices/{device_id}/code (the `AdminNewOrgDeviceCode` operationId).
+	AdminNewOrgDeviceCode(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListOrgDomains An organization's email domains
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -4151,6 +4354,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 	AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListOrgPINs The organization's members and their PINs' states (FR-A46)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
+	AdminListOrgPINs(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgRoles An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
 	//
@@ -4862,6 +5072,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 	AdminGrantPermission(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminRemoveUserPIN Remove a user's PIN
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/pin (the `AdminRemoveUserPIN` operationId).
+	AdminRemoveUserPIN(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUnlockUserPIN Unlock a user's locked or held PIN
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+	//
+	// Corresponds with POST /v1/admin/users/{id}/pin/unlock (the `AdminUnlockUserPIN` operationId).
+	AdminUnlockUserPIN(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListPushApprovers A user's push approvers (FR-D22)
 	//
@@ -6181,6 +6405,95 @@ func (c *Client) AdminListOrgAuditEvents(ctx context.Context, id string, params 
 	return c.Client.Do(req)
 }
 
+// AdminListOrgDevices The organization's shared devices (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/devices (the `AdminListOrgDevices` operationId).
+func (c *Client) AdminListOrgDevices(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListOrgDevicesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRegisterOrgDeviceWithBody Register a shared device; returns its one-time code (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+func (c *Client) AdminRegisterOrgDeviceWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRegisterOrgDeviceRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRegisterOrgDevice Register a shared device; returns its one-time code (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+func (c *Client) AdminRegisterOrgDevice(ctx context.Context, id string, body AdminRegisterOrgDeviceJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRegisterOrgDeviceRequest(c.Server, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRevokeOrgDevice Revoke a shared device; its signatures stop and its sessions end at once
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/devices/{device_id} (the `AdminRevokeOrgDevice` operationId).
+func (c *Client) AdminRevokeOrgDevice(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRevokeOrgDeviceRequest(c.Server, id, deviceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminNewOrgDeviceCode Register a device again: its key goes and its sessions end; a new one-time code
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices/{device_id}/code (the `AdminNewOrgDeviceCode` operationId).
+func (c *Client) AdminNewOrgDeviceCode(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminNewOrgDeviceCodeRequest(c.Server, id, deviceId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListOrgDomains An organization's email domains
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -6440,6 +6753,23 @@ func (c *Client) AdminAddOrgMember(ctx context.Context, id string, body AdminAdd
 // Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 func (c *Client) AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminRemoveOrgMemberRequest(c.Server, id, userId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListOrgPINs The organization's members and their PINs' states (FR-A46)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
+func (c *Client) AdminListOrgPINs(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListOrgPINsRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -8021,6 +8351,40 @@ func (c *Client) AdminGrantPermissionWithBody(ctx context.Context, id string, pa
 // Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 func (c *Client) AdminGrantPermission(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminGrantPermissionRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminRemoveUserPIN Remove a user's PIN
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/pin (the `AdminRemoveUserPIN` operationId).
+func (c *Client) AdminRemoveUserPIN(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRemoveUserPINRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUnlockUserPIN Unlock a user's locked or held PIN
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+//
+// Corresponds with POST /v1/admin/users/{id}/pin/unlock (the `AdminUnlockUserPIN` operationId).
+func (c *Client) AdminUnlockUserPIN(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUnlockUserPINRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -10685,6 +11049,169 @@ func NewAdminListOrgAuditEventsRequest(server string, id string, params *AdminLi
 	return req, nil
 }
 
+// NewAdminListOrgDevicesRequest constructs an http.Request for the AdminListOrgDevices method
+func NewAdminListOrgDevicesRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/devices", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminRegisterOrgDeviceRequest calls the generic AdminRegisterOrgDevice builder with application/json body
+func NewAdminRegisterOrgDeviceRequest(server string, id string, body AdminRegisterOrgDeviceJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminRegisterOrgDeviceRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminRegisterOrgDeviceRequestWithBody constructs an http.Request for the AdminRegisterOrgDevice method, with any body, and a specified content type
+func NewAdminRegisterOrgDeviceRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/devices", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewAdminRevokeOrgDeviceRequest constructs an http.Request for the AdminRevokeOrgDevice method
+func NewAdminRevokeOrgDeviceRequest(server string, id string, deviceId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "device_id", deviceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/devices/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminNewOrgDeviceCodeRequest constructs an http.Request for the AdminNewOrgDeviceCode method
+func NewAdminNewOrgDeviceCodeRequest(server string, id string, deviceId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "device_id", deviceId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/devices/%s/code", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListOrgDomainsRequest constructs an http.Request for the AdminListOrgDomains method
 func NewAdminListOrgDomainsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -11148,6 +11675,40 @@ func NewAdminRemoveOrgMemberRequest(server string, id string, userId string) (*h
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminListOrgPINsRequest constructs an http.Request for the AdminListOrgPINs method
+func NewAdminListOrgPINsRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/pins", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -13842,6 +14403,74 @@ func NewAdminGrantPermissionRequestWithBody(server string, id string, params *Ad
 	return req, nil
 }
 
+// NewAdminRemoveUserPINRequest constructs an http.Request for the AdminRemoveUserPIN method
+func NewAdminRemoveUserPINRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/pin", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminUnlockUserPINRequest constructs an http.Request for the AdminUnlockUserPIN method
+func NewAdminUnlockUserPINRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/users/%s/pin/unlock", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListPushApproversRequest constructs an http.Request for the AdminListPushApprovers method
 func NewAdminListPushApproversRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -15036,6 +15665,51 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/audit-events (the `AdminListOrgAuditEvents` operationId).
 	AdminListOrgAuditEventsWithResponse(ctx context.Context, id string, params *AdminListOrgAuditEventsParams, reqEditors ...RequestEditorFn) (*AdminListOrgAuditEventsResponse, error)
 
+	// AdminListOrgDevicesWithResponse The organization's shared devices (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/devices (the `AdminListOrgDevices` operationId).
+	AdminListOrgDevicesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgDevicesResponse, error)
+
+	// AdminRegisterOrgDeviceWithBodyWithResponse Register a shared device; returns its one-time code (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+	AdminRegisterOrgDeviceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRegisterOrgDeviceResponse, error)
+
+	// AdminRegisterOrgDeviceWithResponse Register a shared device; returns its one-time code (FR-A45)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+	AdminRegisterOrgDeviceWithResponse(ctx context.Context, id string, body AdminRegisterOrgDeviceJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRegisterOrgDeviceResponse, error)
+
+	// AdminRevokeOrgDeviceWithResponse Revoke a shared device; its signatures stop and its sessions end at once
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/orgs/{id}/devices/{device_id} (the `AdminRevokeOrgDevice` operationId).
+	AdminRevokeOrgDeviceWithResponse(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRevokeOrgDeviceResponse, error)
+
+	// AdminNewOrgDeviceCodeWithResponse Register a device again: its key goes and its sessions end; a new one-time code
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/devices/{device_id}/code (the `AdminNewOrgDeviceCode` operationId).
+	AdminNewOrgDeviceCodeWithResponse(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminNewOrgDeviceCodeResponse, error)
+
 	// AdminListOrgDomainsWithResponse An organization's email domains
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -15170,6 +15844,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
 	AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error)
+
+	// AdminListOrgPINsWithResponse The organization's members and their PINs' states (FR-A46)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
+	AdminListOrgPINsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgPINsResponse, error)
 
 	// AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
 	//
@@ -15949,6 +16632,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /v1/admin/users/{id}/permissions (the `AdminGrantPermission` operationId).
 	AdminGrantPermissionWithResponse(ctx context.Context, id string, params *AdminGrantPermissionParams, body AdminGrantPermissionJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminGrantPermissionResponse, error)
+
+	// AdminRemoveUserPINWithResponse Remove a user's PIN
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /v1/admin/users/{id}/pin (the `AdminRemoveUserPIN` operationId).
+	AdminRemoveUserPINWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRemoveUserPINResponse, error)
+
+	// AdminUnlockUserPINWithResponse Unlock a user's locked or held PIN
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/users/{id}/pin/unlock (the `AdminUnlockUserPIN` operationId).
+	AdminUnlockUserPINWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminUnlockUserPINResponse, error)
 
 	// AdminListPushApproversWithResponse A user's push approvers (FR-D22)
 	//
@@ -19529,6 +20230,261 @@ func (r AdminListOrgAuditEventsResponse) ContentType() string {
 	return ""
 }
 
+type AdminListOrgDevicesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SharedDeviceList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListOrgDevicesResponse) GetJSON200() *SharedDeviceList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListOrgDevicesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListOrgDevicesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListOrgDevicesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListOrgDevicesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListOrgDevicesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListOrgDevicesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListOrgDevicesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRegisterOrgDeviceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *SharedDeviceRegistered
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r AdminRegisterOrgDeviceResponse) GetJSON201() *SharedDeviceRegistered {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminRegisterOrgDeviceResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRegisterOrgDeviceResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRegisterOrgDeviceResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRegisterOrgDeviceResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminRegisterOrgDeviceResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRegisterOrgDeviceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRegisterOrgDeviceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRegisterOrgDeviceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRegisterOrgDeviceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminRevokeOrgDeviceResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRevokeOrgDeviceResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRevokeOrgDeviceResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRevokeOrgDeviceResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRevokeOrgDeviceResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRevokeOrgDeviceResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRevokeOrgDeviceResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRevokeOrgDeviceResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminNewOrgDeviceCodeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *SharedDeviceRegistered
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminNewOrgDeviceCodeResponse) GetJSON200() *SharedDeviceRegistered {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminNewOrgDeviceCodeResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminNewOrgDeviceCodeResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminNewOrgDeviceCodeResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminNewOrgDeviceCodeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminNewOrgDeviceCodeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminNewOrgDeviceCodeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminNewOrgDeviceCodeResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListOrgDomainsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20288,6 +21244,68 @@ func (r AdminRemoveOrgMemberResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminRemoveOrgMemberResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListOrgPINsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *MemberPINList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListOrgPINsResponse) GetJSON200() *MemberPINList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListOrgPINsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListOrgPINsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListOrgPINsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListOrgPINsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListOrgPINsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListOrgPINsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListOrgPINsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -24712,6 +25730,116 @@ func (r AdminGrantPermissionResponse) ContentType() string {
 	return ""
 }
 
+type AdminRemoveUserPINResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminRemoveUserPINResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminRemoveUserPINResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminRemoveUserPINResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminRemoveUserPINResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminRemoveUserPINResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminRemoveUserPINResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminRemoveUserPINResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminUnlockUserPINResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminUnlockUserPINResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminUnlockUserPINResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminUnlockUserPINResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminUnlockUserPINResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminUnlockUserPINResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminUnlockUserPINResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminUnlockUserPINResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListPushApproversResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -26720,6 +27848,81 @@ func (c *ClientWithResponses) AdminListOrgAuditEventsWithResponse(ctx context.Co
 	return ParseAdminListOrgAuditEventsResponse(rsp)
 }
 
+// AdminListOrgDevicesWithResponse The organization's shared devices (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/devices (the `AdminListOrgDevices` operationId).
+func (c *ClientWithResponses) AdminListOrgDevicesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgDevicesResponse, error) {
+	rsp, err := c.AdminListOrgDevices(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListOrgDevicesResponse(rsp)
+}
+
+// AdminRegisterOrgDeviceWithBodyWithResponse Register a shared device; returns its one-time code (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+func (c *ClientWithResponses) AdminRegisterOrgDeviceWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminRegisterOrgDeviceResponse, error) {
+	rsp, err := c.AdminRegisterOrgDeviceWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRegisterOrgDeviceResponse(rsp)
+}
+
+// AdminRegisterOrgDeviceWithResponse Register a shared device; returns its one-time code (FR-A45)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices (the `AdminRegisterOrgDevice` operationId).
+func (c *ClientWithResponses) AdminRegisterOrgDeviceWithResponse(ctx context.Context, id string, body AdminRegisterOrgDeviceJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminRegisterOrgDeviceResponse, error) {
+	rsp, err := c.AdminRegisterOrgDevice(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRegisterOrgDeviceResponse(rsp)
+}
+
+// AdminRevokeOrgDeviceWithResponse Revoke a shared device; its signatures stop and its sessions end at once
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/orgs/{id}/devices/{device_id} (the `AdminRevokeOrgDevice` operationId).
+func (c *ClientWithResponses) AdminRevokeOrgDeviceWithResponse(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRevokeOrgDeviceResponse, error) {
+	rsp, err := c.AdminRevokeOrgDevice(ctx, id, deviceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRevokeOrgDeviceResponse(rsp)
+}
+
+// AdminNewOrgDeviceCodeWithResponse Register a device again: its key goes and its sessions end; a new one-time code
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/devices/{device_id}/code (the `AdminNewOrgDeviceCode` operationId).
+func (c *ClientWithResponses) AdminNewOrgDeviceCodeWithResponse(ctx context.Context, id string, deviceId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminNewOrgDeviceCodeResponse, error) {
+	rsp, err := c.AdminNewOrgDeviceCode(ctx, id, deviceId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminNewOrgDeviceCodeResponse(rsp)
+}
+
 // AdminListOrgDomainsWithResponse An organization's email domains
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -26943,6 +28146,21 @@ func (c *ClientWithResponses) AdminRemoveOrgMemberWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseAdminRemoveOrgMemberResponse(rsp)
+}
+
+// AdminListOrgPINsWithResponse The organization's members and their PINs' states (FR-A46)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
+func (c *ClientWithResponses) AdminListOrgPINsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgPINsResponse, error) {
+	rsp, err := c.AdminListOrgPINs(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListOrgPINsResponse(rsp)
 }
 
 // AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
@@ -28244,6 +29462,36 @@ func (c *ClientWithResponses) AdminGrantPermissionWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseAdminGrantPermissionResponse(rsp)
+}
+
+// AdminRemoveUserPINWithResponse Remove a user's PIN
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /v1/admin/users/{id}/pin (the `AdminRemoveUserPIN` operationId).
+func (c *ClientWithResponses) AdminRemoveUserPINWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminRemoveUserPINResponse, error) {
+	rsp, err := c.AdminRemoveUserPIN(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminRemoveUserPINResponse(rsp)
+}
+
+// AdminUnlockUserPINWithResponse Unlock a user's locked or held PIN
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/users/{id}/pin/unlock (the `AdminUnlockUserPIN` operationId).
+func (c *ClientWithResponses) AdminUnlockUserPINWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminUnlockUserPINResponse, error) {
+	rsp, err := c.AdminUnlockUserPIN(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUnlockUserPINResponse(rsp)
 }
 
 // AdminListPushApproversWithResponse A user's push approvers (FR-D22)
@@ -31189,6 +32437,204 @@ func ParseAdminListOrgAuditEventsResponse(rsp *http.Response) (*AdminListOrgAudi
 	return response, nil
 }
 
+// ParseAdminListOrgDevicesResponse parses an HTTP response from a AdminListOrgDevicesWithResponse call
+func ParseAdminListOrgDevicesResponse(rsp *http.Response) (*AdminListOrgDevicesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListOrgDevicesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SharedDeviceList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRegisterOrgDeviceResponse parses an HTTP response from a AdminRegisterOrgDeviceWithResponse call
+func ParseAdminRegisterOrgDeviceResponse(rsp *http.Response) (*AdminRegisterOrgDeviceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRegisterOrgDeviceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SharedDeviceRegistered
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRevokeOrgDeviceResponse parses an HTTP response from a AdminRevokeOrgDeviceWithResponse call
+func ParseAdminRevokeOrgDeviceResponse(rsp *http.Response) (*AdminRevokeOrgDeviceResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRevokeOrgDeviceResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminNewOrgDeviceCodeResponse parses an HTTP response from a AdminNewOrgDeviceCodeWithResponse call
+func ParseAdminNewOrgDeviceCodeResponse(rsp *http.Response) (*AdminNewOrgDeviceCodeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminNewOrgDeviceCodeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest SharedDeviceRegistered
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListOrgDomainsResponse parses an HTTP response from a AdminListOrgDomainsWithResponse call
 func ParseAdminListOrgDomainsResponse(rsp *http.Response) (*AdminListOrgDomainsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -31765,6 +33211,53 @@ func ParseAdminRemoveOrgMemberResponse(rsp *http.Response) (*AdminRemoveOrgMembe
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListOrgPINsResponse parses an HTTP response from a AdminListOrgPINsWithResponse call
+func ParseAdminListOrgPINsResponse(rsp *http.Response) (*AdminListOrgPINsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListOrgPINsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MemberPINList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -35309,6 +36802,92 @@ func ParseAdminGrantPermissionResponse(rsp *http.Response) (*AdminGrantPermissio
 			return nil, err
 		}
 		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminRemoveUserPINResponse parses an HTTP response from a AdminRemoveUserPINWithResponse call
+func ParseAdminRemoveUserPINResponse(rsp *http.Response) (*AdminRemoveUserPINResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminRemoveUserPINResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminUnlockUserPINResponse parses an HTTP response from a AdminUnlockUserPINWithResponse call
+func ParseAdminUnlockUserPINResponse(rsp *http.Response) (*AdminUnlockUserPINResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminUnlockUserPINResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 

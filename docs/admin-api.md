@@ -94,6 +94,19 @@ func main() {
 }
 ```
 
+## Shared devices and PINs
+
+Organizations register the tills and terminals their people share ([Shared devices](signing-in.md#shared-devices-signing-staff-in-with-a-pin)). Org admins reach these for their own organization and its members; tenant admins for any.
+
+| Call | What it does |
+| --- | --- |
+| `GET /v1/admin/orgs/{id}/devices` | The organization's devices: `waiting` (registered, not claimed), `active` or `revoked` |
+| `POST /v1/admin/orgs/{id}/devices` | `{name, client_id}`: registers one; the response's `code` is shown once and lasts 10 minutes |
+| `POST /v1/admin/orgs/{id}/devices/{device_id}/code` | Registers it again: its key stops working and its sessions end; a new code |
+| `DELETE /v1/admin/orgs/{id}/devices/{device_id}` | Revokes it; its sessions end at once |
+| `GET /v1/admin/orgs/{id}/pins` | Members and their PINs: `none`, `active`, `locked` or `held` |
+| `POST /v1/admin/users/{id}/pin/unlock`, `DELETE /v1/admin/users/{id}/pin` | Unlock or remove a member's PIN |
+
 ## The generated clients
 
 ```ts compile

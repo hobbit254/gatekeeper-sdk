@@ -129,6 +129,31 @@ Users can approve a sign-in on their phone by tapping the number the sign-in pag
 - Without a relay, users can still open the app and approve. A push lasts 2 minutes.
 - Headless sign-in doesn't offer push yet.
 
+## Shared devices: signing staff in with a PIN
+
+Tills and terminals that staff share can sign people in with a 4–6 digit PIN instead of a full sign-in. A PIN works only on a device the organization registered, which signs every request with its own key.
+1. **Turn it on:** `PUT /v1/admin/tenant/policy` with `pin: {sign_in: true, session_max_sec: 28800}` (15 minutes to 12 hours; 8 hours by default).
+2. **Mark what a till may do:** give `pin_sign_in: true` to the roles staff may use there, in the manifest or on an organization's own role (see [Organization roles](admin-api.md#organization-roles)). A PIN session's token carries only those roles, and checks for it weigh only them. A role with a sensitive permission, a `tenant_only` group, `*:*` or a limited permission without `approves` can't be marked.
+3. **Register the device:** an org admin registers it on the dashboard's Devices page and gets a one-time code, valid 10 minutes.
+4. **Claim it in the app:** create a P-256 key that can't be exported (WebCrypto, Keychain or Keystore) and redeem the code. With the TypeScript SDK:
+
+```ts
+import { createSharedDevice, cryptoKeySigner, generatePushKey } from "@hobbit254/gatekeeper-sdk";
+
+const keys = await generatePushKey(); // keep it, with the device id
+const till = createSharedDevice({ issuer: "https://auth.example.com/t/acme", signer: cryptoKeySigner(keys) });
+await till.claim("K7QM-2XRP");
+const session = await till.pinSignIn(userId, pin); // session.access_token, session.sid
+```
+
+5. **People set their PIN** on their account's security page, or with `PUT /v1/me/pin {pin}` after a sign-in in the last 5 minutes.
+6. **Keep the session alive:** a PIN access token lasts 15 minutes and there's no refresh token. Call `renewPinSession(sid)` while someone is using the till. After 15 idle minutes, or at `session_max_sec`, the session ends and they type their PIN again. `pinSignOut(sid)` ends it at once.
+
+- **Errors:** every refusal is a `DeviceError`. `401` never says whether the device, the signature or the PIN was wrong. `423` is `pin-locked` (5 wrong in a row, for 15 minutes; `retryAfter` in seconds) or `pin-held` (10 wrong; an org admin must unlock it, and the user is emailed).
+- **What a PIN can't do:** `amr` is `pin`, `hwk`, never `mfa`, so step-up always refuses it. Account changes from a PIN session are refused (`403`).
+- **Revoking:** revoking a device, or registering it again, signs everyone on it out at once.
+- **Not yet:** signing in while offline, the hosted PIN pad, and Dart helpers.
+
 ## Signing out
 
 - **Browser:** `auth.logout({ returnTo })` ends the Gatekeeper session and returns to `returnTo`, which must be one of the client's post-logout redirect URIs.

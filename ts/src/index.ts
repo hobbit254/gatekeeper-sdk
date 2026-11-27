@@ -702,3 +702,4 @@ export { generateDPoPKey } from "./dpop.js";
 export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";
 export { createRevocationFeed, type RevocationFeed, type RevocationFeedConfig } from "./feed.js";
+export { bodyHash, createSharedDevice, DeviceError, signDeviceRequest, type DeviceSigner, type PinSession, type SharedDevice, type SharedDeviceConfig } from "./device.js";

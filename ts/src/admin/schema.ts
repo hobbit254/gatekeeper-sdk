@@ -814,6 +814,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The organization's shared devices (FR-A45)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        get: operations["adminListOrgDevices"];
+        put?: never;
+        /**
+         * Register a shared device; returns its one-time code (FR-A45)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        post: operations["adminRegisterOrgDevice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/devices/{device_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a shared device; its signatures stop and its sessions end at once
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        delete: operations["adminRevokeOrgDevice"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/devices/{device_id}/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a device again: its key goes and its sessions end; a new one-time code
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        post: operations["adminNewOrgDeviceCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/domains": {
         parameters: {
             query?: never;
@@ -985,6 +1049,26 @@ export interface paths {
          * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
          */
         delete: operations["adminRemoveOrgMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The organization's members and their PINs' states (FR-A46)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
+         */
+        get: operations["adminListOrgPINs"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1939,6 +2023,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/users/{id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a user's PIN
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+         */
+        delete: operations["adminRemoveUserPIN"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{id}/pin/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlock a user's locked or held PIN
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). An org admin reaches only members of their organization (403).
+         */
+        post: operations["adminUnlockUserPIN"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/users/{id}/push-approvers": {
         parameters: {
             query?: never;
@@ -2368,6 +2492,8 @@ export interface components {
             name: string;
             /** @description The role's own patterns; what its groups give is not listed here (ADR-0141) */
             permissions: string[];
+            /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
+            pin_sign_in?: boolean;
         };
         AdminRoleList: {
             items: components["schemas"]["AdminRole"][];
@@ -2963,6 +3089,22 @@ export interface components {
         MemberList: {
             members: components["schemas"]["Member"][];
         };
+        MemberPIN: {
+            display_name: string;
+            /** @description Wrong PINs in a row */
+            failures?: number;
+            /** Format: date-time */
+            locked_until?: string | null;
+            /** Format: date-time */
+            set_at?: string | null;
+            /** @enum {string} */
+            status: "none" | "active" | "locked" | "held";
+            /** Format: uuid */
+            user_id: string;
+        };
+        MemberPINList: {
+            items: components["schemas"]["MemberPIN"][];
+        };
         Onboarding: {
             /** @description Every required step done; every optional one done or not needed */
             complete: boolean;
@@ -3046,6 +3188,8 @@ export interface components {
             };
             /** @example senior-cashier */
             name: string;
+            /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
+            pin_sign_in?: boolean;
             /**
              * @description Why it isn't editable
              * @enum {string}
@@ -3071,6 +3215,8 @@ export interface components {
             };
             /** @example senior-cashier */
             name: string;
+            /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
+            pin_sign_in?: boolean;
         };
         OrgRoleEditor: {
             /**
@@ -3120,6 +3266,8 @@ export interface components {
             };
             /** @example senior-cashier */
             name?: string;
+            /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
+            pin_sign_in?: boolean;
         };
         /** @description A manifest role marked template: true */
         OrgRoleTemplate: {
@@ -3535,6 +3683,47 @@ export interface components {
         SessionsRevoked: {
             revoked: number;
         };
+        /** @description A shared device registered for one client (FR-A45, ADR-0144) */
+        SharedDevice: {
+            /** Format: date-time */
+            claimed_at?: string | null;
+            client_id: string;
+            /** Format: date-time */
+            code_expires_at?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            last_used_at?: string | null;
+            name: string;
+            /** Format: date-time */
+            registered_at: string;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            /**
+             * @description waiting: registered, not yet claimed
+             * @enum {string}
+             */
+            status: "waiting" | "active" | "revoked";
+        };
+        SharedDeviceCreate: {
+            /**
+             * @description The client the device signs in to
+             * @example pos
+             */
+            client_id: string;
+            /** @example Front till */
+            name: string;
+        };
+        SharedDeviceList: {
+            items: components["schemas"]["SharedDevice"][];
+        };
+        SharedDeviceRegistered: components["schemas"]["SharedDevice"] & {
+            /**
+             * @description Shown once; the device redeems it within 10 minutes
+             * @example K7QM-2XRP
+             */
+            code: string;
+        };
         SigningKey: {
             /** Format: date-time */
             active_from?: string | null;
@@ -3633,6 +3822,13 @@ export interface components {
                 check_breached: boolean;
                 max_length: number;
                 min_length: number;
+            };
+            /** @description PIN sign-in on shared devices (ADR-0144) */
+            pin?: {
+                /** @default 28800 */
+                session_max_sec: number;
+                /** @default false */
+                sign_in: boolean;
             };
             /** @description Sign-in risk bands (ADR-0069); omitted = enabled, step_up 40, block 80 */
             risk?: {
@@ -5133,6 +5329,112 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    adminListOrgDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDeviceList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminRegisterOrgDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SharedDeviceCreate"];
+            };
+        };
+        responses: {
+            /** @description Registered */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDeviceRegistered"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminRevokeOrgDevice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminNewOrgDeviceCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                device_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedDeviceRegistered"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     adminListOrgDomains: {
         parameters: {
             query?: never;
@@ -5443,6 +5745,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminListOrgPINs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberPINList"];
+                };
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
@@ -7190,6 +7517,52 @@ export interface operations {
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
+        };
+    };
+    adminRemoveUserPIN: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminUnlockUserPIN: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlocked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     adminListPushApprovers: {
