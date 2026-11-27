@@ -162,7 +162,13 @@ A tenant can attach a customer's plan and paid features to its users' tokens, te
 
 ## Impersonation
 
-A tenant admin can act as a user for support, when the client allows it. The token then carries `Actor` (`actor`), the admin's id, and `ImpersonationEndsAt`. Show a banner while it's set ("Viewing as … · ends in N min · Stop"), wire Stop to `POST /v1/auth/impersonation/stop`, and record `Actor` in your own audit trail.
+A tenant admin can act as a user for support, when the client allows it. Every support session has a reason, and it's **read-only unless the admin asked for write**:
+- **The token** carries `Actor` (`actor`), the admin's id, `ImpersonationEndsAt`, and `ActorMode` (`actorMode`, `$actorMode`): `read` or `write`.
+- **In read mode,** the SDK keeps only read permissions: those in a group's `read` set, or ending in `:read`. `Can`, `RequirePermission` and `CanAmount` refuse the rest, and `/v1/authz/check` answers `deny` with `matched_by: "impersonation_read_only"`. Name read-only actions `…:read`, or put them in a group's `read` set.
+- **Write mode** needs a tenant owner, or a role in the policy's `impersonation_write_roles`, with a second factor in the last 5 minutes.
+- **The organization is told:** its owners and admins are emailed who, why, the mode and when it ends, and they can end the session from the dashboard.
+
+Show a banner while `Actor` is set ("Support is viewing as … · read-only · ends in N min · Stop"), wire Stop to `POST /v1/auth/impersonation/stop`, and record `Actor` and `ActorMode` in your own audit trail.
 
 ## DPoP-bound tokens
 

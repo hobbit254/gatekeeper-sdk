@@ -47,8 +47,13 @@ final readonly class Principal
         public array $limits = [],
         /** The currency those limits are counted in (ISO 4217): the organization's, else the tenant's. */
         public string $currency = '',
+        /** The support session's mode, 'read' or 'write', or null without an actor; in read mode $permissions holds only read ones (ADR-0146). */
+        public ?string $actorMode = null,
     ) {
     }
+
+    public const ACTOR_READ = 'read';
+    public const ACTOR_WRITE = 'write';
 
     public const AMOUNT_ALLOW = 'allow';
     public const AMOUNT_APPROVAL_REQUIRED = 'approval_required';

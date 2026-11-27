@@ -54,6 +54,8 @@ export interface Principal {
   /** The admin acting as `sub`, and when that ends; set only on impersonation tokens (ADR-0058). Show a banner. */
   actor?: string;
   impersonationEndsAt?: Date;
+  /** The support session's mode (ADR-0146): in "read", permissions hold only read ones. Show it in the banner. */
+  actorMode?: "read" | "write";
   /** True for a principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
   apiKey?: boolean;
   ownerType?: string;
@@ -248,6 +250,8 @@ interface RoleMap {
   limited?: string[];
   limits?: Record<string, Record<string, Limit>>;
   currency?: string;
+  /** What read-mode support access may use (ADR-0146); absent from an older server. */
+  read?: string[];
 }
 
 /** Returns an SDK instance for one API; safe to share across requests. */
@@ -338,7 +342,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   // with amount limits (which organizations may override), resolves through
   // the organization's map (ADR-0142, ADR-0143).
   async function permissions(roles: string[], rv: number, org = "", orv = 0):
-    Promise<{ perms: string[]; stepUp?: Record<string, number>; limits?: Record<string, Limit>; currency?: string }> {
+    Promise<{ perms: string[]; stepUp?: Record<string, number>; limits?: Record<string, Limit>; currency?: string; read?: string[] }> {
     let map: RoleMap;
     if (org && roles.some((r) => r.startsWith(ORG_ROLE_PREFIX))) {
       map = await orgMap(org, rv, orv);
@@ -369,7 +373,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       const w = map.step_up?.[p];
       if (w) (stepUp ??= {})[p] = w;
     }
-    return { perms: [...out], stepUp, limits, currency: limits ? map.currency : undefined };
+    return { perms: [...out], stepUp, limits, currency: limits ? map.currency : undefined, read: map.read };
   }
 
   /** The more generous value of k; missing (no limit) beats any number. */
@@ -439,7 +443,16 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     const rv = typeof c.rv === "number" ? c.rv : 0;
     const orv = typeof c.orv === "number" ? c.orv : 0;
     const org = typeof c.org === "string" ? c.org : "";
-    const { perms, stepUp, limits, currency } = await permissions(roles, rv, org, orv);
+    const resolved = await permissions(roles, rv, org, orv);
+    const { stepUp, currency } = resolved;
+    let { perms, limits } = resolved;
+    const imp = impersonation(c.act);
+    if (imp.actorMode === "read") {
+      // Read-mode support access keeps only read permissions (ADR-0146).
+      const keep = (p: string) => (resolved.read ? resolved.read.includes(p) : p.endsWith(":read"));
+      perms = perms.filter(keep);
+      if (limits) limits = Object.fromEntries(Object.entries(limits).filter(([k]) => keep(k)));
+    }
     const ents = entitlements(c.entitlements);
     return {
       ...(stepUp ? { stepUp } : {}),
@@ -456,7 +469,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       orv,
       sid: String(c.sid ?? ""),
       jti: String(c.jti ?? ""),
-      ...impersonation(c.act),
+      ...imp,
       ...(typeof (c.cnf as { jkt?: unknown } | undefined)?.jkt === "string" ? { jkt: (c.cnf as { jkt: string }).jkt } : {}),
       ...(ents ? { entitlements: ents } : {}),
       ...(limits ? { limits, currency } : {}),
@@ -712,12 +725,13 @@ export function requireStepUp(maxAgeSec: number): Middleware {
   };
 }
 
-function impersonation(act: unknown): { actor?: string; impersonationEndsAt?: Date } {
+function impersonation(act: unknown): { actor?: string; impersonationEndsAt?: Date; actorMode?: "read" | "write" } {
   if (!act || typeof act !== "object") return {};
-  const a = act as { sub?: unknown; ends_at?: unknown };
+  const a = act as { sub?: unknown; ends_at?: unknown; mode?: unknown };
   return {
     actor: typeof a.sub === "string" ? a.sub : undefined,
     impersonationEndsAt: typeof a.ends_at === "number" ? new Date(a.ends_at * 1000) : undefined,
+    actorMode: a.mode === "write" ? "write" : "read", // no mode is read (ADR-0146)
   };
 }
 

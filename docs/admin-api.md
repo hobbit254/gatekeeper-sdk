@@ -107,6 +107,17 @@ Organizations register the tills and terminals their people share ([Shared devic
 | `GET /v1/admin/orgs/{id}/pins` | Members and their PINs: `none`, `active`, `locked` or `held` |
 | `POST /v1/admin/users/{id}/pin/unlock`, `DELETE /v1/admin/users/{id}/pin` | Unlock or remove a member's PIN |
 
+## Support access
+
+Impersonation (`POST /v1/admin/users/{id}/impersonate {client_id, reason, mode}`) needs a reason of 10–500 characters and is `read` unless `mode` is `write` (see [Impersonation](protecting-an-api.md#impersonation)). The subject's organizations see it:
+
+| Call | What it does |
+| --- | --- |
+| `GET /v1/admin/orgs/{id}/impersonations` | Live support sessions acting as the organization's members: who, as whom, why, the mode and when it ends |
+| `POST /v1/admin/orgs/{id}/impersonations/{imp}/end` | Ends one; its tokens stop working at once |
+| `PATCH /v1/admin/orgs/{id} {impersonation_notice}` | Whether its owners and admins are emailed; on by default. Tenant admins only |
+| `PUT /v1/admin/tenant/policy {impersonation_write_roles}` | Roles that may ask for write mode, besides owners |
+
 ## The generated clients
 
 ```ts compile

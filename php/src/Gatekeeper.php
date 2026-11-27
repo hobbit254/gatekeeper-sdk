@@ -63,7 +63,16 @@ final class Gatekeeper
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
         $orv = is_int($claims->orv ?? null) ? $claims->orv : 0;
         $org = isset($claims->org) && is_string($claims->org) ? $claims->org : '';
-        [$permissions, $stepUp, $limits, $currency] = $this->permissions($roles, $rv, $org, $orv);
+        [$permissions, $stepUp, $limits, $currency, $read] = $this->permissions($roles, $rv, $org, $orv);
+        $actorMode = null;
+        if (isset($claims->act) && $claims->act instanceof \stdClass) {
+            $actorMode = ($claims->act->mode ?? null) === Principal::ACTOR_WRITE ? Principal::ACTOR_WRITE : Principal::ACTOR_READ; // no mode is read (ADR-0146)
+        }
+        if ($actorMode === Principal::ACTOR_READ) {
+            $keep = static fn (string $p): bool => $read !== null ? in_array($p, $read, true) : str_ends_with($p, ':read');
+            $permissions = array_values(array_filter($permissions, $keep));
+            $limits = array_filter($limits, $keep, ARRAY_FILTER_USE_KEY);
+        }
 
         return new Principal(
             sub: (string) ($claims->sub ?? ''),
@@ -86,6 +95,7 @@ final class Gatekeeper
             entitlements: self::entitlements($claims->entitlements ?? null),
             limits: $limits,
             currency: $currency,
+            actorMode: $actorMode,
         );
     }
 
@@ -346,8 +356,9 @@ final class Gatekeeper
      * map, cached by (org, rv, orv) (ADR-0142, ADR-0143).
      *
      * @param list<string> $roles
-     * @return array{list<string>, array<string, int>, array<string, array{alone?: int, approves?: int}>, string}
-     *         permissions, their step-up windows (ADR-0097), the limits on held limited permissions and their currency (ADR-0143)
+     * @return array{list<string>, array<string, int>, array<string, array{alone?: int, approves?: int}>, string, ?list<string>}
+     *         permissions, their step-up windows (ADR-0097), the limits on held limited permissions and their currency (ADR-0143),
+     *         and what read-mode support access may use, or null from an older server (ADR-0146)
      */
     private function permissions(array $roles, int $rv, string $org = '', int $orv = 0): array
     {
@@ -394,7 +405,8 @@ final class Gatekeeper
                 $stepUp[(string) $p] = $sec;
             }
         }
-        return [array_keys($out), $stepUp, $limits, $limits === [] ? '' : (string) ($map['currency'] ?? '')];
+        $read = isset($map['read']) && is_array($map['read']) ? self::strings($map['read']) : null;
+        return [array_keys($out), $stepUp, $limits, $limits === [] ? '' : (string) ($map['currency'] ?? ''), $read];
     }
 
     /**
