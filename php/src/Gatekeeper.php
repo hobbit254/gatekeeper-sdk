@@ -503,6 +503,62 @@ final class Gatekeeper
         return $this->authzClient->token();
     }
 
+    /**
+     * Checks a second person's approval offline for $p's request (ADR-0145):
+     * signed by the tenant's key with typ approval+jwt, unexpired, for $p's
+     * client, requested by $p. It doesn't spend it; only spendApproval does.
+     *
+     * @throws ApprovalException
+     */
+    public function verifyApproval(string $raw, Principal $p): Approval
+    {
+        try {
+            $c = $this->claims($raw, 'approval+jwt', $p->clientId);
+        } catch (InvalidTokenException $e) {
+            if ($e->getPrevious() instanceof \Firebase\JWT\ExpiredException) {
+                throw new ApprovalException('closed', 'approval expired', $e);
+            }
+            throw new ApprovalException('mismatch', 'approval not valid: ' . $e->getMessage(), $e);
+        }
+        if (($c->req ?? null) !== $p->sub) {
+            throw new ApprovalException('mismatch', "approval is not for this user's request");
+        }
+        return new Approval((string) $c->jti, (string) $c->sub, (string) $c->req, $p->clientId, (string) $c->perm, (string) $c->res,
+            isset($c->amt) ? (int) $c->amt : null, isset($c->cur) ? (string) $c->cur : null, isset($c->org) ? (string) $c->org : null,
+            (string) ($c->method ?? ''), (int) $c->exp);
+    }
+
+    /**
+     * Spends an approval once for $permission on $resource and $amount, with
+     * $accessToken (the requester's, or a client-credentials token of the
+     * approval's client). Call it last, in the commit path of the action.
+     *
+     * @throws ApprovalException
+     */
+    public function spendApproval(string $accessToken, string $raw, string $permission, string $resource, ?int $amount = null): Approval
+    {
+        $body = ['token' => $raw, 'permission' => $permission, 'resource' => $resource];
+        if ($amount !== null) {
+            $body['amount'] = $amount;
+        }
+        [$status, $out] = ($this->fetch)($this->config->issuer . '/v1/approvals/spend',
+            ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Authorization' => 'Bearer ' . $accessToken], json_encode($body));
+        if ($status === 409) {
+            throw new ApprovalException('closed', 'approval already spent or expired');
+        }
+        if ($status === 422 || $status === 403) {
+            throw new ApprovalException('mismatch', 'approval does not match the action');
+        }
+        $a = json_decode($out, true);
+        if ($status !== 200 || !is_array($a)) {
+            throw new \RuntimeException("gatekeeper: approvals unavailable: status {$status}");
+        }
+        return new Approval((string) ($a['approval_id'] ?? ''), (string) ($a['approver_id'] ?? ''), (string) ($a['requester_id'] ?? ''),
+            (string) ($a['client_id'] ?? ''), (string) ($a['permission'] ?? ''), (string) ($a['resource'] ?? ''),
+            isset($a['amount']) ? (int) $a['amount'] : null, isset($a['currency']) ? (string) $a['currency'] : null,
+            isset($a['org_id']) ? (string) $a['org_id'] : null, (string) ($a['method'] ?? ''));
+    }
+
     /** @return array<string, mixed> */
     private function authz(string $token, string $path, array $body): array
     {

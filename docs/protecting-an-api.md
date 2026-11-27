@@ -65,6 +65,28 @@ roles:
 
 The SDK sees only the token's roles. For the authoritative answer, direct grants included, send the amount to the server: `POST /v1/authz/check {"permission": "refund:create", "amount": 250000}` answers `decision` (`allow`, `approval_required` or `deny`) and `limit {alone, approves, currency}`. Above `alone`, `allow` is `false`, so code that reads only `allow` never lets the amount through. Decisions above `alone` are audited.
 
+## Second-person approval
+
+Above `alone`, or for a permission that always needs a second person, Gatekeeper can collect one approval for one action and hand you a token you spend once. Mark a permission that needs approval whatever the amount (a void, a price override) with `requires_approval: true` in the manifest.
+
+1. **Ask:** when a check answers `approval_required` (or `allow` for a `requires_approval` permission), your backend calls `POST /v1/approvals {"permission": "refund:create", "resource": "sale:42", "amount": 250000, "summary": "Refund of a broken kettle"}` with the requester's token. You get `approval_id`; it waits 2 minutes. Any other answer is `409 approval-not-needed`.
+2. **Tell approvers:** subscribe to the `approval.requested` webhook, which carries the ids and the amount, never the summary.
+3. **Approve:**
+   - **on the shared device,** the approver enters their PIN: `device.approveWithPin(approvalId, approverId, pin)` in the TypeScript device signer. Wrong PINs count toward their lockout, and a sensitive permission is never approved by PIN;
+   - **on their own device,** with a second factor in the last 5 minutes: `POST /v1/approvals/{id}/approve` (or `/deny`) with their token. `GET /v1/approvals/{id}` shows them the summary.
+   The approver must be another active member holding the permission in the same organization, with `approves` covering the amount.
+4. **Get the token:** the device's approve call answers with `approval_token`, and the requester's `GET /v1/approvals/{id}` returns it once granted. It's valid for 2 minutes.
+5. **Spend it last,** in the commit path of the action, with the requester's token or your client's client-credentials token. Everything must match: permission, resource, amount, client and requester. A second spend is refused.
+
+| | Go | TypeScript | Laravel |
+| --- | --- | --- | --- |
+| Read it (no spend) | `sdk.VerifyApproval(ctx, raw, p)` | `gk.verifyApproval(raw, p)` | `$gk->verifyApproval($raw, $principal)` |
+| Spend it once | `sdk.SpendApproval(ctx, token, raw, "refund:create", "sale:42", &amount)` | `gk.spendApproval(token, raw, "refund:create", "sale:42", 250000)` | `$gk->spendApproval($token, $raw, 'refund:create', 'sale:42', 250000)` |
+| Already spent or expired | `gk.ErrApprovalClosed` | `ApprovalError` with `code: "closed"` | `ApprovalException` with `reason` `closed` |
+| Doesn't match | `gk.ErrApprovalMismatch` | `ApprovalError` with `code: "mismatch"` | `ApprovalException` with `reason` `mismatch` |
+
+The approval token is an ES256 JWS with `typ: approval+jwt`, signed by the keys in the tenant's JWKS: `aud` is the requester's client, `jti` the approval id, `sub` the approver, `req` the requester, and `perm`, `res`, `amt`, `cur`, `org` and `method` (`pin` or `mfa`) say what was approved and how.
+
 ## Step-up
 
 Some actions need a second factor from the last few minutes. `RequireStepUp(5*time.Minute)` (Go), `requireStepUp(300)` (TypeScript) and `gk.stepup:300` (Laravel) refuse a user whose last second factor is older, with `401` and an RFC 9470 challenge:

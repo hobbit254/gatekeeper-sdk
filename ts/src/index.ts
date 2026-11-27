@@ -172,6 +172,42 @@ export interface Gatekeeper {
    * client's credentials (canOnFor); without a clientSecret it is 403.
    */
   requirePermissionOn(permission: string, resource: (req: Req) => string): Middleware;
+  /**
+   * Checks a second person's approval offline for p's request (ADR-0145): signed by the
+   * tenant's key with typ approval+jwt, unexpired, for p's client, requested by p. It doesn't
+   * spend it. Rejects with ApprovalError.
+   */
+  verifyApproval(raw: string, p: Principal): Promise<Approval>;
+  /**
+   * Spends an approval once for permission on resource and amount, with accessToken (the
+   * requester's, or a client-credentials token of the approval's client). Call it last, in the
+   * commit path of the action. Rejects with ApprovalError ("closed" or "mismatch").
+   */
+  spendApproval(accessToken: string, raw: string, permission: string, resource: string, amount?: number): Promise<Approval>;
+}
+
+/** A second person's approval of one action (FR-Z21, ADR-0145). */
+export interface Approval {
+  id: string;
+  approver: string;
+  requester: string;
+  clientId: string;
+  permission: string;
+  resource: string;
+  /** Minor units; undefined for a permission without a limit. */
+  amount?: number;
+  currency?: string;
+  orgId?: string;
+  method: string;
+  expiresAt?: Date;
+}
+
+/** An approval refused: "closed" (spent or expired) or "mismatch" (another action, client or requester, or a bad signature). */
+export class ApprovalError extends Error {
+  constructor(readonly code: "closed" | "mismatch", message: string) {
+    super(message);
+    this.name = "ApprovalError";
+  }
 }
 
 /** Gatekeeper's answer for one resource (FR-Z12). */
@@ -515,9 +551,53 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   const canOnEachFor = async (userId: string, permission: string, resources: string[]) =>
     canOnEach(await clientToken(), permission, resources, userId);
 
+  async function verifyApproval(raw: string, p: Principal): Promise<Approval> {
+    if (!keys) await refreshKeys();
+    if (!keys) throw new Error("no signing keys");
+    const opts = { issuer, algorithms: ["ES256"], typ: "approval+jwt", clockTolerance: leeway, currentDate: new Date(now()) };
+    let c: JWTPayload;
+    try {
+      c = (await jwtVerify(raw, keys!, opts)).payload;
+    } catch (e) {
+      if (e instanceof errors.JWKSNoMatchingKey && (await refreshKeys())) return verifyApproval(raw, p);
+      if (e instanceof errors.JWTExpired) throw new ApprovalError("closed", "approval expired");
+      throw new ApprovalError("mismatch", `approval not valid: ${(e as Error).message}`);
+    }
+    if (c.aud !== p.clientId || c.req !== p.sub) throw new ApprovalError("mismatch", "approval is not for this user's request");
+    return {
+      id: String(c.jti), approver: String(c.sub), requester: String(c.req), clientId: String(c.aud), permission: String(c.perm),
+      resource: String(c.res), amount: typeof c.amt === "number" ? c.amt : undefined, currency: typeof c.cur === "string" ? c.cur : undefined,
+      orgId: typeof c.org === "string" ? c.org : undefined, method: String(c.method), expiresAt: c.exp ? new Date(c.exp * 1000) : undefined,
+    };
+  }
+
+  async function spendApproval(accessToken: string, raw: string, permission: string, resource: string, amount?: number): Promise<Approval> {
+    const body: Record<string, unknown> = { token: raw, permission, resource };
+    if (amount !== undefined) body.amount = amount;
+    let res: Response;
+    try {
+      res = await doFetch(`${issuer}/v1/approvals/spend`, { method: "POST", body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` } });
+    } catch (e) {
+      throw new Error(`gatekeeper: approvals unavailable: ${String(e)}`);
+    }
+    if (res.status === 409) throw new ApprovalError("closed", "approval already spent or expired");
+    if (res.status === 422 || res.status === 403) throw new ApprovalError("mismatch", "approval does not match the action");
+    if (res.status !== 200) throw new Error(`gatekeeper: approvals unavailable: status ${res.status}`);
+    const a = (await res.json()) as Record<string, unknown>;
+    return {
+      id: String(a.approval_id), approver: String(a.approver_id ?? ""), requester: String(a.requester_id ?? ""), clientId: String(a.client_id ?? ""),
+      permission: String(a.permission ?? ""), resource: String(a.resource ?? ""), amount: typeof a.amount === "number" ? a.amount : undefined,
+      currency: typeof a.currency === "string" ? a.currency : undefined, orgId: typeof a.org_id === "string" ? a.org_id : undefined,
+      method: String(a.method ?? ""),
+    };
+  }
+
   return {
     verify,
     verifyDPoP,
+    verifyApproval,
+    spendApproval,
     canOn,
     canOnEach: (token: string, permission: string, resources: string[]) => canOnEach(token, permission, resources),
     canOnFor,
@@ -702,4 +782,4 @@ export { generateDPoPKey } from "./dpop.js";
 export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";
 export { createRevocationFeed, type RevocationFeed, type RevocationFeedConfig } from "./feed.js";
-export { bodyHash, createSharedDevice, DeviceError, signDeviceRequest, type DeviceSigner, type PinSession, type SharedDevice, type SharedDeviceConfig } from "./device.js";
+export { bodyHash, createSharedDevice, DeviceError, signDeviceRequest, type DeviceApproval, type DeviceSigner, type PinSession, type SharedDevice, type SharedDeviceConfig } from "./device.js";
