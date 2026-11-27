@@ -143,8 +143,10 @@ Every event's `data` carries `tenant_id` and `tenant` (the slug). User events al
 | `data_export.ready` | a copy of the user's data is ready for them | `export_id` |
 | `session.created` | a sign-in starts a session | `session_id`, `client_id`, `amr`, device, country |
 | `session.revoked` | a session ends | `session_id`, reason |
-| `login.succeeded` | a sign-in succeeds | `amr`, device, country |
-| `login.failed` | a sign-in fails | reason |
+| `login.succeeded` | a sign-in succeeds | `amr`, device, country; `amr: ["pin","hwk"]` and `device_id` for a PIN on a shared device |
+| `login.failed` | a sign-in fails | reason; `amr: ["pin"]` and `device_id` for a PIN |
+| `device.registered`, `device.revoked` | an organization registers (or registers again) or revokes a shared device | `device_id`, `org_id`, `name` |
+| `pin.set`, `pin.removed`, `pin.held`, `pin.unlocked` | a user's PIN for shared devices changes; `pin.held` after 10 wrong tries | `user_id` |
 | `login.new_device` | a sign-in from a device the user hasn't used | `session_id`, `device`, `ip`, `country`, `at` |
 | `token.revoked` | a session's tokens are revoked | `sid` |
 | `refresh.reuse_detected` | a used refresh token came back: the family is revoked | `family_id` |
