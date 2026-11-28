@@ -290,6 +290,70 @@ func main() {
 		"url":   target + "?page=2", // the query is not part of htu
 		"cases": dpopCases,
 	}
+	// Approvals (ADR-0145, ADR-0152): approval+jwt tokens checked for a
+	// principal; expect is ok (with the fields read back), mismatch or closed.
+	approval := func(k *ecdsa.PrivateKey, kid, typ string, edit func(map[string]any)) string {
+		c := map[string]any{"iss": issuer, "aud": "pos", "jti": "0192f3a1-bbbb-7000-8000-00000000000b", "sub": "manager-1", "req": "cashier-1",
+			"perm": "sale:refund", "res": "sale:42", "amt": 300000, "cur": "KES", "org": "0192f3a1-cccc-7000-8000-00000000000c",
+			"method": "pin", "iat": 1700000000, "exp": future}
+		if edit != nil {
+			edit(c)
+		}
+		return sign(k, kid, typ, c)
+	}
+	goodApproval := approval(key, "contract-1", "approval+jwt", nil)
+	ap := strings.Split(goodApproval, ".")
+	approvals := map[string]any{
+		"principal": map[string]any{"sub": "cashier-1", "client_id": "pos"},
+		"cases": []map[string]any{
+			{"name": "a good approval", "token": goodApproval, "expect": "ok",
+				"approval": map[string]any{"id": "0192f3a1-bbbb-7000-8000-00000000000b", "approver": "manager-1", "requester": "cashier-1",
+					"permission": "sale:refund", "resource": "sale:42", "amount": 300000, "currency": "KES", "method": "pin"}},
+			{"name": "no amount for a permission without a limit", "token": approval(key, "contract-1", "approval+jwt", func(c map[string]any) {
+				delete(c, "amt")
+				delete(c, "cur")
+				c["perm"] = "sale:void"
+			}), "expect": "ok", "approval": map[string]any{"id": "0192f3a1-bbbb-7000-8000-00000000000b", "approver": "manager-1",
+				"requester": "cashier-1", "permission": "sale:void", "resource": "sale:42", "method": "pin"}},
+			{"name": "an access token is not an approval", "token": approval(key, "contract-1", "at+jwt", nil), "expect": "mismatch"},
+			{"name": "signed by an unknown key", "token": approval(other, "contract-1", "approval+jwt", nil), "expect": "mismatch"},
+			{"name": "another issuer", "token": approval(key, "contract-1", "approval+jwt", func(c map[string]any) { c["iss"] = "https://auth.example.test/t/evil" }), "expect": "mismatch"},
+			{"name": "another client", "token": approval(key, "contract-1", "approval+jwt", func(c map[string]any) { c["aud"] = "web" }), "expect": "mismatch"},
+			{"name": "another requester", "token": approval(key, "contract-1", "approval+jwt", func(c map[string]any) { c["req"] = "cashier-2" }), "expect": "mismatch"},
+			{"name": "a tampered amount", "token": ap[0] + "." + b64(map[string]any{"iss": issuer, "aud": "pos", "jti": "0192f3a1-bbbb-7000-8000-00000000000b",
+				"sub": "manager-1", "req": "cashier-1", "perm": "sale:refund", "res": "sale:42", "amt": 3000000, "cur": "KES", "method": "pin",
+				"iat": 1700000000, "exp": future}) + "." + ap[2], "expect": "mismatch"},
+			{"name": "expired", "token": approval(key, "contract-1", "approval+jwt", func(c map[string]any) { c["exp"] = 946684800 }), "expect": "closed"},
+		},
+	}
+	// Support-session modes (ADR-0146, ADR-0152): in read mode the principal
+	// keeps only the role map's read list, or :read keys without one.
+	supportToken := func(roles []string, act map[string]any) string {
+		return good(func(c map[string]any) {
+			c["roles"] = roles
+			if act != nil {
+				c["act"] = act
+			}
+		})
+	}
+	const supportAdmin = "0192f3a1-aaaa-7000-8000-00000000000a"
+	supportModes := map[string]any{
+		"role_map": map[string]any{"client_id": clientID, "rv": 3, "roles": map[string][]string{
+			"auditor": {"subscriber:read", "subscriber:list", "subscriber:export"}},
+			"read": []string{"subscriber:read", "subscriber:list"}},
+		"cases": []map[string]any{
+			{"name": "no support session", "map": "support", "token": supportToken([]string{"auditor"}, nil),
+				"actor_mode": "", "permissions": []string{"subscriber:read", "subscriber:list", "subscriber:export"}},
+			{"name": "read mode keeps the read list", "map": "support", "token": supportToken([]string{"auditor"}, map[string]any{"sub": supportAdmin, "ends_at": 4102444000, "mode": "read"}),
+				"actor_mode": "read", "permissions": []string{"subscriber:read", "subscriber:list"}},
+			{"name": "write mode keeps everything", "map": "support", "token": supportToken([]string{"auditor"}, map[string]any{"sub": supportAdmin, "ends_at": 4102444000, "mode": "write"}),
+				"actor_mode": "write", "permissions": []string{"subscriber:read", "subscriber:list", "subscriber:export"}},
+			{"name": "no mode is read", "map": "support", "token": supportToken([]string{"auditor"}, map[string]any{"sub": supportAdmin, "ends_at": 4102444000}),
+				"actor_mode": "read", "permissions": []string{"subscriber:read", "subscriber:list"}},
+			{"name": "a role map without read keeps :read keys", "map": "base", "token": supportToken([]string{"admin"}, map[string]any{"sub": supportAdmin, "ends_at": 4102444000, "mode": "read"}),
+				"actor_mode": "read", "permissions": []string{"subscriber:read"}},
+		},
+	}
 	out := map[string]any{
 		"description": "Shared SDK contract, test data only: the keys, tokens, API keys and secret here were made for these tests and protect nothing. Fetch JWKS from {issuer}/.well-known/jwks.json and the role map from " +
 			"{issuer}/v1/clients/{client_id}/role-map (with ?org=<slug>, from org_roles.role_maps, 404 for any other slug); serve both from this file. Generated by go/internal/contractgen.",
@@ -312,6 +376,8 @@ func main() {
 		"entitlements":       entitlements,
 		"org_roles":          orgRoles,
 		"amount_limits":      amountLimits,
+		"approvals":          approvals,    // ADR-0152
+		"support_modes":      supportModes, // ADR-0152
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

@@ -152,7 +152,9 @@ const session = await till.pinSignIn(userId, pin); // session.access_token, sess
 - **Errors:** every refusal is a `DeviceError`. `401` never says whether the device, the signature or the PIN was wrong. `423` is `pin-locked` (5 wrong in a row, for 15 minutes; `retryAfter` in seconds) or `pin-held` (10 wrong; an org admin must unlock it, and the user is emailed).
 - **What a PIN can't do:** `amr` is `pin`, `hwk`, never `mfa`, so step-up always refuses it. Account changes from a PIN session are refused (`403`).
 - **Revoking:** revoking a device, or registering it again, signs everyone on it out at once.
-- **Not yet:** signing in while offline, the hosted PIN pad, and Dart helpers.
+- **Dart and Flutter:** `SharedDevice` in `gatekeeper_sdk` has the same calls: `claim`, `pinSignIn`, `renewPinSession`, `pinSignOut` and `approveWithPin`. Give it a signer backed by the platform keystore (Android Keystore, Secure Enclave), as for push approvers. Refusals are a `DeviceException` with `status`, `code` and `retryAfter`.
+- **The hosted till:** for a web till, embed Gatekeeper's page instead of building the screens: `<iframe src="https://auth.example.com/t/acme/till?client_id=pos&origin=https://pos.example.com">`. It claims the device with a key the page makes and can't export, shows who has a PIN, takes the PIN, and posts `{type: "gatekeeper:pin-session", access_token, sid, expires_in, user_id}` to your page. Post `{type: "gatekeeper:approve", approval_id}` to it for a manager's approval; it shows the amber prompt and answers `{type: "gatekeeper:approval", approval_token}`, or `gatekeeper:approval-cancelled`. Only your client's redirect-URI origins can frame it or hear from it.
+- **Not yet:** signing in while offline.
 
 ## Signing out
 

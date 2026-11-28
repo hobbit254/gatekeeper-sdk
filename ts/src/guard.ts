@@ -127,3 +127,108 @@ export function assertEveryRouteGuarded(app: unknown, opts: RouteCheckOptions = 
   if (problems.length) throw new Error(`gatekeeper: ${problems.join("\n")}`);
   return rep;
 }
+
+// --- Fastify (ADR-0153) ------------------------------------------------------
+
+/** The slice of a Fastify request the guards use. */
+interface FastifyRequestLike {
+  headers: Record<string, string | string[] | undefined>;
+  method: string;
+  url: string;
+  protocol?: string;
+  gatekeeper?: unknown;
+}
+
+/** The slice of a Fastify reply the guards use. */
+interface FastifyReplyLike {
+  code(status: number): unknown;
+  header(name: string, value: string): unknown;
+  send(body?: unknown): unknown;
+}
+
+type ExpressLike = (req: never, res: never, next: (err?: unknown) => void) => void;
+
+/** A Fastify hook: resolves to continue, or after answering (returning the reply). */
+export type FastifyHook = (request: FastifyRequestLike, reply: FastifyReplyLike) => Promise<unknown>;
+
+/** Runs an Express-style guard as a Fastify hook, keeping its mark. */
+export function fromExpress(mw: ExpressLike): FastifyHook {
+  const hook: FastifyHook = (request, reply) => new Promise((resolve, reject) => {
+    const req = { headers: request.headers, method: request.method, url: request.url, originalUrl: request.url,
+      protocol: request.protocol, gatekeeper: request.gatekeeper };
+    const res = {
+      status(code: number) { reply.code(code); return { end: (body?: string) => { reply.send(body ?? ""); resolve(reply); } }; },
+      setHeader(name: string, value: string) { reply.header(name, value); },
+    };
+    (mw as unknown as (q: typeof req, s: typeof res, n: (err?: unknown) => void) => void)(req, res, (err) => {
+      if (err) return reject(err);
+      request.gatekeeper = req.gatekeeper;
+      resolve(undefined);
+    });
+  });
+  const g = guardOf(mw);
+  return g ? markGuard(g, hook) : hook;
+}
+
+/** Fastify hooks for one Gatekeeper instance: verify on onRequest, the guards on preHandler. */
+export interface FastifyGuards {
+  verify: FastifyHook;
+  requirePermission(permission: string): FastifyHook;
+  requirePermissionOn(permission: string, resource: (request: FastifyRequestLike) => string): FastifyHook;
+  publicRoute(): FastifyHook;
+  signedIn(): FastifyHook;
+}
+
+interface RecordedRoute {
+  method: string;
+  url: string;
+  hooks: unknown[];
+}
+
+const recorded = new WeakMap<object, RecordedRoute[]>();
+
+/** Starts recording a Fastify app's routes; call it before adding them. */
+export function recordFastifyRoutes(app: { addHook(name: "onRoute", fn: (route: Record<string, unknown>) => void): unknown }): void {
+  const routes: RecordedRoute[] = [];
+  recorded.set(app, routes);
+  app.addHook("onRoute", (route) => {
+    const hooks = ["onRequest", "preHandler"].flatMap((k) => {
+      const h = route[k];
+      return Array.isArray(h) ? h : h ? [h] : [];
+    });
+    const methods = Array.isArray(route.method) ? route.method as string[] : [String(route.method)];
+    for (const m of methods) routes.push({ method: m, url: String(route.url), hooks });
+  });
+}
+
+/** Reports a recorded Fastify app's routes with no guard, and unused permissions. */
+export function checkFastifyRoutes(app: object, opts: RouteCheckOptions = {}): RouteReport {
+  const routes = recorded.get(app);
+  if (!routes) throw new Error("gatekeeper: call recordFastifyRoutes(app) before adding routes");
+  const ignore = new Set(opts.ignore ?? []);
+  const used = new Set<string>();
+  const unguarded = new Set<string>();
+  const gets = new Set(routes.filter((r) => r.method === "GET").map((r) => r.url));
+  for (const r of routes) {
+    if (r.method === "HEAD" && gets.has(r.url)) continue; // the HEAD twin Fastify adds for a GET
+    const name = `${r.method} ${r.url}`;
+    if (ignore.has(name) || ignore.has(r.url)) continue;
+    const g = r.hooks.map(guardOf).find(Boolean);
+    if (!g) unguarded.add(name);
+    else if (g.permission) used.add(g.permission);
+  }
+  return { unguarded: [...unguarded].sort(), unused: (opts.permissions ?? []).filter((p) => !used.has(p)).sort() };
+}
+
+/**
+ * Throws, listing them, when a recorded Fastify app has routes with no Gatekeeper guard
+ * in their onRequest or preHandler hooks. A hook added with app.addHook isn't seen.
+ */
+export function assertEveryFastifyRouteGuarded(app: object, opts: RouteCheckOptions = {}): RouteReport {
+  const rep = checkFastifyRoutes(app, opts);
+  const problems: string[] = [];
+  if (rep.unguarded.length) problems.push(`${rep.unguarded.length} route(s) with no Gatekeeper guard:\n  ${rep.unguarded.join("\n  ")}`);
+  if (opts.failOnUnused && rep.unused.length) problems.push(`permission(s) no route guards: ${rep.unused.join(", ")}`);
+  if (problems.length) throw new Error(`gatekeeper: ${problems.join("\n")}`);
+  return rep;
+}

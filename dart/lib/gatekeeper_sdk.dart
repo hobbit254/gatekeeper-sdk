@@ -3,4 +3,5 @@
 library;
 
 export 'src/client.dart';
+export 'src/device.dart';
 export 'src/push.dart';
