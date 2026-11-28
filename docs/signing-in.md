@@ -152,7 +152,8 @@ const session = await till.pinSignIn(userId, pin); // session.access_token, sess
 - **Errors:** every refusal is a `DeviceError`. `401` never says whether the device, the signature or the PIN was wrong. `423` is `pin-locked` (5 wrong in a row, for 15 minutes; `retryAfter` in seconds) or `pin-held` (10 wrong; an org admin must unlock it, and the user is emailed).
 - **What a PIN can't do:** `amr` is `pin`, `hwk`, never `mfa`, so step-up always refuses it. Account changes from a PIN session are refused (`403`).
 - **Revoking:** revoking a device, or registering it again, signs everyone on it out at once.
-- **Not yet:** signing in while offline, the hosted PIN pad, and Dart helpers.
+- **Dart and Flutter:** `SharedDevice` in `gatekeeper_sdk` has the same calls: `claim`, `pinSignIn`, `renewPinSession`, `pinSignOut` and `approveWithPin`. Give it a signer backed by the platform keystore (Android Keystore, Secure Enclave), as for push approvers. Refusals are a `DeviceException` with `status`, `code` and `retryAfter`.
+- **Not yet:** signing in while offline.
 
 ## Signing out
 
