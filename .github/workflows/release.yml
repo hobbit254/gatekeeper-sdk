@@ -4,28 +4,24 @@ name: release
 
 on:
   push:
-    tags: ["go/v*", "ts/v*", "php/v*", "dart/v*", "flutter/v*"]
+    tags: ["go/v*", "go/gkgin/v*", "ts/v*", "php/v*", "dart/v*", "flutter/v*"]
 
 permissions:
   contents: read
 
 jobs:
-  version: # the tag must match the manifest, so a release can't ship the wrong version
+  version: # the tag must match the manifest, so a release can't ship the wrong version (tools/release-version.sh)
     runs-on: ubuntu-24.04
     outputs:
       package: ${{ steps.tag.outputs.package }}
       version: ${{ steps.tag.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 } # a gkgin tag is checked against the core module's tags (ADR-0156)
       - id: tag
         run: |
-          pkg="${GITHUB_REF_NAME%%/*}"; ver="${GITHUB_REF_NAME#*/v}"
-          case "$pkg" in
-            ts) have=$(jq -r .version ts/package.json) ;;
-            dart|flutter) have=$(sed -n 's/^version: //p' "$pkg/pubspec.yaml") ;;
-            *) have="$ver" ;; # Go and Packagist take the version from the tag itself
-          esac
-          [ "$have" = "$ver" ] || { echo "::error::tag $GITHUB_REF_NAME but $pkg is at $have"; exit 1; }
+          out=$(tools/release-version.sh "$GITHUB_REF_NAME") # fails the step when the tag can't be released
+          read -r pkg ver <<<"$out"
           echo "package=$pkg" >> "$GITHUB_OUTPUT"; echo "version=$ver" >> "$GITHUB_OUTPUT"
 
   go:
@@ -34,6 +30,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - run: GOPROXY=https://proxy.golang.org go list -m "github.com/hobbit254/gatekeeper-sdk/go@v${{ needs.version.outputs.version }}" # asks the proxy to fetch it now
+
+  gkgin:
+    needs: version
+    if: needs.version.outputs.package == 'gkgin'
+    runs-on: ubuntu-24.04
+    steps:
+      - run: GOPROXY=https://proxy.golang.org go list -m "github.com/hobbit254/gatekeeper-sdk/go/gkgin@v${{ needs.version.outputs.version }}"
 
   npm:
     needs: version

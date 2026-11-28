@@ -4,8 +4,11 @@ import { createLocalJWKSet, jwtVerify, type JSONWebKeySet, type JWTPayload } fro
 import { dpopSigner, generateDPoPKey, indexedDBKeyStore, type DPoPKeyStore, type DPoPSigner } from "./dpop.js";
 import { innerToken, type DecryptionKey } from "./jwe.js";
 import { challenge, random, same, tokenRequest, type TokenResponse } from "./pkce.js";
+import { supportSession, type SupportSession } from "./support.js";
 
 export type { DPoPKeyStore } from "./dpop.js";
+export { mountSupportBanner, supportSession } from "./support.js";
+export type { SupportBannerLabels, SupportBannerOptions, SupportSession } from "./support.js";
 
 export interface BrowserClientConfig {
   /** https://auth.<domain>/t/<tenant> */
@@ -69,6 +72,8 @@ export interface BrowserClient {
   fetchWithDPoP(url: string, init?: RequestInit): Promise<Response>;
   /** Ends the session; with dpop, also deletes the key. */
   logout(opts?: { returnTo?: string }): Promise<void>;
+  /** The support session the current access token is part of, or null: for the banner (ADR-0159). */
+  supportSession(): SupportSession | null;
 }
 
 export function createBrowserClient(config: BrowserClientConfig): BrowserClient {
@@ -163,6 +168,10 @@ export function createBrowserClient(config: BrowserClientConfig): BrowserClient 
       const d = await dpop();
       if (!d) throw new Error("fetchWithDPoP needs dpop: true");
       return d.fetch(f, url, init, await this.getAccessToken());
+    },
+
+    supportSession() {
+      return session ? supportSession(session.access) : null;
     },
 
     async logout(opts = {}) {

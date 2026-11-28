@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Rehearses every package's release without publishing anything (ADR-0135):
-#   tools/release-dry-run.sh npm|dart|flutter|php|go
+#   tools/release-dry-run.sh npm|dart|flutter|php|go|gkgin
 # Run from the repository root. npm needs `npm ci`; php needs full git history.
 set -euo pipefail
 fail() { echo "release dry run: $*" >&2; exit 1; }
 
-case "${1:?usage: release-dry-run.sh npm|dart|flutter|php|go}" in
+case "${1:?usage: release-dry-run.sh npm|dart|flutter|php|go|gkgin}" in
 npm)
   npm run build -w ts >/dev/null
   npm pack --dry-run --json -w ts 2>/dev/null | node -e '
@@ -49,6 +49,16 @@ go)
   (cd "$tmp/app" && go mod edit -replace "github.com/hobbit254/gatekeeper-sdk/go@$want=../module" \
     && GOWORK=off GOFLAGS=-mod=mod go build -o /dev/null .)
   echo "go: the module and a copied example build without go.work ($want)"
+  ;;
+gkgin)
+  # gkgin is its own module (ADR-0153), released after the core version it requires (ADR-0156).
+  want=$(sed -n 's#^[[:space:]]*github.com/hobbit254/gatekeeper-sdk/go \(v[^ ]*\)$#\1#p' go/gkgin/go.mod)
+  have=$(sed -n 's#^replace github.com/hobbit254/gatekeeper-sdk/go \(v[^ ]*\) => ./go$#\1#p' go.work)
+  [ -n "$want" ] && [ "$want" = "$have" ] || fail "gkgin: go/gkgin/go.mod requires $want but go.work replaces $have"
+  tmp=$(mktemp -d) && cp -R go/gkgin "$tmp/gkgin" && cp -R go "$tmp/module" && rm -rf "$tmp/module/gkgin"
+  (cd "$tmp/gkgin" && go mod edit -replace "github.com/hobbit254/gatekeeper-sdk/go@$want=../module" \
+    && GOWORK=off GOFLAGS=-mod=mod go vet ./... && GOWORK=off GOFLAGS=-mod=mod go test ./... >/dev/null)
+  echo "gkgin: a copy builds and passes its tests without go.work, against the core module at $want"
   ;;
 *) fail "unknown package $1" ;;
 esac

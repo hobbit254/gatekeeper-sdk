@@ -4629,6 +4629,13 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
 	AdminPutOrgRoleLimits(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminResetOrgRole Reset an organization role to its template as it stands now: its groups, own limits and end-date rule; the name, description and PIN mark stay (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited as role.updated with reset_to_template (ADR-0030, ADR-0061, ADR-0064). The same guard rails as an edit: an org admin resets only a role they can edit, to a template whose groups they hold (403); a PIN-marked role must stay PIN-safe (422). 422 when the role wasn't copied from a template or its template is no longer one (ADR-0158).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles/{role_id}/reset (the `AdminResetOrgRole` operationId).
+	AdminResetOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListSCIMGroups The groups an organization's IdP has provisioned, with their mapped roles
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -4636,7 +4643,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/scim-groups (the `AdminListSCIMGroups` operationId).
 	AdminListSCIMGroups(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminSetSCIMGroupRolesWithBody Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithBody Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -4645,7 +4652,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/scim-groups/{group_id}/roles (the `AdminSetSCIMGroupRoles` operationId).
 	AdminSetSCIMGroupRolesWithBody(ctx context.Context, id string, groupId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminSetSCIMGroupRoles Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRoles Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -7233,6 +7240,23 @@ func (c *Client) AdminPutOrgRoleLimits(ctx context.Context, id string, roleId op
 	return c.Client.Do(req)
 }
 
+// AdminResetOrgRole Reset an organization role to its template as it stands now: its groups, own limits and end-date rule; the name, description and PIN mark stay (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited as role.updated with reset_to_template (ADR-0030, ADR-0061, ADR-0064). The same guard rails as an edit: an org admin resets only a role they can edit, to a template whose groups they hold (403); a PIN-marked role must stay PIN-safe (422). 422 when the role wasn't copied from a template or its template is no longer one (ADR-0158).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles/{role_id}/reset (the `AdminResetOrgRole` operationId).
+func (c *Client) AdminResetOrgRole(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminResetOrgRoleRequest(c.Server, id, roleId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListSCIMGroups The groups an organization's IdP has provisioned, with their mapped roles
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -7250,7 +7274,7 @@ func (c *Client) AdminListSCIMGroups(ctx context.Context, id string, reqEditors 
 	return c.Client.Do(req)
 }
 
-// AdminSetSCIMGroupRolesWithBody Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithBody Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -7269,7 +7293,7 @@ func (c *Client) AdminSetSCIMGroupRolesWithBody(ctx context.Context, id string, 
 	return c.Client.Do(req)
 }
 
-// AdminSetSCIMGroupRoles Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRoles Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -12519,6 +12543,47 @@ func NewAdminPutOrgRoleLimitsRequestWithBody(server string, id string, roleId op
 	return req, nil
 }
 
+// NewAdminResetOrgRoleRequest constructs an http.Request for the AdminResetOrgRole method
+func NewAdminResetOrgRoleRequest(server string, id string, roleId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "role_id", roleId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/roles/%s/reset", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListSCIMGroupsRequest constructs an http.Request for the AdminListSCIMGroups method
 func NewAdminListSCIMGroupsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -16553,6 +16618,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/roles/{role_id}/limits (the `AdminPutOrgRoleLimits` operationId).
 	AdminPutOrgRoleLimitsWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, body AdminPutOrgRoleLimitsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgRoleLimitsResponse, error)
 
+	// AdminResetOrgRoleWithResponse Reset an organization role to its template as it stands now: its groups, own limits and end-date rule; the name, description and PIN mark stay (FR-Z19)
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited as role.updated with reset_to_template (ADR-0030, ADR-0061, ADR-0064). The same guard rails as an edit: an org admin resets only a role they can edit, to a template whose groups they hold (403); a PIN-marked role must stay PIN-safe (422). 422 when the role wasn't copied from a template or its template is no longer one (ADR-0158).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/roles/{role_id}/reset (the `AdminResetOrgRole` operationId).
+	AdminResetOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminResetOrgRoleResponse, error)
+
 	// AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -16562,7 +16636,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/scim-groups (the `AdminListSCIMGroups` operationId).
 	AdminListSCIMGroupsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListSCIMGroupsResponse, error)
 
-	// AdminSetSCIMGroupRolesWithBodyWithResponse Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithBodyWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -16571,7 +16645,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/scim-groups/{group_id}/roles (the `AdminSetSCIMGroupRoles` operationId).
 	AdminSetSCIMGroupRolesWithBodyWithResponse(ctx context.Context, id string, groupId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetSCIMGroupRolesResponse, error)
 
-	// AdminSetSCIMGroupRolesWithResponse Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -22658,6 +22732,89 @@ func (r AdminPutOrgRoleLimitsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminPutOrgRoleLimitsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminResetOrgRoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgRole
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminResetOrgRoleResponse) GetJSON200() *OrgRole {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminResetOrgRoleResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminResetOrgRoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminResetOrgRoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminResetOrgRoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminResetOrgRoleResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -29345,6 +29502,21 @@ func (c *ClientWithResponses) AdminPutOrgRoleLimitsWithResponse(ctx context.Cont
 	return ParseAdminPutOrgRoleLimitsResponse(rsp)
 }
 
+// AdminResetOrgRoleWithResponse Reset an organization role to its template as it stands now: its groups, own limits and end-date rule; the name, description and PIN mark stay (FR-Z19)
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited as role.updated with reset_to_template (ADR-0030, ADR-0061, ADR-0064). The same guard rails as an edit: an org admin resets only a role they can edit, to a template whose groups they hold (403); a PIN-marked role must stay PIN-safe (422). 422 when the role wasn't copied from a template or its template is no longer one (ADR-0158).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/roles/{role_id}/reset (the `AdminResetOrgRole` operationId).
+func (c *ClientWithResponses) AdminResetOrgRoleWithResponse(ctx context.Context, id string, roleId openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminResetOrgRoleResponse, error) {
+	rsp, err := c.AdminResetOrgRole(ctx, id, roleId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminResetOrgRoleResponse(rsp)
+}
+
 // AdminListSCIMGroupsWithResponse The groups an organization's IdP has provisioned, with their mapped roles
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -29360,7 +29532,7 @@ func (c *ClientWithResponses) AdminListSCIMGroupsWithResponse(ctx context.Contex
 	return ParseAdminListSCIMGroupsResponse(rsp)
 }
 
-// AdminSetSCIMGroupRolesWithBodyWithResponse Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithBodyWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -29375,7 +29547,7 @@ func (c *ClientWithResponses) AdminSetSCIMGroupRolesWithBodyWithResponse(ctx con
 	return ParseAdminSetSCIMGroupRolesResponse(rsp)
 }
 
-// AdminSetSCIMGroupRolesWithResponse Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -34915,6 +35087,74 @@ func ParseAdminPutOrgRoleLimitsResponse(rsp *http.Response) (*AdminPutOrgRoleLim
 			return nil, err
 		}
 		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminResetOrgRoleResponse parses an HTTP response from a AdminResetOrgRoleWithResponse call
+func ParseAdminResetOrgRoleResponse(rsp *http.Response) (*AdminResetOrgRoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminResetOrgRoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgRole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Problem
