@@ -34,14 +34,19 @@ func main() {
 
 func routes(auth *gk.SDK) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/me", func(w http.ResponseWriter, r *http.Request) {
+	register(mux)
+	return auth.Middleware()(mux)
+}
+
+// register adds the routes, each with a guard; main_test.go checks none is missing.
+func register(mux interface{ Handle(string, http.Handler) }) {
+	mux.Handle("GET /api/me", gk.SignedIn()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, _ := gk.FromContext(r.Context())
 		writeJSON(w, map[string]any{"sub": p.Sub, "roles": p.Roles, "permissions": p.Permissions})
-	})
+	})))
 	mux.Handle("GET /api/reports", gk.RequirePermission("report:read")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, map[string]any{"reports": []string{"October sales"}})
 	})))
-	return auth.Middleware()(mux)
 }
 
 // cors lets the browser app call the API with its bearer token.

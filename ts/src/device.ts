@@ -38,6 +38,25 @@ export interface SharedDevice {
   pinSignIn(userId: string, pin: string): Promise<PinSession>;
   renewPinSession(sid: string): Promise<PinSession>;
   pinSignOut(sid: string): Promise<void>;
+  /** A second person approves one action with their PIN on this device
+   * (ADR-0145). Resolves with the approval and its 2-minute `approval_token`;
+   * wrong PINs count toward the approver's lockout. */
+  approveWithPin(approvalId: string, approverId: string, pin: string): Promise<DeviceApproval>;
+}
+
+/** An approval granted on the device (ADR-0145). */
+export interface DeviceApproval {
+  approval_id: string;
+  status: "granted";
+  permission: string;
+  resource: string;
+  amount?: number;
+  currency?: string;
+  approver_id: string;
+  method: "pin";
+  /** Hand it to your backend, which spends it once with spendApproval. */
+  approval_token: string;
+  expires_at: string;
 }
 
 /**
@@ -117,5 +136,7 @@ export function createSharedDevice(config: SharedDeviceConfig): SharedDevice {
     pinSignIn: async (userId, pin) => post<PinSession>("pin-sign-in", { user_id: userId, pin }, needId()),
     renewPinSession: async (sid) => post<PinSession>("pin-sessions/renew", { sid }, needId()),
     pinSignOut: async (sid) => post<void>("pin-sign-out", { sid }, needId()),
+    approveWithPin: async (approvalId, approverId, pin) =>
+      post<DeviceApproval>(`approvals/${encodeURIComponent(approvalId)}/approve`, { approver_id: approverId, pin }, needId()),
   };
 }

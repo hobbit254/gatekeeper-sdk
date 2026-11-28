@@ -39,6 +39,8 @@ final class GatekeeperServiceProvider extends ServiceProvider
             $router->aliasMiddleware('gk.can', RequirePermission::class);
             $router->aliasMiddleware('gk.stepup', RequireStepUp::class);
             $router->aliasMiddleware('gk.can_on', RequirePermissionOn::class); // ADR-0108
+            $router->aliasMiddleware('gk.public', MarkPublic::class); // ADR-0149
+            $router->aliasMiddleware('gk.signed_in', RequireSignedIn::class);
         }
     }
 }

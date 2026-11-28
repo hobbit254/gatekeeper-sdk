@@ -3,6 +3,7 @@
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
 import { dpopSigner } from "./dpop.js";
+import { markGuard } from "./guard.js";
 import { innerToken, type DecryptionKey } from "./jwe.js";
 import {
   calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
@@ -54,6 +55,8 @@ export interface Principal {
   /** The admin acting as `sub`, and when that ends; set only on impersonation tokens (ADR-0058). Show a banner. */
   actor?: string;
   impersonationEndsAt?: Date;
+  /** The support session's mode (ADR-0146): in "read", permissions hold only read ones. Show it in the banner. */
+  actorMode?: "read" | "write";
   /** True for a principal from a gk_live_ API key (ADR-0057); ownerType is "user" or "service_account". */
   apiKey?: boolean;
   ownerType?: string;
@@ -172,6 +175,42 @@ export interface Gatekeeper {
    * client's credentials (canOnFor); without a clientSecret it is 403.
    */
   requirePermissionOn(permission: string, resource: (req: Req) => string): Middleware;
+  /**
+   * Checks a second person's approval offline for p's request (ADR-0145): signed by the
+   * tenant's key with typ approval+jwt, unexpired, for p's client, requested by p. It doesn't
+   * spend it. Rejects with ApprovalError.
+   */
+  verifyApproval(raw: string, p: Principal): Promise<Approval>;
+  /**
+   * Spends an approval once for permission on resource and amount, with accessToken (the
+   * requester's, or a client-credentials token of the approval's client). Call it last, in the
+   * commit path of the action. Rejects with ApprovalError ("closed" or "mismatch").
+   */
+  spendApproval(accessToken: string, raw: string, permission: string, resource: string, amount?: number): Promise<Approval>;
+}
+
+/** A second person's approval of one action (FR-Z21, ADR-0145). */
+export interface Approval {
+  id: string;
+  approver: string;
+  requester: string;
+  clientId: string;
+  permission: string;
+  resource: string;
+  /** Minor units; undefined for a permission without a limit. */
+  amount?: number;
+  currency?: string;
+  orgId?: string;
+  method: string;
+  expiresAt?: Date;
+}
+
+/** An approval refused: "closed" (spent or expired) or "mismatch" (another action, client or requester, or a bad signature). */
+export class ApprovalError extends Error {
+  constructor(readonly code: "closed" | "mismatch", message: string) {
+    super(message);
+    this.name = "ApprovalError";
+  }
 }
 
 /** Gatekeeper's answer for one resource (FR-Z12). */
@@ -212,6 +251,8 @@ interface RoleMap {
   limited?: string[];
   limits?: Record<string, Record<string, Limit>>;
   currency?: string;
+  /** What read-mode support access may use (ADR-0146); absent from an older server. */
+  read?: string[];
 }
 
 /** Returns an SDK instance for one API; safe to share across requests. */
@@ -302,7 +343,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   // with amount limits (which organizations may override), resolves through
   // the organization's map (ADR-0142, ADR-0143).
   async function permissions(roles: string[], rv: number, org = "", orv = 0):
-    Promise<{ perms: string[]; stepUp?: Record<string, number>; limits?: Record<string, Limit>; currency?: string }> {
+    Promise<{ perms: string[]; stepUp?: Record<string, number>; limits?: Record<string, Limit>; currency?: string; read?: string[] }> {
     let map: RoleMap;
     if (org && roles.some((r) => r.startsWith(ORG_ROLE_PREFIX))) {
       map = await orgMap(org, rv, orv);
@@ -333,7 +374,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       const w = map.step_up?.[p];
       if (w) (stepUp ??= {})[p] = w;
     }
-    return { perms: [...out], stepUp, limits, currency: limits ? map.currency : undefined };
+    return { perms: [...out], stepUp, limits, currency: limits ? map.currency : undefined, read: map.read };
   }
 
   /** The more generous value of k; missing (no limit) beats any number. */
@@ -403,7 +444,16 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     const rv = typeof c.rv === "number" ? c.rv : 0;
     const orv = typeof c.orv === "number" ? c.orv : 0;
     const org = typeof c.org === "string" ? c.org : "";
-    const { perms, stepUp, limits, currency } = await permissions(roles, rv, org, orv);
+    const resolved = await permissions(roles, rv, org, orv);
+    const { stepUp, currency } = resolved;
+    let { perms, limits } = resolved;
+    const imp = impersonation(c.act);
+    if (imp.actorMode === "read") {
+      // Read-mode support access keeps only read permissions (ADR-0146).
+      const keep = (p: string) => (resolved.read ? resolved.read.includes(p) : p.endsWith(":read"));
+      perms = perms.filter(keep);
+      if (limits) limits = Object.fromEntries(Object.entries(limits).filter(([k]) => keep(k)));
+    }
     const ents = entitlements(c.entitlements);
     return {
       ...(stepUp ? { stepUp } : {}),
@@ -420,7 +470,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
       orv,
       sid: String(c.sid ?? ""),
       jti: String(c.jti ?? ""),
-      ...impersonation(c.act),
+      ...imp,
       ...(typeof (c.cnf as { jkt?: unknown } | undefined)?.jkt === "string" ? { jkt: (c.cnf as { jkt: string }).jkt } : {}),
       ...(ents ? { entitlements: ents } : {}),
       ...(limits ? { limits, currency } : {}),
@@ -515,16 +565,60 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
   const canOnEachFor = async (userId: string, permission: string, resources: string[]) =>
     canOnEach(await clientToken(), permission, resources, userId);
 
+  async function verifyApproval(raw: string, p: Principal): Promise<Approval> {
+    if (!keys) await refreshKeys();
+    if (!keys) throw new Error("no signing keys");
+    const opts = { issuer, algorithms: ["ES256"], typ: "approval+jwt", clockTolerance: leeway, currentDate: new Date(now()) };
+    let c: JWTPayload;
+    try {
+      c = (await jwtVerify(raw, keys!, opts)).payload;
+    } catch (e) {
+      if (e instanceof errors.JWKSNoMatchingKey && (await refreshKeys())) return verifyApproval(raw, p);
+      if (e instanceof errors.JWTExpired) throw new ApprovalError("closed", "approval expired");
+      throw new ApprovalError("mismatch", `approval not valid: ${(e as Error).message}`);
+    }
+    if (c.aud !== p.clientId || c.req !== p.sub) throw new ApprovalError("mismatch", "approval is not for this user's request");
+    return {
+      id: String(c.jti), approver: String(c.sub), requester: String(c.req), clientId: String(c.aud), permission: String(c.perm),
+      resource: String(c.res), amount: typeof c.amt === "number" ? c.amt : undefined, currency: typeof c.cur === "string" ? c.cur : undefined,
+      orgId: typeof c.org === "string" ? c.org : undefined, method: String(c.method), expiresAt: c.exp ? new Date(c.exp * 1000) : undefined,
+    };
+  }
+
+  async function spendApproval(accessToken: string, raw: string, permission: string, resource: string, amount?: number): Promise<Approval> {
+    const body: Record<string, unknown> = { token: raw, permission, resource };
+    if (amount !== undefined) body.amount = amount;
+    let res: Response;
+    try {
+      res = await doFetch(`${issuer}/v1/approvals/spend`, { method: "POST", body: JSON.stringify(body),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` } });
+    } catch (e) {
+      throw new Error(`gatekeeper: approvals unavailable: ${String(e)}`);
+    }
+    if (res.status === 409) throw new ApprovalError("closed", "approval already spent or expired");
+    if (res.status === 422 || res.status === 403) throw new ApprovalError("mismatch", "approval does not match the action");
+    if (res.status !== 200) throw new Error(`gatekeeper: approvals unavailable: status ${res.status}`);
+    const a = (await res.json()) as Record<string, unknown>;
+    return {
+      id: String(a.approval_id), approver: String(a.approver_id ?? ""), requester: String(a.requester_id ?? ""), clientId: String(a.client_id ?? ""),
+      permission: String(a.permission ?? ""), resource: String(a.resource ?? ""), amount: typeof a.amount === "number" ? a.amount : undefined,
+      currency: typeof a.currency === "string" ? a.currency : undefined, orgId: typeof a.org_id === "string" ? a.org_id : undefined,
+      method: String(a.method ?? ""),
+    };
+  }
+
   return {
     verify,
     verifyDPoP,
+    verifyApproval,
+    spendApproval,
     canOn,
     canOnEach: (token: string, permission: string, resources: string[]) => canOnEach(token, permission, resources),
     canOnFor,
     canOnEachFor,
     verifyIdToken,
     requirePermissionOn(permission, resource): Middleware {
-      return (req, res, next) => {
+      return markGuard({ kind: "resource", permission }, (req: Req, res: Res, next: Next) => {
         const header = req.headers.authorization;
         const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : "";
         const p = req.gatekeeper;
@@ -544,7 +638,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
           }
           res.status(403).end("forbidden");
         }, (e) => { if (e instanceof NotServedError) res.status(403).end("forbidden"); else res.status(503).end("authorization unavailable"); });
-      };
+      });
     },
     express(): Middleware {
       return (req, res, next) => {
@@ -587,7 +681,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
  * the RFC 9470 challenge when the permission's step-up window from the role
  * map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005). */
 export function requirePermission(permission: string): Middleware {
-  return (req, res, next) => {
+  return markGuard({ kind: "permission", permission }, (req: Req, res: Res, next: Next) => {
     const p = req.gatekeeper;
     if (!p?.can(permission)) {
       res.status(403).end("forbidden");
@@ -601,7 +695,7 @@ export function requirePermission(permission: string): Middleware {
       return;
     }
     next();
-  };
+  });
 }
 
 /** The Principal the express() middleware stored on req. */
@@ -632,12 +726,13 @@ export function requireStepUp(maxAgeSec: number): Middleware {
   };
 }
 
-function impersonation(act: unknown): { actor?: string; impersonationEndsAt?: Date } {
+function impersonation(act: unknown): { actor?: string; impersonationEndsAt?: Date; actorMode?: "read" | "write" } {
   if (!act || typeof act !== "object") return {};
-  const a = act as { sub?: unknown; ends_at?: unknown };
+  const a = act as { sub?: unknown; ends_at?: unknown; mode?: unknown };
   return {
     actor: typeof a.sub === "string" ? a.sub : undefined,
     impersonationEndsAt: typeof a.ends_at === "number" ? new Date(a.ends_at * 1000) : undefined,
+    actorMode: a.mode === "write" ? "write" : "read", // no mode is read (ADR-0146)
   };
 }
 
@@ -699,7 +794,8 @@ export function createClientCredentials(config: ClientCredentialsConfig): Client
 }
 
 export { generateDPoPKey } from "./dpop.js";
+export { assertEveryRouteGuarded, checkRoutes, guardOf, publicRoute, signedIn, type Guard, type RouteCheckOptions, type RouteReport } from "./guard.js";
 export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";
 export { createRevocationFeed, type RevocationFeed, type RevocationFeedConfig } from "./feed.js";
-export { bodyHash, createSharedDevice, DeviceError, signDeviceRequest, type DeviceSigner, type PinSession, type SharedDevice, type SharedDeviceConfig } from "./device.js";
+export { bodyHash, createSharedDevice, DeviceError, signDeviceRequest, type DeviceApproval, type DeviceSigner, type PinSession, type SharedDevice, type SharedDeviceConfig } from "./device.js";

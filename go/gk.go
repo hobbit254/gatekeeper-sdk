@@ -57,6 +57,9 @@ type Principal struct {
 	// ends; empty unless the token is an impersonation (ADR-0058). Show a banner.
 	Actor               string
 	ImpersonationEndsAt time.Time
+	// ActorMode is the support session's mode, "read" or "write" (ADR-0146);
+	// in read mode Permissions holds only read permissions. "" without an actor.
+	ActorMode string
 	// APIKey marks a principal from a gk_live_ key (ADR-0057); OwnerType is
 	// "user" or "service_account".
 	APIKey    bool
@@ -118,6 +121,29 @@ func (p *Principal) HasFeature(feature string) bool {
 // machine principals (API keys, client-credentials tokens) are never asked to step up (ADR-0056).
 func (p *Principal) machine() bool { return p.APIKey || len(p.AMR) == 0 }
 
+// Support session modes (ADR-0146). A token whose act has no mode is read.
+const (
+	ActorRead  = "read"
+	ActorWrite = "write"
+)
+
+// readOnly keeps only the permissions read-mode support access may use: the
+// role map's read list, or keys ending in :read from a server without one.
+func (p *Principal) readOnly(read []string) {
+	keep := func(perm string) bool {
+		if read == nil {
+			return strings.HasSuffix(perm, ":read")
+		}
+		return slices.Contains(read, perm)
+	}
+	p.Permissions = slices.DeleteFunc(p.Permissions, func(perm string) bool { return !keep(perm) })
+	for k := range p.Limits {
+		if !keep(k) {
+			delete(p.Limits, k)
+		}
+	}
+}
+
 // Can reports whether the principal holds permission (exact key; wildcards
 // are already expanded in the role map).
 func (p *Principal) Can(permission string) bool { return slices.Contains(p.Permissions, permission) }
@@ -156,6 +182,8 @@ type roleMap struct {
 	Limited  []string                    `json:"limited"`
 	Limits   map[string]map[string]Limit `json:"limits"`
 	Currency string                      `json:"currency"`
+	// Read is what read-mode support access may use (ADR-0146); nil from an older server.
+	Read []string `json:"read"`
 }
 
 // maxOrgMaps bounds the per-organization cache; past it the cache starts over.
@@ -219,6 +247,7 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		Act      *struct {
 			Sub    string `json:"sub"`
 			EndsAt int64  `json:"ends_at"`
+			Mode   string `json:"mode"`
 		} `json:"act"`
 		Cnf *struct {
 			JKT string `json:"jkt"`
@@ -250,7 +279,13 @@ func (s *SDK) Verify(ctx context.Context, raw string) (*Principal, error) {
 		Permissions: res.perms, Scopes: strings.Fields(c.Scope), AMR: c.AMR, AuthTime: time.Unix(c.AuthTime, 0), RV: c.RV, ORV: c.ORV,
 		SID: c.SID, JTI: c.JTI, StepUp: res.stepUp, Entitlements: c.Entitlements, Limits: res.limits, Currency: res.currency}
 	if c.Act != nil {
-		p.Actor, p.ImpersonationEndsAt = c.Act.Sub, time.Unix(c.Act.EndsAt, 0)
+		p.Actor, p.ImpersonationEndsAt, p.ActorMode = c.Act.Sub, time.Unix(c.Act.EndsAt, 0), ActorRead
+		if c.Act.Mode == ActorWrite {
+			p.ActorMode = ActorWrite
+		}
+		if p.ActorMode == ActorRead {
+			p.readOnly(res.read)
+		}
 	}
 	if c.Cnf != nil {
 		p.JKT = c.Cnf.JKT
@@ -283,6 +318,7 @@ func (s *SDK) key(ctx context.Context, kid string) (any, error) {
 
 // resolved is what a token's roles give through the role map.
 type resolved struct {
+	read     []string // the role map's read list; nil from an older server
 	perms    []string
 	stepUp   map[string]time.Duration
 	limits   map[string]Limit
@@ -323,7 +359,7 @@ func (s *SDK) permissions(ctx context.Context, roles []string, rv int64, org str
 		}
 		rm = cached
 	}
-	out := resolved{currency: rm.Currency}
+	out := resolved{currency: rm.Currency, read: rm.Read}
 	seen := map[string]bool{}
 	for _, r := range roles {
 		if strings.HasPrefix(r, OrgRolePrefix) && org == "" {
@@ -413,7 +449,7 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 // the DPoP header (ADR-0070).
 func (s *SDK) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return wrapper{next: next, serve: func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 			dpop := false
 			if !ok {
@@ -444,7 +480,7 @@ func (s *SDK) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
-		})
+		}}
 	}
 }
 
@@ -453,7 +489,7 @@ func (s *SDK) Middleware() func(http.Handler) http.Handler {
 // the role map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005).
 func RequirePermission(permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return withMark(Guard{Kind: GuardPermission, Permission: permission}, next, func(w http.ResponseWriter, r *http.Request) {
 			p, ok := FromContext(r.Context())
 			if !ok || !p.Can(permission) {
 				http.Error(w, "forbidden", http.StatusForbidden)
@@ -482,7 +518,7 @@ func (p *Principal) FreshMFA(maxAge time.Duration) bool {
 func RequireStepUp(maxAge time.Duration) func(http.Handler) http.Handler {
 	secs := int(maxAge.Seconds())
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return withMark(Guard{Kind: GuardStepUp}, next, func(w http.ResponseWriter, r *http.Request) {
 			p, ok := FromContext(r.Context())
 			if !ok || !p.FreshMFA(maxAge) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d"`, secs))

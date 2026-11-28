@@ -107,6 +107,37 @@ Organizations register the tills and terminals their people share ([Shared devic
 | `GET /v1/admin/orgs/{id}/pins` | Members and their PINs: `none`, `active`, `locked` or `held` |
 | `POST /v1/admin/users/{id}/pin/unlock`, `DELETE /v1/admin/users/{id}/pin` | Unlock or remove a member's PIN |
 
+## Guard rails on admin actions
+
+Every admin path, whether the dashboard, the API, SCIM or a script, checks the same rules:
+- **`409 org-needs-admin`:** revoking a role, removing a member, suspending or deleting a user would leave an organization with members and no owner or admin. `tenant-needs-owner` is the same for the tenant's last owner. Make someone else an admin first, or, as a tenant owner, send `force: true` with a `reason` (on `DELETE /v1/admin/users/{id}/roles`, or `?force=true&reason=…` on removing a member); it's audited.
+- **`403 target-above-you`:** an org admin acting on a member who holds access they don't, or anyone but an owner acting on an owner. Member lists carry `can_manage`.
+- **`422 expiry-required`:** granting a role with `max_grant` without `expires_at`, or past it.
+
+## Closing an organization
+
+Close an organization instead of deleting it: it's refused everywhere at once, its owners get its records, and it can be reopened during a grace period .
+
+| Call | What it does |
+| --- | --- |
+| `POST /v1/admin/orgs/{id}/close {reason, grace_days}` | Closes it: sign-in, checks (`matched_by: "org_closed"`), members, invitations, grants, SCIM and its devices stop; its sessions end; each owner is emailed a link to its records. `grace_days` is 7–365 (90 by default) |
+| `POST /v1/admin/orgs/{id}/reopen` | Within the grace period: memberships and grants come back at the next sign-in |
+| `GET /v1/admin/orgs/{id}/export` | Its records as JSON: members with emails and roles, its own roles, grants, entitlements and activity |
+| `DELETE /v1/admin/orgs/{id}` | Only for an organization with no members, or by a tenant owner with `?force=true&reason=…` |
+
+Tenant admins only. Listen for `org.closed` (with `purge_at`), `org.reopened` and `org.deleted` to stop, restore and finally remove the customer's data in your product; each product exports its own records.
+
+## Support access
+
+Impersonation (`POST /v1/admin/users/{id}/impersonate {client_id, reason, mode}`) needs a reason of 10–500 characters and is `read` unless `mode` is `write` (see [Impersonation](protecting-an-api.md#impersonation)). The subject's organizations see it:
+
+| Call | What it does |
+| --- | --- |
+| `GET /v1/admin/orgs/{id}/impersonations` | Live support sessions acting as the organization's members: who, as whom, why, the mode and when it ends |
+| `POST /v1/admin/orgs/{id}/impersonations/{imp}/end` | Ends one; its tokens stop working at once |
+| `PATCH /v1/admin/orgs/{id} {impersonation_notice}` | Whether its owners and admins are emailed; on by default. Tenant admins only |
+| `PUT /v1/admin/tenant/policy {impersonation_write_roles}` | Roles that may ask for write mode, besides owners |
+
 ## The generated clients
 
 ```ts compile
@@ -184,6 +215,8 @@ roles:
 - **Bump `version`** with each change.
 - **Removing a permission** that a role or a direct grant still uses fails, so remove the grant first.
 - **Reserved roles:** `owner` can't be redefined, and only `owner` and `admin` may hold `*:*`.
+- **`requires_approval: true`** on a permission makes every use need a second person's approval (see [Second-person approval](protecting-an-api.md#second-person-approval)).
+- **Roles that must end:** a role in the `{groups, permissions}` form may set `max_grant: P90D` (ISO 8601, 1 hour to 1 year). Every grant of it then needs `expires_at` within that, it can't be given by invitation or SCIM group, and holders and admins are emailed a week before it ends.
 
 Apply it on the dashboard's **Roles and permissions** page (choose the client and the file, **Preview**, then **Apply**), or with `PUT /v1/admin/permissions/sync?client_id=shop-api&dry_run=true` and the YAML as the body. The dry run lists what would be added, changed or removed. A role change reaches users at their next token (see [Protecting an API](protecting-an-api.md#permissions-and-roles)).
 

@@ -37,6 +37,32 @@ An organization can also define its own roles ([Organization roles](admin-api.md
 
 Wildcards work in roles: `report:*` holds every `report:` permission.
 
+## Check every route is guarded
+
+The commonest authorization bug is a route nobody guarded. Mark every route, and add a test that fails when one isn't:
+- **Guarded:** `RequirePermission`, `RequirePermissionOn` or `RequireStepUp`.
+- **Deliberately open:** `Public()`.
+- **Any signed-in user:** `SignedIn()`, which also answers `401` without a principal.
+
+The test reads the marks and never calls a route. It lists every unmarked route and, given your manifest's keys, the permissions no route guards (some are checked in code; `FailOnUnused` makes that a failure too).
+
+```go
+func TestEveryRouteGuarded(t *testing.T) {
+	mux := gktest.NewMux() // records what you register; an http.ServeMux can't list its routes
+	register(mux)
+	gktest.AssertEveryRouteGuarded(t, mux.Routes(), gktest.Options{Permissions: []string{"report:read"}})
+}
+```
+
+| | Go | TypeScript (Express 4 and 5) | Laravel |
+| --- | --- | --- | --- |
+| Open on purpose | `gk.Public()` | `publicRoute()` | middleware `gk.public` |
+| Any signed-in user | `gk.SignedIn()` | `signedIn()` | middleware `gk.signed_in` |
+| The test | `gktest.AssertEveryRouteGuarded(t, routes, opts)` | `assertEveryRouteGuarded(app, {permissions})` | `GatekeeperAssert::everyRouteGuarded(Route::getRoutes())` |
+| Routes from | `gktest.NewMux()`, or a `[]gktest.Route` (chi's `chi.Walk` gives the fields) | the app's router, nested routers included | Laravel's route list |
+
+In Go, put the Gatekeeper guards outside your other middleware, or have that middleware implement `Unwrap() http.Handler`, so the test can see through it.
+
 ## Amount limits
 
 Some actions are fine up to an amount: a cashier refunds up to KES 2,000, and above that a manager must approve. Mark the permission `limit: amount` in the manifest, and give each role its limits in minor units (cents):
@@ -64,6 +90,28 @@ roles:
 | The limit | `p.Limits["refund:create"]`, `p.Currency` | `p.limits?.["refund:create"]`, `p.currency` | `$principal->limits['refund:create']`, `$principal->currency` |
 
 The SDK sees only the token's roles. For the authoritative answer, direct grants included, send the amount to the server: `POST /v1/authz/check {"permission": "refund:create", "amount": 250000}` answers `decision` (`allow`, `approval_required` or `deny`) and `limit {alone, approves, currency}`. Above `alone`, `allow` is `false`, so code that reads only `allow` never lets the amount through. Decisions above `alone` are audited.
+
+## Second-person approval
+
+Above `alone`, or for a permission that always needs a second person, Gatekeeper can collect one approval for one action and hand you a token you spend once. Mark a permission that needs approval whatever the amount (a void, a price override) with `requires_approval: true` in the manifest.
+
+1. **Ask:** when a check answers `approval_required` (or `allow` for a `requires_approval` permission), your backend calls `POST /v1/approvals {"permission": "refund:create", "resource": "sale:42", "amount": 250000, "summary": "Refund of a broken kettle"}` with the requester's token. You get `approval_id`; it waits 2 minutes. Any other answer is `409 approval-not-needed`.
+2. **Tell approvers:** subscribe to the `approval.requested` webhook, which carries the ids and the amount, never the summary.
+3. **Approve:**
+   - **on the shared device,** the approver enters their PIN: `device.approveWithPin(approvalId, approverId, pin)` in the TypeScript device signer. Wrong PINs count toward their lockout, and a sensitive permission is never approved by PIN;
+   - **on their own device,** with a second factor in the last 5 minutes: `POST /v1/approvals/{id}/approve` (or `/deny`) with their token. `GET /v1/approvals/{id}` shows them the summary.
+   The approver must be another active member holding the permission in the same organization, with `approves` covering the amount.
+4. **Get the token:** the device's approve call answers with `approval_token`, and the requester's `GET /v1/approvals/{id}` returns it once granted. It's valid for 2 minutes.
+5. **Spend it last,** in the commit path of the action, with the requester's token or your client's client-credentials token. Everything must match: permission, resource, amount, client and requester. A second spend is refused.
+
+| | Go | TypeScript | Laravel |
+| --- | --- | --- | --- |
+| Read it (no spend) | `sdk.VerifyApproval(ctx, raw, p)` | `gk.verifyApproval(raw, p)` | `$gk->verifyApproval($raw, $principal)` |
+| Spend it once | `sdk.SpendApproval(ctx, token, raw, "refund:create", "sale:42", &amount)` | `gk.spendApproval(token, raw, "refund:create", "sale:42", 250000)` | `$gk->spendApproval($token, $raw, 'refund:create', 'sale:42', 250000)` |
+| Already spent or expired | `gk.ErrApprovalClosed` | `ApprovalError` with `code: "closed"` | `ApprovalException` with `reason` `closed` |
+| Doesn't match | `gk.ErrApprovalMismatch` | `ApprovalError` with `code: "mismatch"` | `ApprovalException` with `reason` `mismatch` |
+
+The approval token is an ES256 JWS with `typ: approval+jwt`, signed by the keys in the tenant's JWKS: `aud` is the requester's client, `jti` the approval id, `sub` the approver, `req` the requester, and `perm`, `res`, `amt`, `cur`, `org` and `method` (`pin` or `mfa`) say what was approved and how.
 
 ## Step-up
 
@@ -140,7 +188,13 @@ A tenant can attach a customer's plan and paid features to its users' tokens, te
 
 ## Impersonation
 
-A tenant admin can act as a user for support, when the client allows it. The token then carries `Actor` (`actor`), the admin's id, and `ImpersonationEndsAt`. Show a banner while it's set ("Viewing as … · ends in N min · Stop"), wire Stop to `POST /v1/auth/impersonation/stop`, and record `Actor` in your own audit trail.
+A tenant admin can act as a user for support, when the client allows it. Every support session has a reason, and it's **read-only unless the admin asked for write**:
+- **The token** carries `Actor` (`actor`), the admin's id, `ImpersonationEndsAt`, and `ActorMode` (`actorMode`, `$actorMode`): `read` or `write`.
+- **In read mode,** the SDK keeps only read permissions: those in a group's `read` set, or ending in `:read`. `Can`, `RequirePermission` and `CanAmount` refuse the rest, and `/v1/authz/check` answers `deny` with `matched_by: "impersonation_read_only"`. Name read-only actions `…:read`, or put them in a group's `read` set.
+- **Write mode** needs a tenant owner, or a role in the policy's `impersonation_write_roles`, with a second factor in the last 5 minutes.
+- **The organization is told:** its owners and admins are emailed who, why, the mode and when it ends, and they can end the session from the dashboard.
+
+Show a banner while `Actor` is set ("Support is viewing as … · read-only · ends in N min · Stop"), wire Stop to `POST /v1/auth/impersonation/stop`, and record `Actor` and `ActorMode` in your own audit trail.
 
 ## DPoP-bound tokens
 

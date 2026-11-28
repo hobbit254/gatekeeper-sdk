@@ -63,7 +63,16 @@ final class Gatekeeper
         $rv = is_int($claims->rv ?? null) ? $claims->rv : 0;
         $orv = is_int($claims->orv ?? null) ? $claims->orv : 0;
         $org = isset($claims->org) && is_string($claims->org) ? $claims->org : '';
-        [$permissions, $stepUp, $limits, $currency] = $this->permissions($roles, $rv, $org, $orv);
+        [$permissions, $stepUp, $limits, $currency, $read] = $this->permissions($roles, $rv, $org, $orv);
+        $actorMode = null;
+        if (isset($claims->act) && $claims->act instanceof \stdClass) {
+            $actorMode = ($claims->act->mode ?? null) === Principal::ACTOR_WRITE ? Principal::ACTOR_WRITE : Principal::ACTOR_READ; // no mode is read (ADR-0146)
+        }
+        if ($actorMode === Principal::ACTOR_READ) {
+            $keep = static fn (string $p): bool => $read !== null ? in_array($p, $read, true) : str_ends_with($p, ':read');
+            $permissions = array_values(array_filter($permissions, $keep));
+            $limits = array_filter($limits, $keep, ARRAY_FILTER_USE_KEY);
+        }
 
         return new Principal(
             sub: (string) ($claims->sub ?? ''),
@@ -86,6 +95,7 @@ final class Gatekeeper
             entitlements: self::entitlements($claims->entitlements ?? null),
             limits: $limits,
             currency: $currency,
+            actorMode: $actorMode,
         );
     }
 
@@ -346,8 +356,9 @@ final class Gatekeeper
      * map, cached by (org, rv, orv) (ADR-0142, ADR-0143).
      *
      * @param list<string> $roles
-     * @return array{list<string>, array<string, int>, array<string, array{alone?: int, approves?: int}>, string}
-     *         permissions, their step-up windows (ADR-0097), the limits on held limited permissions and their currency (ADR-0143)
+     * @return array{list<string>, array<string, int>, array<string, array{alone?: int, approves?: int}>, string, ?list<string>}
+     *         permissions, their step-up windows (ADR-0097), the limits on held limited permissions and their currency (ADR-0143),
+     *         and what read-mode support access may use, or null from an older server (ADR-0146)
      */
     private function permissions(array $roles, int $rv, string $org = '', int $orv = 0): array
     {
@@ -394,7 +405,8 @@ final class Gatekeeper
                 $stepUp[(string) $p] = $sec;
             }
         }
-        return [array_keys($out), $stepUp, $limits, $limits === [] ? '' : (string) ($map['currency'] ?? '')];
+        $read = isset($map['read']) && is_array($map['read']) ? self::strings($map['read']) : null;
+        return [array_keys($out), $stepUp, $limits, $limits === [] ? '' : (string) ($map['currency'] ?? ''), $read];
     }
 
     /**
@@ -501,6 +513,62 @@ final class Gatekeeper
         $this->authzClient ??= new ClientCredentials($this->config->issuer . '/oauth2/token', $this->config->clientId,
             $this->config->clientSecret, 'authz:check', $this->config->audience, null, $this->fetch);
         return $this->authzClient->token();
+    }
+
+    /**
+     * Checks a second person's approval offline for $p's request (ADR-0145):
+     * signed by the tenant's key with typ approval+jwt, unexpired, for $p's
+     * client, requested by $p. It doesn't spend it; only spendApproval does.
+     *
+     * @throws ApprovalException
+     */
+    public function verifyApproval(string $raw, Principal $p): Approval
+    {
+        try {
+            $c = $this->claims($raw, 'approval+jwt', $p->clientId);
+        } catch (InvalidTokenException $e) {
+            if ($e->getPrevious() instanceof \Firebase\JWT\ExpiredException) {
+                throw new ApprovalException('closed', 'approval expired', $e);
+            }
+            throw new ApprovalException('mismatch', 'approval not valid: ' . $e->getMessage(), $e);
+        }
+        if (($c->req ?? null) !== $p->sub) {
+            throw new ApprovalException('mismatch', "approval is not for this user's request");
+        }
+        return new Approval((string) $c->jti, (string) $c->sub, (string) $c->req, $p->clientId, (string) $c->perm, (string) $c->res,
+            isset($c->amt) ? (int) $c->amt : null, isset($c->cur) ? (string) $c->cur : null, isset($c->org) ? (string) $c->org : null,
+            (string) ($c->method ?? ''), (int) $c->exp);
+    }
+
+    /**
+     * Spends an approval once for $permission on $resource and $amount, with
+     * $accessToken (the requester's, or a client-credentials token of the
+     * approval's client). Call it last, in the commit path of the action.
+     *
+     * @throws ApprovalException
+     */
+    public function spendApproval(string $accessToken, string $raw, string $permission, string $resource, ?int $amount = null): Approval
+    {
+        $body = ['token' => $raw, 'permission' => $permission, 'resource' => $resource];
+        if ($amount !== null) {
+            $body['amount'] = $amount;
+        }
+        [$status, $out] = ($this->fetch)($this->config->issuer . '/v1/approvals/spend',
+            ['Content-Type' => 'application/json', 'Accept' => 'application/json', 'Authorization' => 'Bearer ' . $accessToken], json_encode($body));
+        if ($status === 409) {
+            throw new ApprovalException('closed', 'approval already spent or expired');
+        }
+        if ($status === 422 || $status === 403) {
+            throw new ApprovalException('mismatch', 'approval does not match the action');
+        }
+        $a = json_decode($out, true);
+        if ($status !== 200 || !is_array($a)) {
+            throw new \RuntimeException("gatekeeper: approvals unavailable: status {$status}");
+        }
+        return new Approval((string) ($a['approval_id'] ?? ''), (string) ($a['approver_id'] ?? ''), (string) ($a['requester_id'] ?? ''),
+            (string) ($a['client_id'] ?? ''), (string) ($a['permission'] ?? ''), (string) ($a['resource'] ?? ''),
+            isset($a['amount']) ? (int) $a['amount'] : null, isset($a['currency']) ? (string) $a['currency'] : null,
+            isset($a['org_id']) ? (string) $a['org_id'] : null, (string) ($a['method'] ?? ''));
     }
 
     /** @return array<string, mixed> */

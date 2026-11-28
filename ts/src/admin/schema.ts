@@ -782,7 +782,7 @@ export interface paths {
         post?: never;
         /**
          * Delete an organization: memberships, org grants and invitations go; sessions that used it are signed out
-         * @description Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+         * @description Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). Refused with 409 org-has-members while it has members: close it instead. A tenant owner may force it with force=true and a reason (ADR-0148).
          */
         delete: operations["adminDeleteOrg"];
         options?: never;
@@ -808,6 +808,26 @@ export interface paths {
         get: operations["adminListOrgAuditEvents"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close an organization with a grace period
+         * @description Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+         */
+        post: operations["adminCloseOrg"];
         delete?: never;
         options?: never;
         head?: never;
@@ -966,6 +986,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The organization's records, as its owners get them when it closes
+         * @description Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Members with their emails and roles there, its own roles, direct grants in it, entitlements and up to 10,000 activity entries. Identity data only.
+         */
+        get: operations["adminExportOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/grantable-roles": {
         parameters: {
             query?: never;
@@ -980,6 +1020,46 @@ export interface paths {
         get: operations["adminListGrantableRoles"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/impersonations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live support sessions acting as the organization's members
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+         */
+        get: operations["adminListOrgImpersonations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/impersonations/{imp}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End a support session; its tokens stop working at once
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+         */
+        post: operations["adminEndOrgImpersonation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1046,7 +1126,7 @@ export interface paths {
         post?: never;
         /**
          * Remove a member: their org grants go and sessions that used the org are signed out
-         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
          */
         delete: operations["adminRemoveOrgMember"];
         options?: never;
@@ -1068,6 +1148,26 @@ export interface paths {
         get: operations["adminListOrgPINs"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/orgs/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reopen a closing organization within its grace period
+         * @description Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Memberships and grants were kept, so access returns at the next sign-in; 409 not-closing after the grace period.
+         */
+        post: operations["adminReopenOrg"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1890,7 +1990,7 @@ export interface paths {
         post?: never;
         /**
          * Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
          */
         delete: operations["adminDeleteUser"];
         options?: never;
@@ -1950,7 +2050,7 @@ export interface paths {
         put?: never;
         /**
          * Impersonate a user for a client that allows it (FR-M3, ADR-0058)
-         * @description Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+         * @description Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
          */
         post: operations["adminImpersonateUser"];
         delete?: never;
@@ -2171,12 +2271,12 @@ export interface paths {
         put?: never;
         /**
          * Grant a role tenant-wide, optionally until expires_at
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
          */
         post: operations["adminGrantRole"];
         /**
          * Revoke a role
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
          */
         delete: operations["adminRevokeRole"];
         options?: never;
@@ -2195,7 +2295,7 @@ export interface paths {
         put?: never;
         /**
          * Suspend: blocks sign-in and ends every session
-         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+         * @description Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
          */
         post: operations["adminSuspendUser"];
         delete?: never;
@@ -2489,6 +2589,11 @@ export interface components {
             limits?: {
                 [key: string]: components["schemas"]["AmountLimit"];
             };
+            /**
+             * @description ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147)
+             * @example P90D
+             */
+            max_grant?: string;
             name: string;
             /** @description The role's own patterns; what its groups give is not listed here (ADR-0141) */
             permissions: string[];
@@ -2793,6 +2898,8 @@ export interface components {
         GrantableRoleList: {
             roles: {
                 description: string;
+                /** @description Set when grants of the role need an end date within this ISO 8601 duration (ADR-0147) */
+                max_grant?: string;
                 name: string;
             }[];
         };
@@ -2822,6 +2929,14 @@ export interface components {
         };
         ImpersonateRequest: {
             client_id: string;
+            /**
+             * @description read allows only read permissions; write needs a tenant owner or a role in impersonation_write_roles, with a second factor in the last 5 minutes
+             * @default read
+             * @enum {string}
+             */
+            mode: "read" | "write";
+            /** @description Why; kept in the audit entry and emailed to the subject's organizations' admins, never in events (ADR-0146) */
+            reason: string;
         };
         ImpersonationToken: {
             access_token: string;
@@ -3071,6 +3186,8 @@ export interface components {
             with_mfa: number;
         };
         Member: {
+            /** @description Whether the caller may act on this member: their own access covers the member's, and only an owner manages an owner (FR-Z23) */
+            can_manage?: boolean;
             display_name?: string;
             /** @description The member's primary email, if any (FR-D39). */
             email?: string;
@@ -3122,6 +3239,10 @@ export interface components {
             required: boolean;
         };
         Org: {
+            /** @description Why it was closed; tenant admins only, never in events */
+            close_reason?: string;
+            /** Format: date-time */
+            closed_at?: string;
             /** Format: date-time */
             created_at: string;
             /** @description Its own currency for amount limits, or absent to use the tenant's (ADR-0143) */
@@ -3131,9 +3252,25 @@ export interface components {
             has_logo?: boolean;
             /** Format: uuid */
             id: string;
+            impersonation_notice?: boolean;
             name: string;
+            /** Format: date-time */
+            purge_at?: string;
             require_sso: boolean;
             slug: string;
+            /**
+             * @description closing: refused everywhere until reopened, and purged at purge_at (ADR-0148)
+             * @enum {string}
+             */
+            status?: "active" | "closing";
+        };
+        OrgClose: {
+            /**
+             * @description How long it can be reopened before it's purged
+             * @default 90
+             */
+            grace_days: number;
+            reason: string;
         };
         OrgCreate: {
             name: string;
@@ -3156,6 +3293,26 @@ export interface components {
         OrgDomainList: {
             domains: components["schemas"]["OrgDomain"][];
         };
+        OrgImpersonation: {
+            /** Format: uuid */
+            actor_id: string;
+            actor_name?: string;
+            /** Format: date-time */
+            ends_at: string;
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            mode: "read" | "write";
+            reason: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: uuid */
+            user_id: string;
+            user_name?: string;
+        };
+        OrgImpersonationList: {
+            items: components["schemas"]["OrgImpersonation"][];
+        };
         OrgList: {
             orgs: components["schemas"]["Org"][];
         };
@@ -3165,6 +3322,8 @@ export interface components {
              * @example KES
              */
             currency?: string;
+            /** @description Tell the organization's owners and admins about support access; on by default. Tenant admins only (ADR-0146) */
+            impersonation_notice?: boolean;
             name?: string;
             /** @description Tenant admins only (ADR-0067) */
             require_sso?: boolean;
@@ -3186,6 +3345,11 @@ export interface components {
             limits?: {
                 [key: string]: components["schemas"]["AmountLimit"];
             };
+            /**
+             * @description ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147)
+             * @example P90D
+             */
+            max_grant?: string;
             /** @example senior-cashier */
             name: string;
             /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
@@ -3213,6 +3377,11 @@ export interface components {
             limits?: {
                 [key: string]: components["schemas"]["AmountLimit"];
             };
+            /**
+             * @description ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147); "" clears it, and a copy keeps the template's
+             * @example P90D
+             */
+            max_grant?: string;
             /** @example senior-cashier */
             name: string;
             /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
@@ -3264,6 +3433,11 @@ export interface components {
             limits?: {
                 [key: string]: components["schemas"]["AmountLimit"];
             };
+            /**
+             * @description ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147); "" clears it, and a copy keeps the template's
+             * @example P90D
+             */
+            max_grant?: string;
             /** @example senior-cashier */
             name?: string;
             /** @description Its holders may use it in a PIN session; refused on a role giving a sensitive permission, a tenant-only group, *:* or a limited permission without approves (ADR-0144) */
@@ -3492,8 +3666,11 @@ export interface components {
         RoleGrant: {
             /** Format: date-time */
             expires_at?: string;
+            /** @description Revoke even if it leaves the organization or tenant without an admin or owner: tenant owners only, with a reason; audited (ADR-0147) */
+            force?: boolean;
             /** @description Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership. */
             org_id?: string;
+            reason?: string;
             /** @description A tenant role's name, or org/<name> for one of the organization's own roles, granted in that organization only (ADR-0142) */
             role: string;
         };
@@ -3786,6 +3963,8 @@ export interface components {
                 /** @description Users may request these for 15–480 minutes */
                 requestable_roles?: string[];
             };
+            /** @description Roles that may ask for write-mode support access besides owner (ADR-0146) */
+            impersonation_write_roles?: string[];
             lockout: {
                 base_sec: number;
                 max_sec: number;
@@ -5230,7 +5409,10 @@ export interface operations {
     };
     adminDeleteOrg: {
         parameters: {
-            query?: never;
+            query?: {
+                force?: boolean;
+                reason?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5249,6 +5431,8 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
         };
     };
     adminPatchOrg: {
@@ -5326,6 +5510,37 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminCloseOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrgClose"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
@@ -5599,6 +5814,31 @@ export interface operations {
             422: components["responses"]["Problem"];
         };
     };
+    adminExportOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JSON document */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     adminListGrantableRoles: {
         parameters: {
             query?: never;
@@ -5618,6 +5858,55 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["GrantableRoleList"];
                 };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminListOrgImpersonations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgImpersonationList"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    adminEndOrgImpersonation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                imp: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ended */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
@@ -5729,7 +6018,11 @@ export interface operations {
     };
     adminRemoveOrgMember: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Remove even the last owner or admin: tenant owners only, with reason (ADR-0147) */
+                force?: boolean;
+                reason?: string;
+            };
             header?: never;
             path: {
                 id: string;
@@ -5749,6 +6042,7 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     adminListOrgPINs: {
@@ -5774,6 +6068,32 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    adminReopenOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Org"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     adminListOrgRoles: {
