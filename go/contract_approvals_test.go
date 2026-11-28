@@ -21,7 +21,7 @@ type moreVectors struct {
 			Name, Token, Expect string
 			Approval            struct {
 				ID, Approver, Requester, Permission, Resource, Currency, Method string
-				Amount                                                         *int64
+				Amount                                                          *int64
 			} `json:"approval"`
 		} `json:"cases"`
 	} `json:"approvals"`
