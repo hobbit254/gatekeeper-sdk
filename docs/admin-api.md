@@ -107,6 +107,13 @@ Organizations register the tills and terminals their people share ([Shared devic
 | `GET /v1/admin/orgs/{id}/pins` | Members and their PINs: `none`, `active`, `locked` or `held` |
 | `POST /v1/admin/users/{id}/pin/unlock`, `DELETE /v1/admin/users/{id}/pin` | Unlock or remove a member's PIN |
 
+## Guard rails on admin actions
+
+Every admin path, whether the dashboard, the API, SCIM or a script, checks the same rules:
+- **`409 org-needs-admin`:** revoking a role, removing a member, suspending or deleting a user would leave an organization with members and no owner or admin. `tenant-needs-owner` is the same for the tenant's last owner. Make someone else an admin first, or, as a tenant owner, send `force: true` with a `reason` (on `DELETE /v1/admin/users/{id}/roles`, or `?force=true&reason=…` on removing a member); it's audited.
+- **`403 target-above-you`:** an org admin acting on a member who holds access they don't, or anyone but an owner acting on an owner. Member lists carry `can_manage`.
+- **`422 expiry-required`:** granting a role with `max_grant` without `expires_at`, or past it.
+
 ## Support access
 
 Impersonation (`POST /v1/admin/users/{id}/impersonate {client_id, reason, mode}`) needs a reason of 10–500 characters and is `read` unless `mode` is `write` (see [Impersonation](protecting-an-api.md#impersonation)). The subject's organizations see it:
@@ -195,6 +202,8 @@ roles:
 - **Bump `version`** with each change.
 - **Removing a permission** that a role or a direct grant still uses fails, so remove the grant first.
 - **Reserved roles:** `owner` can't be redefined, and only `owner` and `admin` may hold `*:*`.
+- **`requires_approval: true`** on a permission makes every use need a second person's approval (see [Second-person approval](protecting-an-api.md#second-person-approval)).
+- **Roles that must end:** a role in the `{groups, permissions}` form may set `max_grant: P90D` (ISO 8601, 1 hour to 1 year). Every grant of it then needs `expires_at` within that, it can't be given by invitation or SCIM group, and holders and admins are emailed a week before it ends.
 
 Apply it on the dashboard's **Roles and permissions** page (choose the client and the file, **Preview**, then **Apply**), or with `PUT /v1/admin/permissions/sync?client_id=shop-api&dry_run=true` and the YAML as the body. The dry run lists what would be added, changed or removed. A role change reaches users at their next token (see [Protecting an API](protecting-an-api.md#permissions-and-roles)).
 
