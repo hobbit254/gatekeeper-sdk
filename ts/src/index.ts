@@ -3,6 +3,7 @@
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
 import { dpopSigner } from "./dpop.js";
+import { markGuard } from "./guard.js";
 import { innerToken, type DecryptionKey } from "./jwe.js";
 import {
   calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
@@ -617,7 +618,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
     canOnEachFor,
     verifyIdToken,
     requirePermissionOn(permission, resource): Middleware {
-      return (req, res, next) => {
+      return markGuard({ kind: "resource", permission }, (req: Req, res: Res, next: Next) => {
         const header = req.headers.authorization;
         const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : "";
         const p = req.gatekeeper;
@@ -637,7 +638,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
           }
           res.status(403).end("forbidden");
         }, (e) => { if (e instanceof NotServedError) res.status(403).end("forbidden"); else res.status(503).end("authorization unavailable"); });
-      };
+      });
     },
     express(): Middleware {
       return (req, res, next) => {
@@ -680,7 +681,7 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
  * the RFC 9470 challenge when the permission's step-up window from the role
  * map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005). */
 export function requirePermission(permission: string): Middleware {
-  return (req, res, next) => {
+  return markGuard({ kind: "permission", permission }, (req: Req, res: Res, next: Next) => {
     const p = req.gatekeeper;
     if (!p?.can(permission)) {
       res.status(403).end("forbidden");
@@ -694,7 +695,7 @@ export function requirePermission(permission: string): Middleware {
       return;
     }
     next();
-  };
+  });
 }
 
 /** The Principal the express() middleware stored on req. */
@@ -793,6 +794,7 @@ export function createClientCredentials(config: ClientCredentialsConfig): Client
 }
 
 export { generateDPoPKey } from "./dpop.js";
+export { assertEveryRouteGuarded, checkRoutes, guardOf, publicRoute, signedIn, type Guard, type RouteCheckOptions, type RouteReport } from "./guard.js";
 export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";
 export { createRevocationFeed, type RevocationFeed, type RevocationFeedConfig } from "./feed.js";

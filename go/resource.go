@@ -104,7 +104,7 @@ func (s *SDK) authz(ctx context.Context, token, path string, body, out any) erro
 // the check uses the client's credentials (CanOnFor, ADR-0119); without them it is 403.
 func (s *SDK) RequirePermissionOn(permission string, resource func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return withMark(Guard{Kind: GuardResource, Permission: permission}, next, func(w http.ResponseWriter, r *http.Request) {
 			p, verified := FromContext(r.Context())
 			if !verified {
 				http.Error(w, "forbidden", http.StatusForbidden)

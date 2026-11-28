@@ -37,6 +37,32 @@ An organization can also define its own roles ([Organization roles](admin-api.md
 
 Wildcards work in roles: `report:*` holds every `report:` permission.
 
+## Check every route is guarded
+
+The commonest authorization bug is a route nobody guarded. Mark every route, and add a test that fails when one isn't:
+- **Guarded:** `RequirePermission`, `RequirePermissionOn` or `RequireStepUp`.
+- **Deliberately open:** `Public()`.
+- **Any signed-in user:** `SignedIn()`, which also answers `401` without a principal.
+
+The test reads the marks and never calls a route. It lists every unmarked route and, given your manifest's keys, the permissions no route guards (some are checked in code; `FailOnUnused` makes that a failure too).
+
+```go
+func TestEveryRouteGuarded(t *testing.T) {
+	mux := gktest.NewMux() // records what you register; an http.ServeMux can't list its routes
+	register(mux)
+	gktest.AssertEveryRouteGuarded(t, mux.Routes(), gktest.Options{Permissions: []string{"report:read"}})
+}
+```
+
+| | Go | TypeScript (Express 4 and 5) | Laravel |
+| --- | --- | --- | --- |
+| Open on purpose | `gk.Public()` | `publicRoute()` | middleware `gk.public` |
+| Any signed-in user | `gk.SignedIn()` | `signedIn()` | middleware `gk.signed_in` |
+| The test | `gktest.AssertEveryRouteGuarded(t, routes, opts)` | `assertEveryRouteGuarded(app, {permissions})` | `GatekeeperAssert::everyRouteGuarded(Route::getRoutes())` |
+| Routes from | `gktest.NewMux()`, or a `[]gktest.Route` (chi's `chi.Walk` gives the fields) | the app's router, nested routers included | Laravel's route list |
+
+In Go, put the Gatekeeper guards outside your other middleware, or have that middleware implement `Unwrap() http.Handler`, so the test can see through it.
+
 ## Amount limits
 
 Some actions are fine up to an amount: a cashier refunds up to KES 2,000, and above that a manager must approve. Mark the permission `limit: amount` in the manifest, and give each role its limits in minor units (cents):

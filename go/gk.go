@@ -449,7 +449,7 @@ func FromContext(ctx context.Context) (*Principal, bool) {
 // the DPoP header (ADR-0070).
 func (s *SDK) Middleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return wrapper{next: next, serve: func(w http.ResponseWriter, r *http.Request) {
 			raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 			dpop := false
 			if !ok {
@@ -480,7 +480,7 @@ func (s *SDK) Middleware() func(http.Handler) http.Handler {
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKey{}, p)))
-		})
+		}}
 	}
 }
 
@@ -489,7 +489,7 @@ func (s *SDK) Middleware() func(http.Handler) http.Handler {
 // the role map has passed (ADR-0097). Direct grants need /v1/authz/check (ADR-0005).
 func RequirePermission(permission string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return withMark(Guard{Kind: GuardPermission, Permission: permission}, next, func(w http.ResponseWriter, r *http.Request) {
 			p, ok := FromContext(r.Context())
 			if !ok || !p.Can(permission) {
 				http.Error(w, "forbidden", http.StatusForbidden)
@@ -518,7 +518,7 @@ func (p *Principal) FreshMFA(maxAge time.Duration) bool {
 func RequireStepUp(maxAge time.Duration) func(http.Handler) http.Handler {
 	secs := int(maxAge.Seconds())
 	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		return withMark(Guard{Kind: GuardStepUp}, next, func(w http.ResponseWriter, r *http.Request) {
 			p, ok := FromContext(r.Context())
 			if !ok || !p.FreshMFA(maxAge) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer error="insufficient_user_authentication", max_age="%d"`, secs))
