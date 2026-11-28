@@ -3,7 +3,7 @@
 // (docs/INTEGRATION.md, docs/TOKENS.md, ADR-0005, ADR-0038).
 import { createHash } from "node:crypto";
 import { dpopSigner } from "./dpop.js";
-import { markGuard } from "./guard.js";
+import { fromExpress, markGuard, publicRoute, signedIn, type FastifyGuards } from "./guard.js";
 import { innerToken, type DecryptionKey } from "./jwe.js";
 import {
   calculateJwkThumbprint, compactVerify, createLocalJWKSet, decodeProtectedHeader, errors, importJWK, jwtVerify,
@@ -187,6 +187,8 @@ export interface Gatekeeper {
    * commit path of the action. Rejects with ApprovalError ("closed" or "mismatch").
    */
   spendApproval(accessToken: string, raw: string, permission: string, resource: string, amount?: number): Promise<Approval>;
+  /** Fastify hooks: verify on onRequest, the guards on preHandler, each carrying its mark (ADR-0153). */
+  fastify(): FastifyGuards;
 }
 
 /** A second person's approval of one action (FR-Z21, ADR-0145). */
@@ -640,6 +642,16 @@ export function createGatekeeper(config: GatekeeperConfig): Gatekeeper {
         }, (e) => { if (e instanceof NotServedError) res.status(403).end("forbidden"); else res.status(503).end("authorization unavailable"); });
       });
     },
+    fastify(this: Gatekeeper): FastifyGuards {
+      return {
+        verify: fromExpress(this.express()),
+        requirePermission: (permission) => fromExpress(requirePermission(permission)),
+        requirePermissionOn: (permission, resource) =>
+          fromExpress(this.requirePermissionOn(permission, (req) => resource(req as unknown as Parameters<typeof resource>[0]))),
+        publicRoute: () => fromExpress(publicRoute()),
+        signedIn: () => fromExpress(signedIn()),
+      };
+    },
     express(): Middleware {
       return (req, res, next) => {
         const header = req.headers.authorization;
@@ -794,7 +806,10 @@ export function createClientCredentials(config: ClientCredentialsConfig): Client
 }
 
 export { generateDPoPKey } from "./dpop.js";
-export { assertEveryRouteGuarded, checkRoutes, guardOf, publicRoute, signedIn, type Guard, type RouteCheckOptions, type RouteReport } from "./guard.js";
+export {
+  assertEveryFastifyRouteGuarded, assertEveryRouteGuarded, checkFastifyRoutes, checkRoutes, fromExpress, guardOf, publicRoute, recordFastifyRoutes, signedIn,
+  type FastifyGuards, type FastifyHook, type Guard, type RouteCheckOptions, type RouteReport,
+} from "./guard.js";
 export { innerToken, type DecryptionKey } from "./jwe.js";
 export { createPushApprover, cryptoKeySigner, generatePushKey, PushError, type PushApprover, type PushApproverConfig, type PushChallenge, type PushSigner } from "./push.js";
 export { createRevocationFeed, type RevocationFeed, type RevocationFeedConfig } from "./feed.js";

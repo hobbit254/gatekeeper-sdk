@@ -61,6 +61,10 @@ func TestEveryRouteGuarded(t *testing.T) {
 | The test | `gktest.AssertEveryRouteGuarded(t, routes, opts)` | `assertEveryRouteGuarded(app, {permissions})` | `GatekeeperAssert::everyRouteGuarded(Route::getRoutes())` |
 | Routes from | `gktest.NewMux()`, or a `[]gktest.Route` (chi's `chi.Walk` gives the fields) | the app's router, nested routers included | Laravel's route list |
 
+**gin** has its own Go module, `github.com/hobbit254/gatekeeper-sdk/go/gkgin`. Wrap each route's handler, `r.GET("/orders", gkgin.RequirePermission("order:read", listOrders))` (also `gkgin.Public`, `gkgin.SignedIn`, `gkgin.RequirePermissionOn`), use `gkgin.Middleware(sdk)` to check tokens, and test with `gkgin.AssertEveryRouteGuarded(t, engine, gkgin.Options{})`. A guard on a group only isn't seen: wrap the handler.
+
+**Fastify:** `const g = gk.fastify()` gives `g.verify` for `onRequest` and `g.requirePermission(p)`, `g.requirePermissionOn(p, resource)`, `g.publicRoute()` and `g.signedIn()` for `preHandler`. Call `recordFastifyRoutes(app)` before adding routes, then `assertEveryFastifyRouteGuarded(app, {permissions})` in a test. Hooks added with `app.addHook` aren't seen; put the guards on the routes.
+
 In Go, put the Gatekeeper guards outside your other middleware, or have that middleware implement `Unwrap() http.Handler`, so the test can see through it.
 
 ## Amount limits
