@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `supportSession()`, `mountSupportBanner()` and `client.supportSession()` in the browser entry: the support-session banner for product UIs (ADR-0159).
 - `gk.fastify()`, `recordFastifyRoutes(app)` and `assertEveryFastifyRouteGuarded(app)`: Fastify hooks carrying the guard marks, and the route test for Fastify (ADR-0153).
 - `publicRoute()`, `signedIn()` and `assertEveryRouteGuarded(app)`: a test that fails when an Express route has no Gatekeeper guard; `requirePermission` and `requirePermissionOn` carry their mark (ADR-0149).
 - `principal.actorMode`: support sessions are `read` or `write`; in read mode `permissions` keeps only read permissions (ADR-0146).

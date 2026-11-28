@@ -156,6 +156,29 @@ const session = await till.pinSignIn(userId, pin); // session.access_token, sess
 - **The hosted till:** for a web till, embed Gatekeeper's page instead of building the screens: `<iframe src="https://auth.example.com/t/acme/till?client_id=pos&origin=https://pos.example.com">`. It claims the device with a key the page makes and can't export, shows who has a PIN, takes the PIN, and posts `{type: "gatekeeper:pin-session", access_token, sid, expires_in, user_id}` to your page. Post `{type: "gatekeeper:approve", approval_id}` to it for a manager's approval; it shows the amber prompt and answers `{type: "gatekeeper:approval", approval_token}`, or `gatekeeper:approval-cancelled`. Only your client's redirect-URI origins can frame it or hear from it.
 - **Not yet:** signing in while offline.
 
+## Support sessions: showing the banner
+
+When your support team acts as a user (an impersonation, read-only unless writing was allowed), every access token says so in `act`. Show it, so nobody forgets they're in someone else's account.
+
+```ts compile
+import { createBrowserClient, mountSupportBanner } from "@hobbit254/gatekeeper-sdk/browser";
+
+const auth = createBrowserClient({ issuer: "https://auth.example.com/t/acme", clientId: "web", redirectUri: "https://app.example.com/callback" });
+
+export async function afterSignIn(userName: string) {
+  await auth.handleRedirectCallback();
+  const session = auth.supportSession();
+  if (session) {
+    mountSupportBanner({ session, name: userName, onStop: () => auth.logout(), onEnded: () => auth.logout() });
+  }
+}
+```
+
+- **What it shows:** "Support session · Viewing as Wanjiru · Read-only · Ends in 48 min", with **Stop**, first on the page. It updates every 30 seconds and says when the session has ended. `labels` replaces the words, for other languages.
+- **Reading it yourself:** `supportSession(accessToken)` returns `{ actor, mode, readOnly, endsAt }` or `null`. It decodes the token without checking it, so use it for display only; your API checks the token (`principal.actor`, `principal.actorMode`).
+- **Flutter:** put `SupportBanner(name: …, child: …)` under your `GatekeeperScope`, for example in `MaterialApp.builder`. `SignedIn.support` has the same details.
+- **Stop:** the default signs out on this device. To end the session for everyone, your support tool ends the impersonation.
+
 ## Signing out
 
 - **Browser:** `auth.logout({ returnTo })` ends the Gatekeeper session and returns to `returnTo`, which must be one of the client's post-logout redirect URIs.

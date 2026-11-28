@@ -27,6 +27,37 @@ class SignedIn extends AuthStatus {
   final Map<String, dynamic> claims;
   String get subject => claims['sub'] as String? ?? '';
   List<String> get amr => [for (final m in claims['amr'] as List? ?? const []) m.toString()];
+
+  /// The support session these tokens belong to, or null (ADR-0159).
+  SupportSession? get support => SupportSession.fromClaims(claims);
+}
+
+/// A support session (impersonation), as the access token's act claim
+/// describes it; for display only (FR-M5, ADR-0146, ADR-0159).
+class SupportSession {
+  const SupportSession({required this.actor, required this.mode, required this.endsAt});
+
+  /// The admin acting as the user.
+  final String actor;
+
+  /// "read" unless writing was allowed.
+  final String mode;
+  final DateTime endsAt;
+  bool get readOnly => mode != 'write';
+
+  /// The session in [claims]' act, or null; no mode is read, as on the server.
+  static SupportSession? fromClaims(Map<String, dynamic> claims) {
+    final act = claims['act'];
+    if (act is! Map) return null;
+    final actor = act['sub'];
+    if (actor is! String || actor.isEmpty) return null;
+    final endsAt = act['ends_at'];
+    return SupportSession(
+      actor: actor,
+      mode: act['mode'] == 'write' ? 'write' : 'read',
+      endsAt: DateTime.fromMillisecondsSinceEpoch((endsAt is num ? endsAt.toInt() : 0) * 1000, isUtc: true),
+    );
+  }
 }
 
 /// An API asked for a recent second factor: call [GatekeeperAuth.stepUp].

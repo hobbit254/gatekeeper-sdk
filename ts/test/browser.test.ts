@@ -1,4 +1,4 @@
-import { CompactEncrypt, SignJWT, exportJWK, generateKeyPair } from "jose";
+import { CompactEncrypt, SignJWT, UnsecuredJWT, exportJWK, generateKeyPair } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { AuthorizeError, LoginRequiredError, createBrowserClient } from "../src/browser.js";
 
@@ -26,7 +26,7 @@ function idToken(nonce: string, extra: Record<string, unknown> = {}) {
 }
 
 /** A fake Gatekeeper: JWKS, the token endpoint (code and refresh grants). */
-function server(opts: { nonce?: (n: string) => string; accessTTL?: number; encryptTo?: CryptoKey } = {}) {
+function server(opts: { nonce?: (n: string) => string; accessTTL?: number; encryptTo?: CryptoKey; accessToken?: (n: number) => string } = {}) {
   const seen: { grant: string; body: URLSearchParams }[] = [];
   let nonce = "";
   let n = 0;
@@ -42,7 +42,7 @@ function server(opts: { nonce?: (n: string) => string; accessTTL?: number; encry
         id = await new CompactEncrypt(new TextEncoder().encode(id))
           .setProtectedHeader({ alg: "ECDH-ES+A256KW", enc: "A256GCM", cty: "JWT", kid: "enc-1" }).encrypt(opts.encryptTo);
       }
-      return Response.json({ access_token: `at-${n}`, refresh_token: `rt-${n}`, token_type: "Bearer", expires_in: opts.accessTTL ?? 600,
+      return Response.json({ access_token: opts.accessToken ? opts.accessToken(n) : `at-${n}`, refresh_token: `rt-${n}`, token_type: "Bearer", expires_in: opts.accessTTL ?? 600,
         id_token: id });
     }
     return new Response("{}", { status: 404 });
@@ -162,5 +162,26 @@ describe("encrypted ID tokens (FR-S15, ADR-0121)", () => {
       s.setNonce(auth.searchParams.get("nonce") ?? "");
       await expect(c.handleRedirectCallback(`${redirectUri}?code=c1&state=${auth.searchParams.get("state")}`)).rejects.toThrow();
     }
+  });
+});
+
+describe("support sessions in the browser (FR-M5, ADR-0159)", () => {
+  async function signedIn(accessToken: (n: number) => string) {
+    const s = server({ accessToken });
+    const { c, went } = client(s.f);
+    await c.loginWithRedirect();
+    const auth = new URL(went[0]);
+    s.setNonce(auth.searchParams.get("nonce") ?? "");
+    await c.handleRedirectCallback(`${redirectUri}?code=c1&state=${auth.searchParams.get("state")}`);
+    return c;
+  }
+  it("tells the page when its token is a support session's", async () => {
+    const c = await signedIn(() => new UnsecuredJWT({ sub: "u1", act: { sub: "admin-1", ends_at: 1_900_000_000, mode: "read" } }).encode());
+    expect(c.supportSession()).toEqual({ actor: "admin-1", mode: "read", readOnly: true, endsAt: new Date(1_900_000_000_000) });
+  });
+  it("is null for an ordinary session, and before sign-in", async () => {
+    expect(client(server().f).c.supportSession()).toBeNull();
+    const c = await signedIn(() => new UnsecuredJWT({ sub: "u1" }).encode());
+    expect(c.supportSession()).toBeNull();
   });
 });
