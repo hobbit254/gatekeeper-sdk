@@ -114,6 +114,19 @@ Every admin path, whether the dashboard, the API, SCIM or a script, checks the s
 - **`403 target-above-you`:** an org admin acting on a member who holds access they don't, or anyone but an owner acting on an owner. Member lists carry `can_manage`.
 - **`422 expiry-required`:** granting a role with `max_grant` without `expires_at`, or past it.
 
+## Closing an organization
+
+Close an organization instead of deleting it: it's refused everywhere at once, its owners get its records, and it can be reopened during a grace period .
+
+| Call | What it does |
+| --- | --- |
+| `POST /v1/admin/orgs/{id}/close {reason, grace_days}` | Closes it: sign-in, checks (`matched_by: "org_closed"`), members, invitations, grants, SCIM and its devices stop; its sessions end; each owner is emailed a link to its records. `grace_days` is 7–365 (90 by default) |
+| `POST /v1/admin/orgs/{id}/reopen` | Within the grace period: memberships and grants come back at the next sign-in |
+| `GET /v1/admin/orgs/{id}/export` | Its records as JSON: members with emails and roles, its own roles, grants, entitlements and activity |
+| `DELETE /v1/admin/orgs/{id}` | Only for an organization with no members, or by a tenant owner with `?force=true&reason=…` |
+
+Tenant admins only. Listen for `org.closed` (with `purge_at`), `org.reopened` and `org.deleted` to stop, restore and finally remove the customer's data in your product; each product exports its own records.
+
 ## Support access
 
 Impersonation (`POST /v1/admin/users/{id}/impersonate {client_id, reason, mode}`) needs a reason of 10–500 characters and is `read` unless `mode` is `write` (see [Impersonation](protecting-an-api.md#impersonation)). The subject's organizations see it:

@@ -148,6 +148,7 @@ Every event's `data` carries `tenant_id` and `tenant` (the slug). User events al
 | `device.registered`, `device.revoked` | an organization registers (or registers again) or revokes a shared device | `device_id`, `org_id`, `name` |
 | `pin.set`, `pin.removed`, `pin.held`, `pin.unlocked` | a user's PIN for shared devices changes; `pin.held` after 10 wrong tries | `user_id` |
 | `approval.requested`, `approval.granted`, `approval.denied`, `approval.spent`, `approval.expired` | a second-person approval is asked for, decided, spent or lapses; tell approvers on `approval.requested` | `approval_id`, `permission`, `resource`, `requester_id`, `client_id`, `status`, and when set `amount`, `currency`, `org_id`, `approver_id`, `method`, `device_id`; never the summary |
+| `org.closed`, `org.reopened` | an organization is closed with a grace period, or reopened within it; `org.deleted` follows the purge with `purged: true` | `org_id`, `slug`, `name`, and `purge_at` on `org.closed`; never the reason |
 | `login.new_device` | a sign-in from a device the user hasn't used | `session_id`, `device`, `ip`, `country`, `at` |
 | `token.revoked` | a session's tokens are revoked | `sid` |
 | `refresh.reuse_detected` | a used refresh token came back: the family is revoked | `family_id` |

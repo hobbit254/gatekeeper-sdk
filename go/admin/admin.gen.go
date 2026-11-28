@@ -405,6 +405,24 @@ func (e IdentityProviderProvider) Valid() bool {
 	}
 }
 
+// Defines values for ImpersonateRequestMode.
+const (
+	ImpersonateRequestModeRead  ImpersonateRequestMode = "read"
+	ImpersonateRequestModeWrite ImpersonateRequestMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the ImpersonateRequestMode enum.
+func (e ImpersonateRequestMode) Valid() bool {
+	switch e {
+	case ImpersonateRequestModeRead:
+		return true
+	case ImpersonateRequestModeWrite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ImportJobRowsOutcome.
 const (
 	Added       ImportJobRowsOutcome = "added"
@@ -729,6 +747,42 @@ func (e OnboardingStepId) Valid() bool {
 	case OnboardingStepIdSignInMethods:
 		return true
 	case OnboardingStepIdWebhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgStatus.
+const (
+	OrgStatusActive  OrgStatus = "active"
+	OrgStatusClosing OrgStatus = "closing"
+)
+
+// Valid indicates whether the value is a known member of the OrgStatus enum.
+func (e OrgStatus) Valid() bool {
+	switch e {
+	case OrgStatusActive:
+		return true
+	case OrgStatusClosing:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OrgImpersonationMode.
+const (
+	OrgImpersonationModeRead  OrgImpersonationMode = "read"
+	OrgImpersonationModeWrite OrgImpersonationMode = "write"
+)
+
+// Valid indicates whether the value is a known member of the OrgImpersonationMode enum.
+func (e OrgImpersonationMode) Valid() bool {
+	switch e {
+	case OrgImpersonationModeRead:
+		return true
+	case OrgImpersonationModeWrite:
 		return true
 	default:
 		return false
@@ -1471,7 +1525,12 @@ type AdminRole struct {
 
 	// Limits The role's own amount limits, from its manifest (ADR-0143)
 	Limits *map[string]AmountLimit `json:"limits,omitempty"`
-	Name   string                  `json:"name"`
+
+	// MaxGrant ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147)
+	//
+	// Example: P90D
+	MaxGrant *string `json:"max_grant,omitempty"`
+	Name     string  `json:"name"`
 
 	// Permissions The role's own patterns; what its groups give is not listed here (ADR-0141)
 	Permissions []string `json:"permissions"`
@@ -1850,7 +1909,10 @@ type GrantPendingStatus string
 type GrantableRoleList struct {
 	Roles []struct {
 		Description string `json:"description"`
-		Name        string `json:"name"`
+
+		// MaxGrant Set when grants of the role need an end date within this ISO 8601 duration (ADR-0147)
+		MaxGrant *string `json:"max_grant,omitempty"`
+		Name     string  `json:"name"`
 	} `json:"roles"`
 }
 
@@ -1890,7 +1952,16 @@ type IdentityProviderList struct {
 // ImpersonateRequest defines model for ImpersonateRequest.
 type ImpersonateRequest struct {
 	ClientId string `json:"client_id"`
+
+	// Mode read allows only read permissions; write needs a tenant owner or a role in impersonation_write_roles, with a second factor in the last 5 minutes
+	Mode *ImpersonateRequestMode `json:"mode,omitempty"`
+
+	// Reason Why; kept in the audit entry and emailed to the subject's organizations' admins, never in events (ADR-0146)
+	Reason string `json:"reason"`
 }
+
+// ImpersonateRequestMode read allows only read permissions; write needs a tenant owner or a role in impersonation_write_roles, with a second factor in the last 5 minutes
+type ImpersonateRequestMode string
 
 // ImpersonationToken defines model for ImpersonationToken.
 type ImpersonationToken struct {
@@ -2187,6 +2258,8 @@ type LoginAnalytics struct {
 
 // Member defines model for Member.
 type Member struct {
+	// CanManage Whether the caller may act on this member: their own access covers the member's, and only an owner manages an owner (FR-Z23)
+	CanManage   *bool   `json:"can_manage,omitempty"`
 	DisplayName *string `json:"display_name,omitempty"`
 
 	// Email The member's primary email, if any (FR-D39).
@@ -2255,7 +2328,10 @@ type OnboardingStepId string
 
 // Org defines model for Org.
 type Org struct {
-	CreatedAt time.Time `json:"created_at"`
+	// CloseReason Why it was closed; tenant admins only, never in events
+	CloseReason *string    `json:"close_reason,omitempty"`
+	ClosedAt    *time.Time `json:"closed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 
 	// Currency Its own currency for amount limits, or absent to use the tenant's (ADR-0143)
 	Currency *string `json:"currency,omitempty"`
@@ -2264,11 +2340,26 @@ type Org struct {
 	Entitlements *Entitlements `json:"entitlements,omitempty"`
 
 	// HasLogo An uploaded sign-in logo (FR-D41, ADR-0138).
-	HasLogo    *bool              `json:"has_logo,omitempty"`
-	Id         openapi_types.UUID `json:"id"`
-	Name       string             `json:"name"`
-	RequireSso bool               `json:"require_sso"`
-	Slug       string             `json:"slug"`
+	HasLogo             *bool              `json:"has_logo,omitempty"`
+	Id                  openapi_types.UUID `json:"id"`
+	ImpersonationNotice *bool              `json:"impersonation_notice,omitempty"`
+	Name                string             `json:"name"`
+	PurgeAt             *time.Time         `json:"purge_at,omitempty"`
+	RequireSso          bool               `json:"require_sso"`
+	Slug                string             `json:"slug"`
+
+	// Status closing: refused everywhere until reopened, and purged at purge_at (ADR-0148)
+	Status *OrgStatus `json:"status,omitempty"`
+}
+
+// OrgStatus closing: refused everywhere until reopened, and purged at purge_at (ADR-0148)
+type OrgStatus string
+
+// OrgClose defines model for OrgClose.
+type OrgClose struct {
+	// GraceDays How long it can be reopened before it's purged
+	GraceDays *int   `json:"grace_days,omitempty"`
+	Reason    string `json:"reason"`
 }
 
 // OrgCreate defines model for OrgCreate.
@@ -2301,6 +2392,27 @@ type OrgDomainList struct {
 	Domains []OrgDomain `json:"domains"`
 }
 
+// OrgImpersonation defines model for OrgImpersonation.
+type OrgImpersonation struct {
+	ActorId   openapi_types.UUID   `json:"actor_id"`
+	ActorName *string              `json:"actor_name,omitempty"`
+	EndsAt    time.Time            `json:"ends_at"`
+	Id        openapi_types.UUID   `json:"id"`
+	Mode      OrgImpersonationMode `json:"mode"`
+	Reason    string               `json:"reason"`
+	StartedAt time.Time            `json:"started_at"`
+	UserId    openapi_types.UUID   `json:"user_id"`
+	UserName  *string              `json:"user_name,omitempty"`
+}
+
+// OrgImpersonationMode defines model for OrgImpersonation.Mode.
+type OrgImpersonationMode string
+
+// OrgImpersonationList defines model for OrgImpersonationList.
+type OrgImpersonationList struct {
+	Items []OrgImpersonation `json:"items"`
+}
+
 // OrgList defines model for OrgList.
 type OrgList struct {
 	Orgs []Org `json:"orgs"`
@@ -2312,7 +2424,10 @@ type OrgPatch struct {
 	//
 	// Example: KES
 	Currency *string `json:"currency,omitempty"`
-	Name     *string `json:"name,omitempty"`
+
+	// ImpersonationNotice Tell the organization's owners and admins about support access; on by default. Tenant admins only (ADR-0146)
+	ImpersonationNotice *bool   `json:"impersonation_notice,omitempty"`
+	Name                *string `json:"name,omitempty"`
 
 	// RequireSso Tenant admins only (ADR-0067)
 	RequireSso *bool `json:"require_sso,omitempty"`
@@ -2333,6 +2448,11 @@ type OrgRole struct {
 
 	// Limits Permission key → limit, on permissions that carry one (ADR-0143)
 	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+
+	// MaxGrant ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147)
+	//
+	// Example: P90D
+	MaxGrant *string `json:"max_grant,omitempty"`
 
 	// Name Example: senior-cashier
 	Name string `json:"name"`
@@ -2366,6 +2486,11 @@ type OrgRoleCreate struct {
 
 	// Limits Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own
 	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+
+	// MaxGrant ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147); "" clears it, and a copy keeps the template's
+	//
+	// Example: P90D
+	MaxGrant *string `json:"max_grant,omitempty"`
 
 	// Name Example: senior-cashier
 	Name string `json:"name"`
@@ -2453,6 +2578,11 @@ type OrgRolePatch struct {
 
 	// Limits Permission key → limit. On a create with copy_from and no limits, the template's are copied; on an edit, replaces them all. A permission the role gives with no limit is unlimited, so an org admin must state one up to their own
 	Limits *map[string]AmountLimit `json:"limits,omitempty"`
+
+	// MaxGrant ISO 8601 duration (P90D, P2W, PT12H), 1 hour to 1 year: grants of the role need expires_at within it (FR-Z24, ADR-0147); "" clears it, and a copy keeps the template's
+	//
+	// Example: P90D
+	MaxGrant *string `json:"max_grant,omitempty"`
 
 	// Name Example: senior-cashier
 	Name *string `json:"name,omitempty"`
@@ -2712,8 +2842,12 @@ type RoleCreate struct {
 type RoleGrant struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
+	// Force Revoke even if it leaves the organization or tenant without an admin or owner: tenant owners only, with a reason; audited (ADR-0147)
+	Force *bool `json:"force,omitempty"`
+
 	// OrgId Org id or slug; omitted is tenant-wide (ADR-0060). Granting adds the membership.
-	OrgId *string `json:"org_id,omitempty"`
+	OrgId  *string `json:"org_id,omitempty"`
+	Reason *string `json:"reason,omitempty"`
 
 	// Role A tenant role's name, or org/<name> for one of the organization's own roles, granted in that organization only (ADR-0142)
 	Role string `json:"role"`
@@ -3087,7 +3221,10 @@ type TenantPolicy struct {
 		// RequestableRoles Users may request these for 15–480 minutes
 		RequestableRoles *[]string `json:"requestable_roles,omitempty"`
 	} `json:"governance,omitempty"`
-	Lockout struct {
+
+	// ImpersonationWriteRoles Roles that may ask for write-mode support access besides owner (ADR-0146)
+	ImpersonationWriteRoles *[]string `json:"impersonation_write_roles,omitempty"`
+	Lockout                 struct {
 		BaseSec   int `json:"base_sec"`
 		MaxSec    int `json:"max_sec"`
 		Threshold int `json:"threshold"`
@@ -3349,6 +3486,12 @@ type AdminListInvitationsParams struct {
 	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
 }
 
+// AdminDeleteOrgParams defines parameters for AdminDeleteOrg.
+type AdminDeleteOrgParams struct {
+	Force  *bool   `form:"force,omitempty" json:"force,omitempty"`
+	Reason *string `form:"reason,omitempty" json:"reason,omitempty"`
+}
+
 // AdminListOrgAuditEventsParams defines parameters for AdminListOrgAuditEvents.
 type AdminListOrgAuditEventsParams struct {
 	// ActorId Actor id
@@ -3372,6 +3515,13 @@ type AdminListOrgAuditEventsParams struct {
 
 	// Cursor next_cursor from the previous page
 	Cursor *Cursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// AdminRemoveOrgMemberParams defines parameters for AdminRemoveOrgMember.
+type AdminRemoveOrgMemberParams struct {
+	// Force Remove even the last owner or admin: tenant owners only, with reason (ADR-0147)
+	Force  *bool   `form:"force,omitempty" json:"force,omitempty"`
+	Reason *string `form:"reason,omitempty" json:"reason,omitempty"`
 }
 
 // AdminRotateOrgSSOKeyJSONBody defines parameters for AdminRotateOrgSSOKey.
@@ -3513,6 +3663,9 @@ type AdminCreateOrgJSONRequestBody = OrgCreate
 
 // AdminPatchOrgJSONRequestBody defines body for AdminPatchOrg for application/json ContentType.
 type AdminPatchOrgJSONRequestBody = OrgPatch
+
+// AdminCloseOrgJSONRequestBody defines body for AdminCloseOrg for application/json ContentType.
+type AdminCloseOrgJSONRequestBody = OrgClose
 
 // AdminRegisterOrgDeviceJSONRequestBody defines body for AdminRegisterOrgDevice for application/json ContentType.
 type AdminRegisterOrgDeviceJSONRequestBody = SharedDeviceCreate
@@ -4160,10 +4313,10 @@ type ClientInterface interface {
 
 	// AdminDeleteOrg Delete an organization: memberships, org grants and invitations go; sessions that used it are signed out
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). Refused with 409 org-has-members while it has members: close it instead. A tenant owner may force it with force=true and a reason (ADR-0148).
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id} (the `AdminDeleteOrg` operationId).
-	AdminDeleteOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AdminDeleteOrg(ctx context.Context, id string, params *AdminDeleteOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminGetOrg One organization (id or slug)
 	//
@@ -4196,6 +4349,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/audit-events (the `AdminListOrgAuditEvents` operationId).
 	AdminListOrgAuditEvents(ctx context.Context, id string, params *AdminListOrgAuditEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCloseOrgWithBody Close an organization with a grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+	AdminCloseOrgWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminCloseOrg Close an organization with a grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+	AdminCloseOrg(ctx context.Context, id string, body AdminCloseOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgDevices The organization's shared devices (FR-A45)
 	//
@@ -4300,12 +4471,33 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
 	AdminPutOrgEntitlements(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminExportOrg The organization's records, as its owners get them when it closes
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Members with their emails and roles there, its own roles, direct grants in it, entitlements and up to 10,000 activity entries. Identity data only.
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/export (the `AdminExportOrg` operationId).
+	AdminExportOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// AdminListGrantableRoles The roles the caller may grant in an organization (FR-D39, ADR-0137)
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
 	AdminListGrantableRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminListOrgImpersonations Live support sessions acting as the organization's members
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/impersonations (the `AdminListOrgImpersonations` operationId).
+	AdminListOrgImpersonations(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminEndOrgImpersonation End a support session; its tokens stop working at once
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/impersonations/{imp}/end (the `AdminEndOrgImpersonation` operationId).
+	AdminEndOrgImpersonation(ctx context.Context, id string, imp string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminDeleteOrgLogo Remove an organization's sign-in logo (FR-D41)
 	//
@@ -4350,10 +4542,10 @@ type ClientInterface interface {
 
 	// AdminRemoveOrgMember Remove a member: their org grants go and sessions that used the org are signed out
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
-	AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	AdminRemoveOrgMember(ctx context.Context, id string, userId string, params *AdminRemoveOrgMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgPINs The organization's members and their PINs' states (FR-A46)
 	//
@@ -4361,6 +4553,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
 	AdminListOrgPINs(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminReopenOrg Reopen a closing organization within its grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Memberships and grants were kept, so access returns at the next sign-in; 409 not-closing after the grace period.
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/reopen (the `AdminReopenOrg` operationId).
+	AdminReopenOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AdminListOrgRoles An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
 	//
@@ -4954,7 +5153,7 @@ type ClientInterface interface {
 
 	// AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
 	AdminDeleteUser(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -5007,7 +5206,7 @@ type ClientInterface interface {
 
 	// AdminImpersonateUserWithBody Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5016,7 +5215,7 @@ type ClientInterface interface {
 
 	// AdminImpersonateUser Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5122,7 +5321,7 @@ type ClientInterface interface {
 
 	// AdminRevokeRoleWithBody Revoke a role
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5131,7 +5330,7 @@ type ClientInterface interface {
 
 	// AdminRevokeRole Revoke a role
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5140,7 +5339,7 @@ type ClientInterface interface {
 
 	// AdminGrantRoleWithBody Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -5149,7 +5348,7 @@ type ClientInterface interface {
 
 	// AdminGrantRole Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -5158,7 +5357,7 @@ type ClientInterface interface {
 
 	// AdminSuspendUser Suspend: blocks sign-in and ends every session
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Corresponds with POST /v1/admin/users/{id}/suspend (the `AdminSuspendUser` operationId).
 	AdminSuspendUser(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -6318,11 +6517,11 @@ func (c *Client) AdminCreateOrg(ctx context.Context, body AdminCreateOrgJSONRequ
 
 // AdminDeleteOrg Delete an organization: memberships, org grants and invitations go; sessions that used it are signed out
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). Refused with 409 org-has-members while it has members: close it instead. A tenant owner may force it with force=true and a reason (ADR-0148).
 //
 // Corresponds with DELETE /v1/admin/orgs/{id} (the `AdminDeleteOrg` operationId).
-func (c *Client) AdminDeleteOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAdminDeleteOrgRequest(c.Server, id)
+func (c *Client) AdminDeleteOrg(ctx context.Context, id string, params *AdminDeleteOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminDeleteOrgRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6395,6 +6594,44 @@ func (c *Client) AdminPatchOrg(ctx context.Context, id string, body AdminPatchOr
 // Corresponds with GET /v1/admin/orgs/{id}/audit-events (the `AdminListOrgAuditEvents` operationId).
 func (c *Client) AdminListOrgAuditEvents(ctx context.Context, id string, params *AdminListOrgAuditEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminListOrgAuditEventsRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCloseOrgWithBody Close an organization with a grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+func (c *Client) AdminCloseOrgWithBody(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCloseOrgRequestWithBody(c.Server, id, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminCloseOrg Close an organization with a grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+func (c *Client) AdminCloseOrg(ctx context.Context, id string, body AdminCloseOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminCloseOrgRequest(c.Server, id, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6638,6 +6875,23 @@ func (c *Client) AdminPutOrgEntitlements(ctx context.Context, id string, body Ad
 	return c.Client.Do(req)
 }
 
+// AdminExportOrg The organization's records, as its owners get them when it closes
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Members with their emails and roles there, its own roles, direct grants in it, entitlements and up to 10,000 activity entries. Identity data only.
+//
+// Corresponds with GET /v1/admin/orgs/{id}/export (the `AdminExportOrg` operationId).
+func (c *Client) AdminExportOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminExportOrgRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // AdminListGrantableRoles The roles the caller may grant in an organization (FR-D39, ADR-0137)
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -6645,6 +6899,40 @@ func (c *Client) AdminPutOrgEntitlements(ctx context.Context, id string, body Ad
 // Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
 func (c *Client) AdminListGrantableRoles(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminListGrantableRolesRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminListOrgImpersonations Live support sessions acting as the organization's members
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/impersonations (the `AdminListOrgImpersonations` operationId).
+func (c *Client) AdminListOrgImpersonations(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminListOrgImpersonationsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminEndOrgImpersonation End a support session; its tokens stop working at once
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/impersonations/{imp}/end (the `AdminEndOrgImpersonation` operationId).
+func (c *Client) AdminEndOrgImpersonation(ctx context.Context, id string, imp string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminEndOrgImpersonationRequest(c.Server, id, imp)
 	if err != nil {
 		return nil, err
 	}
@@ -6748,11 +7036,11 @@ func (c *Client) AdminAddOrgMember(ctx context.Context, id string, body AdminAdd
 
 // AdminRemoveOrgMember Remove a member: their org grants go and sessions that used the org are signed out
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
-func (c *Client) AdminRemoveOrgMember(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewAdminRemoveOrgMemberRequest(c.Server, id, userId)
+func (c *Client) AdminRemoveOrgMember(ctx context.Context, id string, userId string, params *AdminRemoveOrgMemberParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminRemoveOrgMemberRequest(c.Server, id, userId, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6770,6 +7058,23 @@ func (c *Client) AdminRemoveOrgMember(ctx context.Context, id string, userId str
 // Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
 func (c *Client) AdminListOrgPINs(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewAdminListOrgPINsRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminReopenOrg Reopen a closing organization within its grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Memberships and grants were kept, so access returns at the next sign-in; 409 not-closing after the grace period.
+//
+// Corresponds with POST /v1/admin/orgs/{id}/reopen (the `AdminReopenOrg` operationId).
+func (c *Client) AdminReopenOrg(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminReopenOrgRequest(c.Server, id)
 	if err != nil {
 		return nil, err
 	}
@@ -8092,7 +8397,7 @@ func (c *Client) AdminGetImport(ctx context.Context, id string, params *AdminGet
 
 // AdminDeleteUser Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Corresponds with DELETE /v1/admin/users/{id} (the `AdminDeleteUser` operationId).
 func (c *Client) AdminDeleteUser(ctx context.Context, id string, params *AdminDeleteUserParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8215,7 +8520,7 @@ func (c *Client) AdminForceResetUser(ctx context.Context, id string, reqEditors 
 
 // AdminImpersonateUserWithBody Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8234,7 +8539,7 @@ func (c *Client) AdminImpersonateUserWithBody(ctx context.Context, id string, co
 
 // AdminImpersonateUser Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8480,7 +8785,7 @@ func (c *Client) AdminRevokeUserSessions(ctx context.Context, id string, reqEdit
 
 // AdminRevokeRoleWithBody Revoke a role
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8499,7 +8804,7 @@ func (c *Client) AdminRevokeRoleWithBody(ctx context.Context, id string, content
 
 // AdminRevokeRole Revoke a role
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8518,7 +8823,7 @@ func (c *Client) AdminRevokeRole(ctx context.Context, id string, body AdminRevok
 
 // AdminGrantRoleWithBody Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 //
 // Takes any type of body and a specified content type.
 //
@@ -8537,7 +8842,7 @@ func (c *Client) AdminGrantRoleWithBody(ctx context.Context, id string, params *
 
 // AdminGrantRole Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8556,7 +8861,7 @@ func (c *Client) AdminGrantRole(ctx context.Context, id string, params *AdminGra
 
 // AdminSuspendUser Suspend: blocks sign-in and ends every session
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Corresponds with POST /v1/admin/users/{id}/suspend (the `AdminSuspendUser` operationId).
 func (c *Client) AdminSuspendUser(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -10790,7 +11095,7 @@ func NewAdminCreateOrgRequestWithBody(server string, contentType string, body io
 }
 
 // NewAdminDeleteOrgRequest constructs an http.Request for the AdminDeleteOrg method
-func NewAdminDeleteOrgRequest(server string, id string) (*http.Request, error) {
+func NewAdminDeleteOrgRequest(server string, id string, params *AdminDeleteOrgParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -10813,6 +11118,45 @@ func NewAdminDeleteOrgRequest(server string, id string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Force != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "force", *params.Force, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Reason != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reason", *params.Reason, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -11045,6 +11389,53 @@ func NewAdminListOrgAuditEventsRequest(server string, id string, params *AdminLi
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewAdminCloseOrgRequest calls the generic AdminCloseOrg builder with application/json body
+func NewAdminCloseOrgRequest(server string, id string, body AdminCloseOrgJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminCloseOrgRequestWithBody(server, id, "application/json", bodyReader)
+}
+
+// NewAdminCloseOrgRequestWithBody constructs an http.Request for the AdminCloseOrg method, with any body, and a specified content type
+func NewAdminCloseOrgRequestWithBody(server string, id string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/close", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -11456,6 +11847,40 @@ func NewAdminPutOrgEntitlementsRequestWithBody(server string, id string, content
 	return req, nil
 }
 
+// NewAdminExportOrgRequest constructs an http.Request for the AdminExportOrg method
+func NewAdminExportOrgRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/export", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewAdminListGrantableRolesRequest constructs an http.Request for the AdminListGrantableRoles method
 func NewAdminListGrantableRolesRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -11483,6 +11908,81 @@ func NewAdminListGrantableRolesRequest(server string, id string) (*http.Request,
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminListOrgImpersonationsRequest constructs an http.Request for the AdminListOrgImpersonations method
+func NewAdminListOrgImpersonationsRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/impersonations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminEndOrgImpersonationRequest constructs an http.Request for the AdminEndOrgImpersonation method
+func NewAdminEndOrgImpersonationRequest(server string, id string, imp string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "imp", imp, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/impersonations/%s/end", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11642,7 +12142,7 @@ func NewAdminAddOrgMemberRequestWithBody(server string, id string, contentType s
 }
 
 // NewAdminRemoveOrgMemberRequest constructs an http.Request for the AdminRemoveOrgMember method
-func NewAdminRemoveOrgMemberRequest(server string, id string, userId string) (*http.Request, error) {
+func NewAdminRemoveOrgMemberRequest(server string, id string, userId string, params *AdminRemoveOrgMemberParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -11672,6 +12172,45 @@ func NewAdminRemoveOrgMemberRequest(server string, id string, userId string) (*h
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Force != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "force", *params.Force, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Reason != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "reason", *params.Reason, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
@@ -11709,6 +12248,40 @@ func NewAdminListOrgPINsRequest(server string, id string) (*http.Request, error)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminReopenOrgRequest constructs an http.Request for the AdminReopenOrg method
+func NewAdminReopenOrgRequest(server string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/admin/orgs/%s/reopen", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -15622,12 +16195,12 @@ type ClientWithResponsesInterface interface {
 
 	// AdminDeleteOrgWithResponse Delete an organization: memberships, org grants and invitations go; sessions that used it are signed out
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). Refused with 409 org-has-members while it has members: close it instead. A tenant owner may force it with force=true and a reason (ADR-0148).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id} (the `AdminDeleteOrg` operationId).
-	AdminDeleteOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteOrgResponse, error)
+	AdminDeleteOrgWithResponse(ctx context.Context, id string, params *AdminDeleteOrgParams, reqEditors ...RequestEditorFn) (*AdminDeleteOrgResponse, error)
 
 	// AdminGetOrgWithResponse One organization (id or slug)
 	//
@@ -15664,6 +16237,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/audit-events (the `AdminListOrgAuditEvents` operationId).
 	AdminListOrgAuditEventsWithResponse(ctx context.Context, id string, params *AdminListOrgAuditEventsParams, reqEditors ...RequestEditorFn) (*AdminListOrgAuditEventsResponse, error)
+
+	// AdminCloseOrgWithBodyWithResponse Close an organization with a grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+	AdminCloseOrgWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCloseOrgResponse, error)
+
+	// AdminCloseOrgWithResponse Close an organization with a grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+	AdminCloseOrgWithResponse(ctx context.Context, id string, body AdminCloseOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCloseOrgResponse, error)
 
 	// AdminListOrgDevicesWithResponse The organization's shared devices (FR-A45)
 	//
@@ -15782,6 +16373,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/entitlements (the `AdminPutOrgEntitlements` operationId).
 	AdminPutOrgEntitlementsWithResponse(ctx context.Context, id string, body AdminPutOrgEntitlementsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminPutOrgEntitlementsResponse, error)
 
+	// AdminExportOrgWithResponse The organization's records, as its owners get them when it closes
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Members with their emails and roles there, its own roles, direct grants in it, entitlements and up to 10,000 activity entries. Identity data only.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/export (the `AdminExportOrg` operationId).
+	AdminExportOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminExportOrgResponse, error)
+
 	// AdminListGrantableRolesWithResponse The roles the caller may grant in an organization (FR-D39, ADR-0137)
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -15790,6 +16390,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/grantable-roles (the `AdminListGrantableRoles` operationId).
 	AdminListGrantableRolesWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListGrantableRolesResponse, error)
+
+	// AdminListOrgImpersonationsWithResponse Live support sessions acting as the organization's members
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /v1/admin/orgs/{id}/impersonations (the `AdminListOrgImpersonations` operationId).
+	AdminListOrgImpersonationsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgImpersonationsResponse, error)
+
+	// AdminEndOrgImpersonationWithResponse End a support session; its tokens stop working at once
+	//
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/impersonations/{imp}/end (the `AdminEndOrgImpersonation` operationId).
+	AdminEndOrgImpersonationWithResponse(ctx context.Context, id string, imp string, reqEditors ...RequestEditorFn) (*AdminEndOrgImpersonationResponse, error)
 
 	// AdminDeleteOrgLogoWithResponse Remove an organization's sign-in logo (FR-D41)
 	//
@@ -15838,12 +16456,12 @@ type ClientWithResponsesInterface interface {
 
 	// AdminRemoveOrgMemberWithResponse Remove a member: their org grants go and sessions that used the org are signed out
 	//
-	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
+	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
-	AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error)
+	AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, params *AdminRemoveOrgMemberParams, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error)
 
 	// AdminListOrgPINsWithResponse The organization's members and their PINs' states (FR-A46)
 	//
@@ -15853,6 +16471,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /v1/admin/orgs/{id}/pins (the `AdminListOrgPINs` operationId).
 	AdminListOrgPINsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgPINsResponse, error)
+
+	// AdminReopenOrgWithResponse Reopen a closing organization within its grace period
+	//
+	// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Memberships and grants were kept, so access returns at the next sign-in; 409 not-closing after the grace period.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /v1/admin/orgs/{id}/reopen (the `AdminReopenOrg` operationId).
+	AdminReopenOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminReopenOrgResponse, error)
 
 	// AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
 	//
@@ -16504,7 +17131,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -16563,7 +17190,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminImpersonateUserWithBodyWithResponse Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16572,7 +17199,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminImpersonateUserWithResponse Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 	//
-	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+	// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16696,7 +17323,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminRevokeRoleWithBodyWithResponse Revoke a role
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16705,7 +17332,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminRevokeRoleWithResponse Revoke a role
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16714,7 +17341,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantRoleWithBodyWithResponse Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16723,7 +17350,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminGrantRoleWithResponse Grant a role tenant-wide, optionally until expires_at
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16732,7 +17359,7 @@ type ClientWithResponsesInterface interface {
 
 	// AdminSuspendUserWithResponse Suspend: blocks sign-in and ends every session
 	//
-	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+	// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -19957,6 +20584,10 @@ type AdminDeleteOrgResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -19972,6 +20603,16 @@ func (r AdminDeleteOrgResponse) GetApplicationproblemJSON403() *Problem {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r AdminDeleteOrgResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminDeleteOrgResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminDeleteOrgResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
 }
 
 // GetBody returns the raw response body bytes
@@ -20224,6 +20865,82 @@ func (r AdminListOrgAuditEventsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminListOrgAuditEventsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminCloseOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminCloseOrgResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminCloseOrgResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminCloseOrgResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminCloseOrgResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminCloseOrgResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r AdminCloseOrgResponse) GetApplicationproblemJSON422() *Problem {
+	return r.ApplicationproblemJSON422
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminCloseOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminCloseOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminCloseOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminCloseOrgResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20899,6 +21616,68 @@ func (r AdminPutOrgEntitlementsResponse) ContentType() string {
 	return ""
 }
 
+type AdminExportOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminExportOrgResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminExportOrgResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminExportOrgResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminExportOrgResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminExportOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminExportOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminExportOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminExportOrgResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type AdminListGrantableRolesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20955,6 +21734,123 @@ func (r AdminListGrantableRolesResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminListGrantableRolesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminListOrgImpersonationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *OrgImpersonationList
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminListOrgImpersonationsResponse) GetJSON200() *OrgImpersonationList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminListOrgImpersonationsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminListOrgImpersonationsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminListOrgImpersonationsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminListOrgImpersonationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminListOrgImpersonationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminListOrgImpersonationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminListOrgImpersonationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminEndOrgImpersonationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminEndOrgImpersonationResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminEndOrgImpersonationResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminEndOrgImpersonationResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminEndOrgImpersonationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminEndOrgImpersonationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminEndOrgImpersonationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminEndOrgImpersonationResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -21204,6 +22100,8 @@ type AdminRemoveOrgMemberResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
@@ -21219,6 +22117,11 @@ func (r AdminRemoveOrgMemberResponse) GetApplicationproblemJSON403() *Problem {
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r AdminRemoveOrgMemberResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminRemoveOrgMemberResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -21306,6 +22209,75 @@ func (r AdminListOrgPINsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r AdminListOrgPINsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type AdminReopenOrgResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Org
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminReopenOrgResponse) GetJSON200() *Org {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r AdminReopenOrgResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r AdminReopenOrgResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r AdminReopenOrgResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r AdminReopenOrgResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminReopenOrgResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminReopenOrgResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminReopenOrgResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminReopenOrgResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -27775,13 +28747,13 @@ func (c *ClientWithResponses) AdminCreateOrgWithResponse(ctx context.Context, bo
 
 // AdminDeleteOrgWithResponse Delete an organization: memberships, org grants and invitations go; sessions that used it are signed out
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). Refused with 409 org-has-members while it has members: close it instead. A tenant owner may force it with force=true and a reason (ADR-0148).
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with DELETE /v1/admin/orgs/{id} (the `AdminDeleteOrg` operationId).
-func (c *ClientWithResponses) AdminDeleteOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminDeleteOrgResponse, error) {
-	rsp, err := c.AdminDeleteOrg(ctx, id, reqEditors...)
+func (c *ClientWithResponses) AdminDeleteOrgWithResponse(ctx context.Context, id string, params *AdminDeleteOrgParams, reqEditors ...RequestEditorFn) (*AdminDeleteOrgResponse, error) {
+	rsp, err := c.AdminDeleteOrg(ctx, id, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -27846,6 +28818,36 @@ func (c *ClientWithResponses) AdminListOrgAuditEventsWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseAdminListOrgAuditEventsResponse(rsp)
+}
+
+// AdminCloseOrgWithBodyWithResponse Close an organization with a grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+func (c *ClientWithResponses) AdminCloseOrgWithBodyWithResponse(ctx context.Context, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminCloseOrgResponse, error) {
+	rsp, err := c.AdminCloseOrgWithBody(ctx, id, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCloseOrgResponse(rsp)
+}
+
+// AdminCloseOrgWithResponse Close an organization with a grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). At once: refused for sign-in, checks (matched_by org_closed), members, invitations, grants, SCIM and its devices; its sessions end and pending invitations are cancelled. Each owner is emailed a link to its final export, valid until the purge. org.closed carries purge_at.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/close (the `AdminCloseOrg` operationId).
+func (c *ClientWithResponses) AdminCloseOrgWithResponse(ctx context.Context, id string, body AdminCloseOrgJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminCloseOrgResponse, error) {
+	rsp, err := c.AdminCloseOrg(ctx, id, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminCloseOrgResponse(rsp)
 }
 
 // AdminListOrgDevicesWithResponse The organization's shared devices (FR-A45)
@@ -28043,6 +29045,21 @@ func (c *ClientWithResponses) AdminPutOrgEntitlementsWithResponse(ctx context.Co
 	return ParseAdminPutOrgEntitlementsResponse(rsp)
 }
 
+// AdminExportOrgWithResponse The organization's records, as its owners get them when it closes
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Members with their emails and roles there, its own roles, direct grants in it, entitlements and up to 10,000 activity entries. Identity data only.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/export (the `AdminExportOrg` operationId).
+func (c *ClientWithResponses) AdminExportOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminExportOrgResponse, error) {
+	rsp, err := c.AdminExportOrg(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminExportOrgResponse(rsp)
+}
+
 // AdminListGrantableRolesWithResponse The roles the caller may grant in an organization (FR-D39, ADR-0137)
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064).
@@ -28056,6 +29073,36 @@ func (c *ClientWithResponses) AdminListGrantableRolesWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseAdminListGrantableRolesResponse(rsp)
+}
+
+// AdminListOrgImpersonationsWithResponse Live support sessions acting as the organization's members
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /v1/admin/orgs/{id}/impersonations (the `AdminListOrgImpersonations` operationId).
+func (c *ClientWithResponses) AdminListOrgImpersonationsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListOrgImpersonationsResponse, error) {
+	rsp, err := c.AdminListOrgImpersonations(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminListOrgImpersonationsResponse(rsp)
+}
+
+// AdminEndOrgImpersonationWithResponse End a support session; its tokens stop working at once
+//
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited with org_id (ADR-0030, ADR-0061, ADR-0064, ADR-0146).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/impersonations/{imp}/end (the `AdminEndOrgImpersonation` operationId).
+func (c *ClientWithResponses) AdminEndOrgImpersonationWithResponse(ctx context.Context, id string, imp string, reqEditors ...RequestEditorFn) (*AdminEndOrgImpersonationResponse, error) {
+	rsp, err := c.AdminEndOrgImpersonation(ctx, id, imp, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminEndOrgImpersonationResponse(rsp)
 }
 
 // AdminDeleteOrgLogoWithResponse Remove an organization's sign-in logo (FR-D41)
@@ -28135,13 +29182,13 @@ func (c *ClientWithResponses) AdminAddOrgMemberWithResponse(ctx context.Context,
 
 // AdminRemoveOrgMemberWithResponse Remove a member: their org grants go and sessions that used the org are signed out
 //
-// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061).
+// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for this org's members, invitations, imports and grants; MFA in the last 10 minutes; audited (ADR-0030, ADR-0061). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with DELETE /v1/admin/orgs/{id}/members/{user_id} (the `AdminRemoveOrgMember` operationId).
-func (c *ClientWithResponses) AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error) {
-	rsp, err := c.AdminRemoveOrgMember(ctx, id, userId, reqEditors...)
+func (c *ClientWithResponses) AdminRemoveOrgMemberWithResponse(ctx context.Context, id string, userId string, params *AdminRemoveOrgMemberParams, reqEditors ...RequestEditorFn) (*AdminRemoveOrgMemberResponse, error) {
+	rsp, err := c.AdminRemoveOrgMember(ctx, id, userId, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -28161,6 +29208,21 @@ func (c *ClientWithResponses) AdminListOrgPINsWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseAdminListOrgPINsResponse(rsp)
+}
+
+// AdminReopenOrgWithResponse Reopen a closing organization within its grace period
+//
+// Requires a tenant admin token (tenant:admin) with MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0064, ADR-0148). Memberships and grants were kept, so access returns at the next sign-in; 409 not-closing after the grace period.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /v1/admin/orgs/{id}/reopen (the `AdminReopenOrg` operationId).
+func (c *ClientWithResponses) AdminReopenOrgWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminReopenOrgResponse, error) {
+	rsp, err := c.AdminReopenOrg(ctx, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminReopenOrgResponse(rsp)
 }
 
 // AdminListOrgRolesWithResponse An organization's own roles, the templates to copy and the groups the caller may give (FR-Z19, FR-D42, ADR-0142)
@@ -29245,7 +30307,7 @@ func (c *ClientWithResponses) AdminGetImportWithResponse(ctx context.Context, id
 
 // AdminDeleteUserWithResponse Soft-delete a user; anonymised after the grace period (FR-I5), or at once with immediately=true (FR-I12)
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -29346,7 +30408,7 @@ func (c *ClientWithResponses) AdminForceResetUserWithResponse(ctx context.Contex
 
 // AdminImpersonateUserWithBodyWithResponse Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29361,7 +30423,7 @@ func (c *ClientWithResponses) AdminImpersonateUserWithBodyWithResponse(ctx conte
 
 // AdminImpersonateUserWithResponse Impersonate a user for a client that allows it (FR-M3, ADR-0058)
 //
-// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046).
+// Requires a tenant:admin token with MFA in the last 10 minutes; audited (ADR-0030, ADR-0046). A reason is required and the session is read-only unless mode is write; act.mode is in every token, and the subject's organizations' owners and admins are emailed (ADR-0146).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29569,7 +30631,7 @@ func (c *ClientWithResponses) AdminRevokeUserSessionsWithResponse(ctx context.Co
 
 // AdminRevokeRoleWithBodyWithResponse Revoke a role
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29584,7 +30646,7 @@ func (c *ClientWithResponses) AdminRevokeRoleWithBodyWithResponse(ctx context.Co
 
 // AdminRevokeRoleWithResponse Revoke a role
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29599,7 +30661,7 @@ func (c *ClientWithResponses) AdminRevokeRoleWithResponse(ctx context.Context, i
 
 // AdminGrantRoleWithBodyWithResponse Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29614,7 +30676,7 @@ func (c *ClientWithResponses) AdminGrantRoleWithBodyWithResponse(ctx context.Con
 
 // AdminGrantRoleWithResponse Grant a role tenant-wide, optionally until expires_at
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030). A protected role or permission (policy governance) answers 202 with a request a second admin decides (ADR-0110). A role with max_grant needs expires_at within it (422 expiry-required, FR-Z24).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -29629,7 +30691,7 @@ func (c *ClientWithResponses) AdminGrantRoleWithResponse(ctx context.Context, id
 
 // AdminSuspendUserWithResponse Suspend: blocks sign-in and ends every session
 //
-// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037).
+// Requires a tenant:admin token (aud gatekeeper-admin-api) of an owner/admin; audited (ADR-0030, ADR-0037). Refused with 409 org-needs-admin (or tenant-needs-owner) when it would leave an organization with members and no owner or admin, or the tenant without an owner; 403 target-above-you when the caller may not act on this user (FR-Z22, FR-Z23).
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -32253,6 +33315,20 @@ func ParseAdminDeleteOrgResponse(rsp *http.Response) (*AdminDeleteOrgResponse, e
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
 	}
 
 	return response, nil
@@ -32424,6 +33500,67 @@ func ParseAdminListOrgAuditEventsResponse(rsp *http.Response) (*AdminListOrgAudi
 			return nil, err
 		}
 		response.ApplicationproblemJSON413 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminCloseOrgResponse parses an HTTP response from a AdminCloseOrgWithResponse call
+func ParseAdminCloseOrgResponse(rsp *http.Response) (*AdminCloseOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminCloseOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
 		var dest Problem
@@ -32965,6 +34102,53 @@ func ParseAdminPutOrgEntitlementsResponse(rsp *http.Response) (*AdminPutOrgEntit
 	return response, nil
 }
 
+// ParseAdminExportOrgResponse parses an HTTP response from a AdminExportOrgWithResponse call
+func ParseAdminExportOrgResponse(rsp *http.Response) (*AdminExportOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminExportOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseAdminListGrantableRolesResponse parses an HTTP response from a AdminListGrantableRolesWithResponse call
 func ParseAdminListGrantableRolesResponse(rsp *http.Response) (*AdminListGrantableRolesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -32985,6 +34169,96 @@ func ParseAdminListGrantableRolesResponse(rsp *http.Response) (*AdminListGrantab
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminListOrgImpersonationsResponse parses an HTTP response from a AdminListOrgImpersonationsWithResponse call
+func ParseAdminListOrgImpersonationsResponse(rsp *http.Response) (*AdminListOrgImpersonationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminListOrgImpersonationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OrgImpersonationList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminEndOrgImpersonationResponse parses an HTTP response from a AdminEndOrgImpersonationWithResponse call
+func ParseAdminEndOrgImpersonationResponse(rsp *http.Response) (*AdminEndOrgImpersonationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminEndOrgImpersonationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Problem
@@ -33233,6 +34507,13 @@ func ParseAdminRemoveOrgMemberResponse(rsp *http.Response) (*AdminRemoveOrgMembe
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	}
 
 	return response, nil
@@ -33279,6 +34560,60 @@ func ParseAdminListOrgPINsResponse(rsp *http.Response) (*AdminListOrgPINsRespons
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseAdminReopenOrgResponse parses an HTTP response from a AdminReopenOrgWithResponse call
+func ParseAdminReopenOrgResponse(rsp *http.Response) (*AdminReopenOrgResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminReopenOrgResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Org
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
