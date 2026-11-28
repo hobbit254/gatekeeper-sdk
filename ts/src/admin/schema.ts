@@ -1242,6 +1242,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/orgs/{id}/roles/{role_id}/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset an organization role to its template as it stands now: its groups, own limits and end-date rule; the name, description and PIN mark stay (FR-Z19)
+         * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited as role.updated with reset_to_template (ADR-0030, ADR-0061, ADR-0064). The same guard rails as an edit: an org admin resets only a role they can edit, to a template whose groups they hold (403); a PIN-marked role must stay PIN-safe (422). 422 when the role wasn't copied from a template or its template is no longer one (ADR-0158).
+         */
+        post: operations["adminResetOrgRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/orgs/{id}/scim-groups": {
         parameters: {
             query?: never;
@@ -6242,6 +6262,35 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             413: components["responses"]["Problem"];
+            422: components["responses"]["Problem"];
+        };
+    };
+    adminResetOrgRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                role_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRole"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
             422: components["responses"]["Problem"];
         };
     };
