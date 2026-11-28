@@ -32,6 +32,7 @@ jobs:
       - run: cd tools/guidecheck && go test ./...
       - run: tools/guidecheck/compile.sh go
       - run: tools/release-dry-run.sh go
+      - run: tools/release-dry-run.sh gkgin
 
   docs: # the integration guide: every page, link and anchor, nothing internal (ADR-0133, ADR-0135)
     runs-on: ubuntu-24.04
@@ -40,6 +41,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: tools/guidecheck/go.mod }
       - run: go run ./tools/guidecheck check docs
+      - run: tools/release-version_test.sh # the release workflow's tag check (ADR-0156)
 
   ts: # the npm workspace links the browser example to ts/
     runs-on: ubuntu-24.04
