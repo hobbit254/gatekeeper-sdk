@@ -1271,7 +1271,7 @@ export interface paths {
         };
         get?: never;
         /**
-         * Map tenant roles onto a group; its members hold them in the org
+         * Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
          * @description Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
          */
         put: operations["adminSetSCIMGroupRoles"];

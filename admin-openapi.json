@@ -9247,7 +9247,7 @@
             "bearer": []
           }
         ],
-        "summary": "Map tenant roles onto a group; its members hold them in the org"
+        "summary": "Map roles onto a group, the tenant's or the organization's own as org/\u003cname\u003e; its members hold them in the org"
       }
     },
     "/v1/admin/orgs/{id}/scim-tokens": {

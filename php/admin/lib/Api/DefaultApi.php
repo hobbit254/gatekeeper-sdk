@@ -58858,7 +58858,7 @@ class DefaultApi
     /**
      * Operation adminSetSCIMGroupRoles
      *
-     * Map tenant roles onto a group; its members hold them in the org
+     * Map roles onto a group, the tenant&#39;s or the organization&#39;s own as org/&lt;name&gt;; its members hold them in the org
      *
      * @param  string $id id (required)
      * @param  string $group_id group_id (required)
@@ -58878,7 +58878,7 @@ class DefaultApi
     /**
      * Operation adminSetSCIMGroupRolesWithHttpInfo
      *
-     * Map tenant roles onto a group; its members hold them in the org
+     * Map roles onto a group, the tenant&#39;s or the organization&#39;s own as org/&lt;name&gt;; its members hold them in the org
      *
      * @param  string $id (required)
      * @param  string $group_id (required)
@@ -59145,7 +59145,7 @@ class DefaultApi
     /**
      * Operation adminSetSCIMGroupRolesAsync
      *
-     * Map tenant roles onto a group; its members hold them in the org
+     * Map roles onto a group, the tenant&#39;s or the organization&#39;s own as org/&lt;name&gt;; its members hold them in the org
      *
      * @param  string $id (required)
      * @param  string $group_id (required)
@@ -59168,7 +59168,7 @@ class DefaultApi
     /**
      * Operation adminSetSCIMGroupRolesAsyncWithHttpInfo
      *
-     * Map tenant roles onto a group; its members hold them in the org
+     * Map roles onto a group, the tenant&#39;s or the organization&#39;s own as org/&lt;name&gt;; its members hold them in the org
      *
      * @param  string $id (required)
      * @param  string $group_id (required)

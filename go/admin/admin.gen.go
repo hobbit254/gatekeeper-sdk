@@ -4636,7 +4636,7 @@ type ClientInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/scim-groups (the `AdminListSCIMGroups` operationId).
 	AdminListSCIMGroups(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminSetSCIMGroupRolesWithBody Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithBody Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -4645,7 +4645,7 @@ type ClientInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/scim-groups/{group_id}/roles (the `AdminSetSCIMGroupRoles` operationId).
 	AdminSetSCIMGroupRolesWithBody(ctx context.Context, id string, groupId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// AdminSetSCIMGroupRoles Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRoles Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -7250,7 +7250,7 @@ func (c *Client) AdminListSCIMGroups(ctx context.Context, id string, reqEditors 
 	return c.Client.Do(req)
 }
 
-// AdminSetSCIMGroupRolesWithBody Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithBody Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -7269,7 +7269,7 @@ func (c *Client) AdminSetSCIMGroupRolesWithBody(ctx context.Context, id string, 
 	return c.Client.Do(req)
 }
 
-// AdminSetSCIMGroupRoles Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRoles Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -16562,7 +16562,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /v1/admin/orgs/{id}/scim-groups (the `AdminListSCIMGroups` operationId).
 	AdminListSCIMGroupsWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*AdminListSCIMGroupsResponse, error)
 
-	// AdminSetSCIMGroupRolesWithBodyWithResponse Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithBodyWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -16571,7 +16571,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /v1/admin/orgs/{id}/scim-groups/{group_id}/roles (the `AdminSetSCIMGroupRoles` operationId).
 	AdminSetSCIMGroupRolesWithBodyWithResponse(ctx context.Context, id string, groupId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminSetSCIMGroupRolesResponse, error)
 
-	// AdminSetSCIMGroupRolesWithResponse Map tenant roles onto a group; its members hold them in the org
+	// AdminSetSCIMGroupRolesWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 	//
 	// Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 	//
@@ -29360,7 +29360,7 @@ func (c *ClientWithResponses) AdminListSCIMGroupsWithResponse(ctx context.Contex
 	return ParseAdminListSCIMGroupsResponse(rsp)
 }
 
-// AdminSetSCIMGroupRolesWithBodyWithResponse Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithBodyWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
@@ -29375,7 +29375,7 @@ func (c *ClientWithResponses) AdminSetSCIMGroupRolesWithBodyWithResponse(ctx con
 	return ParseAdminSetSCIMGroupRolesResponse(rsp)
 }
 
-// AdminSetSCIMGroupRolesWithResponse Map tenant roles onto a group; its members hold them in the org
+// AdminSetSCIMGroupRolesWithResponse Map roles onto a group, the tenant's or the organization's own as org/<name>; its members hold them in the org
 //
 // Requires a tenant admin token (tenant:admin), or an org admin token (org:admin + org) for its own org; MFA in the last 10 minutes, or the dashboard's gk_admin cookie with X-CSRF-Token; audited (ADR-0030, ADR-0061, ADR-0064). Org admins may map only roles within their own (ADR-0061).
 //
