@@ -17,6 +17,7 @@ const token = await auth.getAccessToken();            // refreshed 30 s before e
 await auth.logout({ returnTo: location.origin });
 ```
 
+- **Your app's origin:** register the client as **public**, with `<your origin>/callback` as a redirect URI. Gatekeeper lets that origin read the token, revoke and userinfo answers, and no other. A new redirect URI works within 30 seconds.
 - **Token storage:** tokens live in memory only. After a reload, call `loginWithRedirect({ prompt: "none" })` to get them back silently while the session lives.
 - **Errors:** an `AuthorizeError` carries `access_denied`, `consent_required` or `interaction_required`.
 - **An organization's sign-in:** `loginWithRedirect({ organization: "acme" })` sends members of an organization with SSO to their identity provider (see [Enterprise SSO and SCIM](enterprise.md)).
